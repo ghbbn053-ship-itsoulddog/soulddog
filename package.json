@@ -1,14 +1,13 @@
 {
-  "name": "projects",
-  "version": "0.1.0",
+  "name": "edu-ai-assistant",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "bash ./scripts/build.sh",
-    "dev": "bash ./scripts/dev.sh",
-    "preinstall": "npx only-allow pnpm",
-    "lint": "eslint",
-    "start": "bash ./scripts/start.sh",
-    "ts-check": "tsc -p tsconfig.json"
+    "dev": "next dev --port 5000",
+    "build": "next build",
+    "start": "next start --port 5000",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.958.0",
@@ -78,7 +77,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
-    "only-allow": "^1.2.2",
     "react-dev-inspector": "^2.0.1",
     "shadcn": "latest",
     "tailwindcss": "^4",
@@ -86,8 +84,8 @@
     "tsx": "^4.19.2",
     "typescript": "^5"
   },
-  "packageManager": "pnpm@9.0.0",
   "engines": {
-    "pnpm": ">=9.0.0"
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   }
 }
