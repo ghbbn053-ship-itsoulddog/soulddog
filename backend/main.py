@@ -180,15 +180,22 @@ async def login(request: Request):
         response.encoding = "utf-8"
         content = response.text
 
-        # 简单判断：如果返回的页面包含错误信息，说明登录失败
+        # 检查登录失败的明确标志
         if "密码错误" in content or "验证码错误" in content or "用户名不存在" in content:
             return {
                 "success": False,
                 "message": "用户名、密码或验证码错误"
             }
 
-        # 如果成功跳转到主页，说明登录成功
-        if "/jsxsd/framework/" in content or "首页" in content:
+        # 检查是否停留在登录页面（说明登录失败）
+        if "LoginToXkLdap" in content or "教务管理系统" in content and "framework" not in response.url:
+            return {
+                "success": False,
+                "message": "登录失败，请检查用户名、密码或验证码"
+            }
+
+        # 检查是否成功跳转到主页
+        if "/jsxsd/framework/" in content or "framework" in response.url:
             # 保存 session
             SESSIONS[username] = session
 
@@ -197,6 +204,13 @@ async def login(request: Request):
                 "message": "登录成功",
                 "username": username,
                 "session_id": session.cookies.get("JSESSIONID", "")
+            }
+
+        # 默认返回失败
+        return {
+            "success": False,
+            "message": "登录失败，请重试"
+        }
             }
         else:
             return {
