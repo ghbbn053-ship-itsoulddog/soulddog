@@ -163,11 +163,16 @@ async def login(request: Request):
         }
 
         # 发送登录请求
+        logger.info(f"【登录】正在尝试登录，用户名: {username}")
+        logger.info(f"【登录】使用服务器: {server_url}")
         response = session.post(
             login_url,
             data=login_data,
             timeout=10
         )
+
+        logger.info(f"【登录】响应状态码: {response.status_code}")
+        logger.info(f"【登录】响应 URL: {response.url}")
 
         # 检查登录结果
         if response.status_code != 200:
@@ -180,8 +185,11 @@ async def login(request: Request):
         response.encoding = "utf-8"
         content = response.text
 
+        logger.info(f"【登录】响应内容长度: {len(content)}")
+
         # 检查登录失败的明确标志
         if "密码错误" in content or "验证码错误" in content or "用户名不存在" in content:
+            logger.warning(f"【登录】登录失败: 密码错误或验证码错误")
             return {
                 "success": False,
                 "message": "用户名、密码或验证码错误"
@@ -189,6 +197,7 @@ async def login(request: Request):
 
         # 检查是否停留在登录页面（说明登录失败）
         if "LoginToXkLdap" in content or "教务管理系统" in content and "framework" not in response.url:
+            logger.warning(f"【登录】登录失败: 仍在登录页面")
             return {
                 "success": False,
                 "message": "登录失败，请检查用户名、密码或验证码"
@@ -198,6 +207,7 @@ async def login(request: Request):
         if "/jsxsd/framework/" in content or "framework" in response.url:
             # 保存 session
             SESSIONS[username] = session
+            logger.info(f"【登录】登录成功，session 已保存，当前 session 数量: {len(SESSIONS)}")
 
             return {
                 "success": True,
@@ -232,14 +242,23 @@ async def get_user_info(username: str):
     获取用户个人信息
     """
     try:
+        logger.info(f"【个人信息】收到请求，用户名: {username}")
+        logger.info(f"【个人信息】当前 session 数量: {len(SESSIONS)}")
+        logger.info(f"【个人信息】当前 session keys: {list(SESSIONS.keys())}")
+
         # 检查 session 是否存在
         if username not in SESSIONS:
+            logger.warning(f"【个人信息】用户 {username} 未登录")
             raise HTTPException(status_code=401, detail="未登录，请先登录")
 
         session = SESSIONS[username]
+        logger.info(f"【个人信息】找到用户 {username} 的 session，开始爬取...")
+
         scraper = JwxtScraper(session, JWXT_BASE_URL)
 
         result = scraper.get_personal_info()
+
+        logger.info(f"【个人信息】爬取结果: {result}")
 
         if result["success"]:
             return {
