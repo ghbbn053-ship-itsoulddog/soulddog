@@ -221,12 +221,6 @@ async def login(request: Request):
             "success": False,
             "message": "登录失败，请重试"
         }
-            }
-        else:
-            return {
-                "success": False,
-                "message": "登录失败，请检查用户名和密码"
-            }
 
     except HTTPException:
         raise
