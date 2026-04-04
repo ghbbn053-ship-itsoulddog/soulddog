@@ -82,8 +82,11 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" disabled>
-                即将推出...
+              <Button
+                className="w-full"
+                onClick={() => router.push('/profile')}
+              >
+                查看信息
               </Button>
             </CardContent>
           </Card>
@@ -97,8 +100,11 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" disabled>
-                即将推出...
+              <Button
+                className="w-full"
+                onClick={() => router.push('/grades')}
+              >
+                查询成绩
               </Button>
             </CardContent>
           </Card>
