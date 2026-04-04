@@ -1,363 +1,227 @@
-# projects
+# 教务系统 AI 助手
 
-这是一个基于 [Next.js 16](https://nextjs.org) + [shadcn/ui](https://ui.shadcn.com) 的全栈应用项目，由扣子编程 CLI 创建。
+一个基于 Next.js + FastAPI + LangChain 的教务系统智能助手，支持验证码登录、数据爬取、AI 问答等功能。
 
-## 快速开始
+## 📋 项目功能
 
-### 启动开发服务器
+### ✅ 已完成
+- [x] 前端登录页面（Next.js + Shadcn/UI）
+- [x] 后端 API（FastAPI）
+- [x] 验证码获取与展示
+- [x] 教务系统登录
+- [x] 服务器自动选择逻辑
+- [x] 前后端 CORS 通信
+- [x] Dashboard 页面
+
+### 🚧 开发中
+- [ ] 教务系统数据爬取
+- [ ] 个人信息存储
+- [ ] Milvus 向量数据库集成
+- [ ] LangChain RAG 系统
+- [ ] 阿里云千问 AI 集成
+- [ ] Redis 缓存
+- [ ] 按学号数据隔离
+
+## 📦 项目结构
+
+```
+教务系统 AI 助手/
+├── src/                      # 前端代码（Next.js）
+│   ├── app/                  # 页面路由
+│   │   ├── page.tsx          # 登录页面
+│   │   └── dashboard/        # Dashboard 页面
+│   ├── components/ui/        # Shadcn UI 组件
+│   └── lib/                  # 工具函数
+├── backend/                  # 后端代码（FastAPI）
+│   ├── main.py               # 主程序
+│   ├── requirements.txt      # Python 依赖
+│   └── .env                  # 环境变量
+├── public/                   # 静态资源
+└── package.json              # 前端依赖
+```
+
+## 🚀 快速开始
+
+### 前置要求
+
+- Python 3.8+
+- Node.js 18+
+- pnpm（前端包管理器）
+
+### 1. 下载项目
+
+在 PyCharm 中操作：
+
+1. 打开 PyCharm
+2. `File → Open`
+3. 选择项目文件夹
+4. 点击 `OK`
+
+### 2. 安装后端依赖
+
+在项目根目录打开终端，运行：
 
 ```bash
-coze dev
+cd backend
+pip install -r requirements.txt
 ```
 
-启动后，在浏览器中打开 [http://localhost:5000](http://localhost:5000) 查看应用。
+### 3. 配置环境变量
 
-开发服务器支持热更新，修改代码后页面会自动刷新。
+后端 `.env` 文件已预配置：
 
-### 构建生产版本
+```env
+JWXT_BASE_URL=http://jwxt.gdufe.edu.cn
+DASHSCOPE_API_KEY=sk-6c8dc750b9744c9cb60ce0eb7fcfce0e
+DASHSCOPE_MODEL=qwen-plus
+REDIS_HOST=localhost
+REDIS_PORT=6379
+MILVUS_HOST=localhost
+MILVUS_PORT=19530
+BACKEND_PORT=8000
+```
+
+### 4. 启动后端服务
+
+在 `backend` 目录下运行：
 
 ```bash
-coze build
+python main.py
 ```
 
-### 启动生产服务器
+后端服务将运行在 `http://localhost:8000`
+
+### 5. 安装前端依赖
+
+在项目根目录运行：
 
 ```bash
-coze start
-```
-
-## 项目结构
-
-```
-src/
-├── app/                      # Next.js App Router 目录
-│   ├── layout.tsx           # 根布局组件
-│   ├── page.tsx             # 首页
-│   ├── globals.css          # 全局样式（包含 shadcn 主题变量）
-│   └── [route]/             # 其他路由页面
-├── components/              # React 组件目录
-│   └── ui/                  # shadcn/ui 基础组件（优先使用）
-│       ├── button.tsx
-│       ├── card.tsx
-│       └── ...
-├── lib/                     # 工具函数库
-│   └── utils.ts            # cn() 等工具函数
-└── hooks/                   # 自定义 React Hooks（可选）
-
-server/
-├── index.ts                 # 自定义服务器入口
-├── tsconfig.json           # Server TypeScript 配置
-└── dist/                    # 编译输出目录（自动生成）
-```
-
-## 核心开发规范
-
-### 1. 组件开发
-
-**优先使用 shadcn/ui 基础组件**
-
-本项目已预装完整的 shadcn/ui 组件库，位于 `src/components/ui/` 目录。开发时应优先使用这些组件作为基础：
-
-```tsx
-// ✅ 推荐：使用 shadcn 基础组件
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-
-export default function MyComponent() {
-  return (
-    <Card>
-      <CardHeader>标题</CardHeader>
-      <CardContent>
-        <Input placeholder="输入内容" />
-        <Button>提交</Button>
-      </CardContent>
-    </Card>
-  );
-}
-```
-
-**可用的 shadcn 组件清单**
-
-- 表单：`button`, `input`, `textarea`, `select`, `checkbox`, `radio-group`, `switch`, `slider`
-- 布局：`card`, `separator`, `tabs`, `accordion`, `collapsible`, `scroll-area`
-- 反馈：`alert`, `alert-dialog`, `dialog`, `toast`, `sonner`, `progress`
-- 导航：`dropdown-menu`, `menubar`, `navigation-menu`, `context-menu`
-- 数据展示：`table`, `avatar`, `badge`, `hover-card`, `tooltip`, `popover`
-- 其他：`calendar`, `command`, `carousel`, `resizable`, `sidebar`
-
-详见 `src/components/ui/` 目录下的具体组件实现。
-
-### 2. 路由开发
-
-Next.js 使用文件系统路由，在 `src/app/` 目录下创建文件夹即可添加路由：
-
-```bash
-# 创建新路由 /about
-src/app/about/page.tsx
-
-# 创建动态路由 /posts/[id]
-src/app/posts/[id]/page.tsx
-
-# 创建路由组（不影响 URL）
-src/app/(marketing)/about/page.tsx
-
-# 创建 API 路由
-src/app/api/users/route.ts
-```
-
-**页面组件示例**
-
-```tsx
-// src/app/about/page.tsx
-import { Button } from '@/components/ui/button';
-
-export const metadata = {
-  title: '关于我们',
-  description: '关于页面描述',
-};
-
-export default function AboutPage() {
-  return (
-    <div>
-      <h1>关于我们</h1>
-      <Button>了解更多</Button>
-    </div>
-  );
-}
-```
-
-**动态路由示例**
-
-```tsx
-// src/app/posts/[id]/page.tsx
-export default async function PostPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-
-  return <div>文章 ID: {id}</div>;
-}
-```
-
-**API 路由示例**
-
-```tsx
-// src/app/api/users/route.ts
-import { NextResponse } from 'next/server';
-
-export async function GET() {
-  return NextResponse.json({ users: [] });
-}
-
-export async function POST(request: Request) {
-  const body = await request.json();
-  return NextResponse.json({ success: true });
-}
-```
-
-### 3. 依赖管理
-
-**必须使用 pnpm 管理依赖**
-
-```bash
-# ✅ 安装依赖
 pnpm install
-
-# ✅ 添加新依赖
-pnpm add package-name
-
-# ✅ 添加开发依赖
-pnpm add -D package-name
-
-# ❌ 禁止使用 npm 或 yarn
-# npm install  # 错误！
-# yarn add     # 错误！
 ```
 
-项目已配置 `preinstall` 脚本，使用其他包管理器会报错。
+### 6. 启动前端服务
 
-### 4. 样式开发
+在项目根目录运行：
 
-**使用 Tailwind CSS v4**
-
-本项目使用 Tailwind CSS v4 进行样式开发，并已配置 shadcn 主题变量。
-
-```tsx
-// 使用 Tailwind 类名
-<div className="flex items-center gap-4 p-4 rounded-lg bg-background">
-  <Button className="bg-primary text-primary-foreground">
-    主要按钮
-  </Button>
-</div>
-
-// 使用 cn() 工具函数合并类名
-import { cn } from '@/lib/utils';
-
-<div className={cn(
-  "base-class",
-  condition && "conditional-class",
-  className
-)}>
-  内容
-</div>
+```bash
+pnpm dev
 ```
 
-**主题变量**
+前端服务将运行在 `http://localhost:5000`
 
-主题变量定义在 `src/app/globals.css` 中，支持亮色/暗色模式：
+## 📱 使用说明
 
-- `--background`, `--foreground`
-- `--primary`, `--primary-foreground`
-- `--secondary`, `--secondary-foreground`
-- `--muted`, `--muted-foreground`
-- `--accent`, `--accent-foreground`
-- `--destructive`, `--destructive-foreground`
-- `--border`, `--input`, `--ring`
+### 登录系统
 
-### 5. 表单开发
+1. 打开浏览器访问 `http://localhost:5000`
+2. 输入教务系统学号、密码
+3. 输入验证码（自动刷新）
+4. 点击登录按钮
 
-推荐使用 `react-hook-form` + `zod` 进行表单开发：
+### Dashboard
 
-```tsx
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+登录成功后，自动跳转到 Dashboard 页面，可以查看：
+- AI 智能问答
+- 个人信息
+- 成绩查询
+- 课程表
+- 选课中心
+- 系统设置
 
-const formSchema = z.object({
-  username: z.string().min(2, '用户名至少 2 个字符'),
-  email: z.string().email('请输入有效的邮箱'),
-});
+## 🔧 技术栈
 
-export default function MyForm() {
-  const form = useForm({
-    resolver: zodResolver(formSchema),
-    defaultValues: { username: '', email: '' },
-  });
+### 前端
+- **框架**: Next.js 16 (App Router)
+- **语言**: TypeScript 5
+- **UI 组件**: Shadcn/UI (Radix UI)
+- **样式**: Tailwind CSS 4
 
-  const onSubmit = (data: z.infer<typeof formSchema>) => {
-    console.log(data);
-  };
+### 后端
+- **框架**: FastAPI
+- **语言**: Python 3.8+
+- **HTTP 客户端**: requests, aiohttp
+- **HTML 解析**: BeautifulSoup4
 
-  return (
-    <form onSubmit={form.handleSubmit(onSubmit)}>
-      <Input {...form.register('username')} />
-      <Input {...form.register('email')} />
-      <Button type="submit">提交</Button>
-    </form>
-  );
+### AI 与数据
+- **向量数据库**: Milvus
+- **缓存**: Redis
+- **LLM**: 阿里云千问（qwen-plus）
+- **框架**: LangChain
+
+## 📝 API 接口
+
+### 1. 获取验证码
+```
+GET /api/captcha
+Response: {
+  "success": true,
+  "image": "data:image/jpeg;base64,...",
+  "session_id": "..."
 }
 ```
 
-### 6. 数据获取
-
-**服务端组件（推荐）**
-
-```tsx
-// src/app/posts/page.tsx
-async function getPosts() {
-  const res = await fetch('https://api.example.com/posts', {
-    cache: 'no-store', // 或 'force-cache'
-  });
-  return res.json();
+### 2. 登录
+```
+POST /api/login
+Body: {
+  "username": "学号",
+  "password": "密码",
+  "code": "验证码"
 }
-
-export default async function PostsPage() {
-  const posts = await getPosts();
-
-  return (
-    <div>
-      {posts.map(post => (
-        <div key={post.id}>{post.title}</div>
-      ))}
-    </div>
-  );
+Response: {
+  "success": true,
+  "message": "登录成功",
+  "username": "学号",
+  "session_id": "..."
 }
 ```
 
-**客户端组件**
-
-```tsx
-'use client';
-
-import { useEffect, useState } from 'react';
-
-export default function ClientComponent() {
-  const [data, setData] = useState(null);
-
-  useEffect(() => {
-    fetch('/api/data')
-      .then(res => res.json())
-      .then(setData);
-  }, []);
-
-  return <div>{JSON.stringify(data)}</div>;
+### 3. 健康检查
+```
+GET /api/health
+Response: {
+  "status": "ok"
 }
 ```
 
-## 常见开发场景
+## 🎯 下一步计划
 
-### 添加新页面
+1. 实现教务系统数据爬取（个人信息、成绩、课程）
+2. 集成 Milvus 向量数据库
+3. 实现 LangChain RAG 系统
+4. 集成阿里云千问 AI
+5. 添加 Redis 缓存
+6. 实现按学号数据隔离
+7. 完善前端 UI 和交互
+8. 添加单元测试
+9. 优化性能和安全性
+10. 生产环境部署
 
-1. 在 `src/app/` 下创建文件夹和 `page.tsx`
-2. 使用 shadcn 组件构建 UI
-3. 根据需要添加 `layout.tsx` 和 `loading.tsx`
+## 🐛 常见问题
 
-### 创建业务组件
+### 1. 验证码获取失败
+- 检查后端服务是否启动
+- 检查网络连接
+- 检查教务系统 URL 是否正确
 
-1. 在 `src/components/` 下创建组件文件（非 UI 组件）
-2. 优先组合使用 `src/components/ui/` 中的基础组件
-3. 使用 TypeScript 定义 Props 类型
+### 2. 登录失败
+- 检查用户名和密码是否正确
+- 检查验证码是否输入正确
+- 检查服务器选择逻辑
 
-### 添加全局状态
+### 3. 前端无法连接后端
+- 检查 CORS 配置
+- 检查后端服务端口（默认 8000）
+- 检查前端 API 地址配置
 
-推荐使用 React Context 或 Zustand：
+## 📄 许可证
 
-```tsx
-// src/lib/store.ts
-import { create } from 'zustand';
+MIT License
 
-interface Store {
-  count: number;
-  increment: () => void;
-}
+## 👤 作者
 
-export const useStore = create<Store>((set) => ({
-  count: 0,
-  increment: () => set((state) => ({ count: state.count + 1 })),
-}));
-```
+教务系统 AI 助手开发团队
 
-### 集成数据库
+---
 
-推荐使用 Prisma 或 Drizzle ORM，在 `src/lib/db.ts` 中配置。
-
-## 技术栈
-
-- **框架**: Next.js 16.1.1 (App Router)
-- **UI 组件**: shadcn/ui (基于 Radix UI)
-- **样式**: Tailwind CSS v4
-- **表单**: React Hook Form + Zod
-- **图标**: Lucide React
-- **字体**: Geist Sans & Geist Mono
-- **包管理器**: pnpm 9+
-- **TypeScript**: 5.x
-
-## 参考文档
-
-- [Next.js 官方文档](https://nextjs.org/docs)
-- [shadcn/ui 组件文档](https://ui.shadcn.com)
-- [Tailwind CSS 文档](https://tailwindcss.com/docs)
-- [React Hook Form](https://react-hook-form.com)
-
-## 重要提示
-
-1. **必须使用 pnpm** 作为包管理器
-2. **优先使用 shadcn/ui 组件** 而不是从零开发基础组件
-3. **遵循 Next.js App Router 规范**，正确区分服务端/客户端组件
-4. **使用 TypeScript** 进行类型安全开发
-5. **使用 `@/` 路径别名** 导入模块（已配置）
+**Powered by AI Assistant** 🚀

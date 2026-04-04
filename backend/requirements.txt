@@ -1,0 +1,42 @@
+# Web 框架
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+
+# HTTP 请求
+requests==2.32.3
+aiohttp==3.11.11
+
+# HTML 解析
+beautifulsoup4==4.12.3
+lxml==5.3.0
+
+# 爬虫工具
+pyppeteer==2.0.0
+selenium==4.27.1
+webdriver-manager==4.0.2
+
+# 缓存
+redis==5.2.1
+
+# 向量数据库
+pymilvus[milvus-lite]==2.6.11
+
+# LangChain
+langchain==0.3.14
+langchain-community==0.3.14
+langchain-core==0.3.32
+
+# AI 模型
+openai==1.59.6
+dashscope==1.20.11
+
+# 工具
+python-dotenv==1.0.1
+pillow==11.1.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# 数据处理
+pandas==2.2.3
+numpy==2.2.1
