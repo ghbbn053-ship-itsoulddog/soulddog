@@ -10,6 +10,14 @@ import io
 import base64
 from typing import Optional
 import random
+import logging
+
+# 导入爬虫模块
+from scraper import JwxtScraper
+
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="教务系统 AI 助手 API", version="1.0.0")
 
@@ -200,6 +208,122 @@ async def login(request: Request):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"登录失败: {str(e)}")
+
+
+# ===== 数据爬取接口 =====
+
+@app.get("/api/user/info")
+async def get_user_info(username: str):
+    """
+    获取用户个人信息
+    """
+    try:
+        # 检查 session 是否存在
+        if username not in SESSIONS:
+            raise HTTPException(status_code=401, detail="未登录，请先登录")
+
+        session = SESSIONS[username]
+        scraper = JwxtScraper(session, JWXT_BASE_URL)
+
+        result = scraper.get_personal_info()
+
+        if result["success"]:
+            return {
+                "success": True,
+                "data": result["data"]
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get("message", "获取信息失败"))
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取个人信息失败: {str(e)}")
+
+
+@app.get("/api/user/card")
+async def get_user_card(username: str):
+    """
+    获取学籍卡片详细信息
+    """
+    try:
+        if username not in SESSIONS:
+            raise HTTPException(status_code=401, detail="未登录，请先登录")
+
+        session = SESSIONS[username]
+        scraper = JwxtScraper(session, JWXT_BASE_URL)
+
+        result = scraper.get_student_card()
+
+        if result["success"]:
+            return {
+                "success": True,
+                "data": result["data"]
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get("message", "获取学籍卡片失败"))
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取学籍卡片失败: {str(e)}")
+
+
+@app.get("/api/grades")
+async def get_grades(
+    username: str,
+    kksj: str = "",
+    kcxz: str = "",
+    kcmc: str = "",
+    fxkc: str = "0",
+    xsfs: str = "all"
+):
+    """
+    获取成绩列表
+    参数:
+    - kksj: 开课时间
+    - kcxz: 课程性质
+    - kcmc: 课程名称
+    - fxkc: 修读类别 (0=主修课程, 1=辅修课程)
+    - xsfs: 显示方式 (all=显示全部成绩, max=显示最好成绩)
+    """
+    try:
+        if username not in SESSIONS:
+            raise HTTPException(status_code=401, detail="未登录，请先登录")
+
+        session = SESSIONS[username]
+        scraper = JwxtScraper(session, JWXT_BASE_URL)
+
+        result = scraper.get_grades(kksj=kksj, kcxz=kcxz, kcmc=kcmc, fxkc=fxkc, xsfs=xsfs)
+
+        if result["success"]:
+            return {
+                "success": True,
+                "data": result["data"],
+                "count": result.get("count", 0)
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get("message", "获取成绩失败"))
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取成绩失败: {str(e)}")
+
+
+@app.get("/api/grades/all")
+async def get_all_grades(username: str):
+    """
+    获取所有成绩（快捷接口）
+    """
+    return await get_grades(
+        username=username,
+        kksj="",
+        kcxz="",
+        kcmc="",
+        fxkc="0",
+        xsfs="all"
+    )
 
 
 if __name__ == "__main__":
