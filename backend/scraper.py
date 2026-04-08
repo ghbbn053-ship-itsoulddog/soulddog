@@ -13,9 +13,61 @@ logger = logging.getLogger(__name__)
 class JwxtScraper:
     """教务系统爬虫"""
 
-    def __init__(self, session: requests.Session, base_url: str = "http://jwxt.gdufe.edu.cn"):
-        self.session = session
+    def __init__(self, session: requests.Session = None, base_url: str = "http://jwxt.gdufe.edu.cn"):
+        self.session = session or requests.Session()
         self.base_url = base_url
+        self.captcha_url = f"{base_url}/jsxsd/verifycode.servlet"
+        self.login_url = f"{base_url}/jsxsd/xk/LoginToXkLdap"
+
+    def get_captcha(self) -> bytes:
+        """获取验证码图片"""
+        try:
+            response = self.session.get(self.captcha_url, timeout=10)
+            response.raise_for_status()
+            logger.info("成功获取验证码")
+            return response.content
+        except Exception as e:
+            logger.error(f"获取验证码失败: {str(e)}")
+            raise
+
+    def login(self, username: str, password: str, captcha: str) -> Dict:
+        """
+        登录教务系统（内网版本，明文密码）
+        
+        参数:
+        - username: 学号
+        - password: 密码（明文）
+        - captcha: 验证码
+        """
+        try:
+            data = {
+                "USERNAME": username,
+                "PASSWORD": password,
+                "RANDOMCODE": captcha
+            }
+            
+            response = self.session.post(self.login_url, data=data, timeout=10)
+            response.encoding = "utf-8"
+            
+            # 检查登录结果
+            if "密码错误" in response.text or "验证码错误" in response.text:
+                return {"success": False, "message": "用户名、密码或验证码错误"}
+            
+            if "xsMain.jsp" in response.text or "framework" in response.url:
+                logger.info(f"用户 {username} 登录成功")
+                return {"success": True, "message": "登录成功"}
+            
+            # 检查是否在登录页（失败）
+            if "LoginToXkLdap" in response.text:
+                return {"success": False, "message": "登录失败，请检查账号密码"}
+            
+            # 其他情况，默认成功（可能已经登录）
+            logger.info(f"登录响应: {response.url}")
+            return {"success": True, "message": "登录成功"}
+            
+        except Exception as e:
+            logger.error(f"登录失败: {str(e)}")
+            return {"success": False, "message": f"登录异常: {str(e)}"}
 
     def get_personal_info(self) -> Dict:
         """
