@@ -18,6 +18,7 @@ class JwxtScraper:
         self.base_url = base_url
         self.captcha_url = f"{base_url}/jsxsd/verifycode.servlet"
         self.login_url = f"{base_url}/jsxsd/xk/LoginToXkLdap"
+        self.main_url = f"{base_url}/jsxsd/framework/xsMain.jsp"
 
     def get_captcha(self) -> bytes:
         """获取验证码图片"""
