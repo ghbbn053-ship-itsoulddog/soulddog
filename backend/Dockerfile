@@ -4,10 +4,9 @@ WORKDIR /app
 
 # 安装依赖
 COPY requirements.txt .
-RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
-    pip config set global.timeout 300 && \
-    pip config set global.retries 10 && \
-    pip install --no-cache-dir --retries 10 -r requirements.txt
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
+    pip config set global.timeout 120 && \
+    pip install --no-cache-dir -r requirements.txt
 
 # 复制代码
 COPY . .
