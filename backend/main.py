@@ -254,11 +254,24 @@ async def login(request: Request):
             }
 
         # 检查是否停留在登录页面（说明登录失败）
-        if "LoginToXkLdap" in content or "教务管理系统" in content and "framework" not in response.url:
+        # 登录页面特征：包含登录表单且 URL 不是 framework
+        is_login_page = (
+            ("LoginToXkLdap" in content or "用户名" in content and "密码" in content and "验证码" in content)
+            and "framework" not in response.url
+        )
+        if is_login_page:
             logger.warning(f"【登录】登录失败: 仍在登录页面")
+            # 尝试提取具体错误信息
+            error_msg = "登录失败，请检查用户名、密码或验证码"
+            if "密码错误" in content:
+                error_msg = "密码错误"
+            elif "验证码错误" in content:
+                error_msg = "验证码错误"
+            elif "用户名不存在" in content:
+                error_msg = "用户名不存在"
             return {
                 "success": False,
-                "message": "登录失败，请检查用户名、密码或验证码"
+                "message": error_msg
             }
 
         # 检查是否成功跳转到主页
