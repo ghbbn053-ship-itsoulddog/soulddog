@@ -24,6 +24,14 @@ from education_options import (
     get_option_description,
 )
 
+# 导入 API 路由
+try:
+    from app.api import chat
+    CHAT_API_AVAILABLE = True
+except ImportError:
+    CHAT_API_AVAILABLE = False
+    print("⚠️ Chat API 未启用")
+
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -65,6 +73,11 @@ SERVERS = [
 # Session 存储（生产环境应使用 Redis）
 SESSIONS = {}
 
+# 注册 Chat API 路由（如果可用）
+if CHAT_API_AVAILABLE:
+    app.include_router(chat.router)
+    print("✅ Chat API 已启用")
+
 
 def select_server(username: str) -> str:
     """
@@ -82,24 +95,31 @@ def select_server(username: str) -> str:
 @app.get("/")
 async def root():
     """根路径"""
+    endpoints = {
+        "captcha": "/api/captcha - 获取验证码",
+        "login": "/api/login - 登录",
+        "user_info": "/api/user/info - 个人信息",
+        "grades": "/api/grades - 成绩查询",
+        "schedule": "/api/schedule - 课表查询",
+        "training_plan": "/api/training-plan/my - 培养方案",
+        "academic_progress": "/api/academic-progress - 学业进度",
+        "exam_schedule": "/api/exam-schedule - 考试安排",
+        "teacher_search": "/api/teacher/search - 教师查询",
+        "course_search": "/api/course/search - 课程查询",
+        "all_data": "/api/all-data - 所有数据（用于向量化）",
+        "health": "/api/health - 健康检查"
+    }
+    
+    # 添加 Chat API
+    if CHAT_API_AVAILABLE:
+        endpoints["chat"] = "/api/chat/send - AI对话"
+        endpoints["conversations"] = "/api/chat/conversations/{username} - 对话列表"
+    
     return {
         "message": "教务系统 AI 助手 API",
         "version": "1.0.0",
         "docs": "/api - 查看完整 API 列表",
-        "endpoints": {
-            "captcha": "/api/captcha - 获取验证码",
-            "login": "/api/login - 登录",
-            "user_info": "/api/user/info - 个人信息",
-            "grades": "/api/grades - 成绩查询",
-            "schedule": "/api/schedule - 课表查询",
-            "training_plan": "/api/training-plan/my - 培养方案",
-            "academic_progress": "/api/academic-progress - 学业进度",
-            "exam_schedule": "/api/exam-schedule - 考试安排",
-            "teacher_search": "/api/teacher/search - 教师查询",
-            "course_search": "/api/course/search - 课程查询",
-            "all_data": "/api/all-data - 所有数据（用于向量化）",
-            "health": "/api/health - 健康检查"
-        }
+        "endpoints": endpoints
     }
 
 
