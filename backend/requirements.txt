@@ -20,7 +20,7 @@ webdriver-manager==4.0.2
 redis==5.2.1
 
 # 向量数据库
-grpcio==1.65.5
+grpcio==1.66.2
 pymilvus[milvus-lite]==2.6.11
 
 # LangChain
