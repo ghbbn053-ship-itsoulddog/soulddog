@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const API_BASE = "http://192.168.88.100:8000";
+  const API_BASE = "";  // 使用相对路径，通过 Nginx 反向代理
 
   // 获取验证码
   const fetchCaptcha = async () => {
