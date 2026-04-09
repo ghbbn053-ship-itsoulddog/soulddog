@@ -42,7 +42,7 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const API_BASE = "";  // 使用相对路径，通过 Nginx 反向代理
 
   // 滚动到底部
   const scrollToBottom = () => {
@@ -178,9 +178,20 @@ export default function ChatPage() {
     }
   };
 
+  // 页面加载时从 localStorage 读取用户名
+  useEffect(() => {
+    const savedUsername = localStorage.getItem("username");
+    if (savedUsername) {
+      setUsername(savedUsername);
+      setShowUserModal(false);
+      fetchConversations();
+    }
+  }, []);
+
   // 确认用户名
   const confirmUsername = () => {
     if (username.trim()) {
+      localStorage.setItem("username", username.trim());
       setShowUserModal(false);
       fetchConversations();
     }
