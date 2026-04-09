@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [captcha, setCaptcha] = useState("");
   const [captchaImage, setCaptchaImage] = useState("");
+  const [captchaSessionId, setCaptchaSessionId] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -23,6 +24,7 @@ export default function LoginPage() {
       const data = await res.json();
       if (data.success) {
         setCaptchaImage(data.image);
+        setCaptchaSessionId(data.captcha_session_id);
       }
     } catch (error) {
       console.error("获取验证码失败:", error);
@@ -44,7 +46,7 @@ export default function LoginPage() {
       const res = await fetch(`${API_BASE}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, code: captcha })
+        body: JSON.stringify({ username, password, code: captcha, captcha_session_id: captchaSessionId })
       });
 
       const data = await res.json();

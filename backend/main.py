@@ -129,6 +129,9 @@ async def health():
     return {"status": "ok"}
 
 
+# 验证码 session 存储
+CAPTCHA_SESSIONS = {}
+
 @app.get("/api/captcha")
 async def get_captcha():
     """
@@ -141,12 +144,14 @@ async def get_captcha():
         captcha_url = f"{VERIFY_CODE_URL}?t={timestamp}"
 
         # 请求验证码图片
-        response = requests.get(
+        session = requests.Session()
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        })
+        
+        response = session.get(
             captcha_url,
-            timeout=10,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-            }
+            timeout=10
         )
 
         if response.status_code != 200:
@@ -157,11 +162,15 @@ async def get_captcha():
 
         # 将图片转换为 base64
         image_base64 = base64.b64encode(response.content).decode("utf-8")
+        
+        # 生成临时验证码 session ID
+        captcha_session_id = f"captcha_{timestamp}"
+        CAPTCHA_SESSIONS[captcha_session_id] = session
 
         return {
             "success": True,
             "image": f"data:image/jpeg;base64,{image_base64}",
-            "session_id": response.cookies.get("JSESSIONID", "")
+            "captcha_session_id": captcha_session_id
         }
 
     except Exception as e:
@@ -172,23 +181,32 @@ async def get_captcha():
 async def login(request: Request):
     """
     登录接口
-    参数: username, password, code (验证码)
+    参数: username, password, code (验证码), captcha_session_id
     """
     try:
         data = await request.json()
         username = data.get("username")
         password = data.get("password")
         code = data.get("code")
+        captcha_session_id = data.get("captcha_session_id")
 
         # 验证参数
         if not all([username, password, code]):
             raise HTTPException(status_code=400, detail="缺少必要参数")
 
-        # 创建 Session
-        session = requests.Session()
-        session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        })
+        # 获取验证码 session
+        if captcha_session_id and captcha_session_id in CAPTCHA_SESSIONS:
+            session = CAPTCHA_SESSIONS[captcha_session_id]
+            # 清理已使用的验证码 session
+            del CAPTCHA_SESSIONS[captcha_session_id]
+            logger.info(f"【登录】使用验证码 session: {captcha_session_id}")
+        else:
+            # 创建新 Session（兼容旧方式）
+            session = requests.Session()
+            session.headers.update({
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+            })
+            logger.info("【登录】创建新 session")
 
         # 选择服务器
         server_url = select_server(username)
