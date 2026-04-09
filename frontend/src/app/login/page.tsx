@@ -1,0 +1,182 @@
+"use client";
+
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { GraduationCap, User, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
+
+export default function LoginPage() {
+  const router = useRouter();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [captcha, setCaptcha] = useState("");
+  const [captchaImage, setCaptchaImage] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+  // 获取验证码
+  const fetchCaptcha = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/captcha`);
+      const data = await res.json();
+      if (data.success) {
+        setCaptchaImage(data.image);
+      }
+    } catch (error) {
+      console.error("获取验证码失败:", error);
+    }
+  };
+
+  // 页面加载时获取验证码
+  React.useEffect(() => {
+    fetchCaptcha();
+  }, []);
+
+  // 登录
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch(`${API_BASE}/api/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password, code: captcha })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        // 保存用户名到 localStorage
+        localStorage.setItem("username", username);
+        // 跳转到聊天页面
+        router.push("/chat");
+      } else {
+        setError(data.message || "登录失败");
+        fetchCaptcha(); // 刷新验证码
+      }
+    } catch (error) {
+      setError("网络错误，请重试");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-blue-500/20">
+            <GraduationCap className="w-10 h-10 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">校园AI助手</h1>
+          <p className="text-gray-500 mt-2">请登录教务系统账号</p>
+        </div>
+
+        {/* 登录表单 */}
+        <div className="bg-white rounded-2xl shadow-xl p-8">
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-5">
+            {/* 学号 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                学号
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="请输入学号"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* 密码 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                密码
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="请输入密码"
+                  className="w-full pl-10 pr-12 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* 验证码 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                验证码
+              </label>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={captcha}
+                  onChange={(e) => setCaptcha(e.target.value)}
+                  placeholder="请输入验证码"
+                  className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+                {captchaImage && (
+                  <img
+                    src={captchaImage}
+                    alt="验证码"
+                    onClick={fetchCaptcha}
+                    className="h-12 w-24 object-cover rounded-xl cursor-pointer hover:opacity-80"
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* 登录按钮 */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  登录中...
+                </>
+              ) : (
+                "登录"
+              )}
+            </button>
+          </form>
+
+          {/* 提示 */}
+          <p className="text-center text-sm text-gray-500 mt-6">
+            使用教务系统账号密码登录
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
