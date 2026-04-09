@@ -201,12 +201,13 @@ async def login(request: Request):
             del CAPTCHA_SESSIONS[captcha_session_id]
             logger.info(f"【登录】使用验证码 session: {captcha_session_id}")
         else:
-            # 创建新 Session（兼容旧方式）
-            session = requests.Session()
-            session.headers.update({
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-            })
-            logger.info("【登录】创建新 session")
+            # 验证码 session 不存在或已过期
+            logger.warning(f"【登录】验证码 session 不存在: {captcha_session_id}")
+            logger.warning(f"【登录】当前可用 sessions: {list(CAPTCHA_SESSIONS.keys())}")
+            return {
+                "success": False,
+                "message": "验证码已过期，请刷新验证码后重试"
+            }
 
         # 选择服务器
         server_url = select_server(username)
