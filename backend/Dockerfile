@@ -5,7 +5,7 @@ WORKDIR /app
 # 安装依赖
 COPY requirements.txt .
 RUN pip config set global.timeout 300 && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
 
 # 复制代码
 COPY . .
