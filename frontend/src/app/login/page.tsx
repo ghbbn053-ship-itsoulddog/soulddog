@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const API_BASE = "http://192.168.88.100:8000";
 
   // 获取验证码
   const fetchCaptcha = async () => {
