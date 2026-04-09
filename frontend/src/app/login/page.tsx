@@ -42,14 +42,36 @@ export default function LoginPage() {
     setIsLoading(true);
     setError("");
 
+    // 验证参数
+    if (!username || !password || !captcha) {
+      setError("请填写所有字段");
+      setIsLoading(false);
+      return;
+    }
+    if (!captchaSessionId) {
+      setError("验证码会话无效，请点击验证码刷新");
+      setIsLoading(false);
+      fetchCaptcha();
+      return;
+    }
+
     try {
+      const requestBody = { 
+        username, 
+        password, 
+        code: captcha, 
+        captcha_session_id: captchaSessionId 
+      };
+      console.log("登录请求:", requestBody);
+
       const res = await fetch(`${API_BASE}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, code: captcha, captcha_session_id: captchaSessionId })
+        body: JSON.stringify(requestBody)
       });
 
       const data = await res.json();
+      console.log("登录响应:", data);
 
       if (data.success) {
         // 保存用户名到 localStorage
@@ -57,11 +79,13 @@ export default function LoginPage() {
         // 跳转到聊天页面
         router.push("/chat");
       } else {
-        setError(data.message || "登录失败");
+        setError(data.message || data.detail || "登录失败");
         fetchCaptcha(); // 刷新验证码
+        setCaptcha(""); // 清空验证码输入
       }
     } catch (error) {
-      setError("网络错误，请重试");
+      console.error("登录错误:", error);
+      setError("网络错误，请检查网络连接");
     } finally {
       setIsLoading(false);
     }
@@ -150,7 +174,7 @@ export default function LoginPage() {
                     src={captchaImage}
                     alt="验证码"
                     onClick={fetchCaptcha}
-                    className="h-12 w-24 object-cover rounded-xl cursor-pointer hover:opacity-80"
+                    className="h-12 w-28 object-contain rounded-xl cursor-pointer hover:opacity-80 bg-gray-100"
                   />
                 )}
               </div>
