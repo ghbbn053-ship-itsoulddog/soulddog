@@ -133,15 +133,23 @@ async def health():
 CAPTCHA_SESSIONS = {}
 
 @app.get("/api/captcha")
-async def get_captcha():
+async def get_captcha(username: str = None):
     """
     获取验证码图片
     返回 base64 编码的图片
+    参数: username - 用于选择服务器（可选）
     """
     try:
-        # 添加随机参数避免缓存
-        timestamp = random.random()
-        captcha_url = f"{VERIFY_CODE_URL}?t={timestamp}"
+        # 根据学号选择服务器，确保验证码和登录使用同一服务器
+        if username and username.isdigit():
+            server_index = int(username) % len(SERVERS)
+            server_url = SERVERS[server_index]
+        else:
+            # 默认使用第一个服务器
+            server_url = SERVERS[0]
+        
+        captcha_url = f"{server_url}verifycode.servlet"
+        logger.info(f"【验证码】使用服务器: {server_url}")
 
         # 请求验证码图片
         session = requests.Session()
@@ -163,9 +171,12 @@ async def get_captcha():
         # 将图片转换为 base64
         image_base64 = base64.b64encode(response.content).decode("utf-8")
         
-        # 生成临时验证码 session ID
-        captcha_session_id = f"captcha_{timestamp}"
+        # 生成临时验证码 session ID，包含服务器信息
+        import time
+        timestamp = time.time()
+        captcha_session_id = f"captcha_{timestamp}_{server_index}"
         CAPTCHA_SESSIONS[captcha_session_id] = session
+        logger.info(f"【验证码】生成 session: {captcha_session_id}")
 
         return {
             "success": True,
@@ -174,6 +185,7 @@ async def get_captcha():
         }
 
     except Exception as e:
+        logger.error(f"【验证码】获取失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取验证码失败: {str(e)}")
 
 
@@ -195,6 +207,17 @@ async def login(request: Request):
             raise HTTPException(status_code=400, detail="缺少必要参数")
 
         # 获取验证码 session
+        # 从 captcha_session_id 中提取服务器索引
+        server_index = None
+        if captcha_session_id:
+            parts = captcha_session_id.split('_')
+            if len(parts) >= 3:
+                try:
+                    server_index = int(parts[2])
+                    logger.info(f"【登录】从 session 提取服务器索引: {server_index}")
+                except ValueError:
+                    pass
+        
         if captcha_session_id and captcha_session_id in CAPTCHA_SESSIONS:
             session = CAPTCHA_SESSIONS[captcha_session_id]
             # 清理已使用的验证码 session
@@ -209,8 +232,13 @@ async def login(request: Request):
                 "message": "验证码已过期，请刷新验证码后重试"
             }
 
-        # 选择服务器
-        server_url = select_server(username)
+        # 选择服务器（优先使用验证码时选择的服务器）
+        if server_index is not None and 0 <= server_index < len(SERVERS):
+            server_url = SERVERS[server_index]
+            logger.info(f"【登录】使用验证码时的服务器: {server_url}")
+        else:
+            server_url = select_server(username)
+            logger.info(f"【登录】根据学号选择服务器: {server_url}")
         login_url = f"{server_url}xk/LoginToXkLdap"
 
         # 登录表单数据

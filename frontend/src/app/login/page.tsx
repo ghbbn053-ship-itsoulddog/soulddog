@@ -20,7 +20,11 @@ export default function LoginPage() {
   // 获取验证码
   const fetchCaptcha = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/captcha`);
+      // 如果已输入用户名，传递给后端用于选择服务器
+      const url = username 
+        ? `${API_BASE}/api/captcha?username=${encodeURIComponent(username)}`
+        : `${API_BASE}/api/captcha`;
+      const res = await fetch(url);
       const data = await res.json();
       if (data.success) {
         setCaptchaImage(data.image);
@@ -35,6 +39,17 @@ export default function LoginPage() {
   React.useEffect(() => {
     fetchCaptcha();
   }, []);
+
+  // 当用户输入用户名后，延迟刷新验证码（确保服务器匹配）
+  React.useEffect(() => {
+    if (username && username.length >= 10) {
+      // 用户名输入完成后，刷新验证码
+      const timer = setTimeout(() => {
+        fetchCaptcha();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [username]);
 
   // 登录
   const handleLogin = async (e: React.FormEvent) => {

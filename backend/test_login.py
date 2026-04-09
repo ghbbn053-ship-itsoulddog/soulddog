@@ -1,143 +1,151 @@
-from scraper import JwxtScraper
+"""
+测试登录功能 - 检查验证码和登录服务器问题
+"""
+import requests
+import base64
 
-print('=== 教务系统登录测试 ===')
-scraper = JwxtScraper()
+# 外网教务系统
+JWXT_BASE_URL = "http://jwxt.gdufe.edu.cn"
+VERIFY_CODE_URL = f"{JWXT_BASE_URL}/jsxsd/verifycode.servlet"
+LOGIN_URL = f"{JWXT_BASE_URL}/jsxsd/xk/LoginToXkLdap"
 
-print('1. 获取验证码...')
-captcha = scraper.get_captcha()
-print(f'   验证码大小: {len(captcha)} bytes')
+# 内网服务器列表
+SERVERS = [
+    "http://172.19.13.60:80/jsxsd/",
+    "http://172.19.13.62:80/jsxsd/",
+    "http://172.19.13.61:80/jsxsd/",
+]
 
-with open('captcha.jpg', 'wb') as f:
-    f.write(captcha)
-print('   验证码已保存到 captcha.jpg')
-
-print('\n2. 请输入登录信息:')
-username = input('   学号: ')
-password = input('   密码: ')
-code = input('   验证码: ')
-
-print('\n3. 正在登录...')
-result = scraper.login(username, password, captcha=code)
-print(f'   结果: {result}')
-
-if result['success']:
-    print('\n4. 获取个人信息...')
-    info = scraper.get_personal_info()
-    print(f'   {info}')
-
-    print('\n5. 选择查询方式:')
-    print('   1. 查询所有主修成绩')
-    print('   2. 查询辅修成绩')
-    print('   3. 按学期查询')
-    print('   4. 查询最好成绩')
-    choice = input('   请选择(1-4，默认1): ').strip() or '1'
-
-    if choice == '1':
-        grades = scraper.get_all_grades()
-    elif choice == '2':
-        grades = scraper.get_grades(fxkc='1')
-    elif choice == '3':
-        semester = input('   输入学期(如2024-2025-2): ')
-        grades = scraper.get_grades(kksj=semester)
-    elif choice == '4':
-        grades = scraper.get_grades(xsfs='max')
+def test_login_external():
+    """测试使用外网服务器登录"""
+    print("=" * 50)
+    print("测试1: 使用外网服务器登录")
+    print("=" * 50)
+    
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    })
+    
+    # 1. 获取验证码
+    print(f"\n1. 获取验证码: {VERIFY_CODE_URL}")
+    response = session.get(VERIFY_CODE_URL, timeout=10)
+    print(f"   状态码: {response.status_code}")
+    print(f"   Cookies: {dict(session.cookies)}")
+    
+    # 保存验证码图片
+    with open("captcha_test.png", "wb") as f:
+        f.write(response.content)
+    print(f"   验证码已保存到 captcha_test.png")
+    
+    # 2. 手动输入验证码进行测试
+    code = input("\n请输入验证码（查看 captcha_test.png）: ")
+    username = input("请输入学号: ")
+    password = input("请输入密码: ")
+    
+    # 3. 登录
+    print(f"\n2. 登录: {LOGIN_URL}")
+    login_data = {
+        "USERNAME": username,
+        "PASSWORD": password,
+        "RANDOMCODE": code
+    }
+    
+    response = session.post(LOGIN_URL, data=login_data, timeout=10)
+    print(f"   状态码: {response.status_code}")
+    print(f"   响应URL: {response.url}")
+    print(f"   Cookies: {dict(session.cookies)}")
+    
+    # 检查结果
+    content = response.text
+    print(f"\n3. 检查结果:")
+    print(f"   内容长度: {len(content)}")
+    print(f"   包含 'framework': {'framework' in content}")
+    print(f"   包含 'LoginToXkLdap': {'LoginToXkLdap' in content}")
+    print(f"   包含 '密码错误': {'密码错误' in content}")
+    print(f"   包含 '验证码错误': {'验证码错误' in content}")
+    
+    if "framework" in response.url or "/jsxsd/framework/" in content:
+        print("\n✅ 登录成功！")
     else:
-        grades = scraper.get_all_grades()
+        print("\n❌ 登录失败！")
+        # 输出部分内容用于调试
+        print(f"\n响应内容预览 (前500字符):\n{content[:500]}")
 
-    print(f'\n   成绩数量: {grades.get("count", 0)}')
 
-    if grades.get('success') and grades.get('data'):
-        print('\n   成绩统计:')
-        stats = grades.get('stats', {})
-        print(f"      需修读: {stats.get('total_credits_required', 0)} 学分")
-        print(f"      已修读: {stats.get('credits_completed', 0)} 学分")
-        print(f"      还需修读: {stats.get('credits_remaining', 0)} 学分")
-        print(f"      平均绩点: {stats.get('gpa_major', 0)}")
-        print(f"      专业排名: {stats.get('rank', 'N/A')}")
+def test_login_internal():
+    """测试使用内网服务器登录"""
+    print("\n" + "=" * 50)
+    print("测试2: 使用内网服务器登录")
+    print("=" * 50)
+    
+    # 选择第一个内网服务器
+    server_url = SERVERS[1]  # 172.19.13.62
+    verify_url = f"{server_url}verifycode.servlet"
+    login_url = f"{server_url}xk/LoginToXkLdap"
+    
+    print(f"\n使用服务器: {server_url}")
+    
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    })
+    
+    # 1. 获取验证码
+    print(f"\n1. 获取验证码: {verify_url}")
+    try:
+        response = session.get(verify_url, timeout=10)
+        print(f"   状态码: {response.status_code}")
+        print(f"   Cookies: {dict(session.cookies)}")
+        
+        # 保存验证码图片
+        with open("captcha_internal.png", "wb") as f:
+            f.write(response.content)
+        print(f"   验证码已保存到 captcha_internal.png")
+    except Exception as e:
+        print(f"   错误: {e}")
+        print("   内网服务器可能无法访问，尝试下一个服务器...")
+        return
+    
+    # 2. 手动输入验证码进行测试
+    code = input("\n请输入验证码（查看 captcha_internal.png）: ")
+    username = input("请输入学号: ")
+    password = input("请输入密码: ")
+    
+    # 3. 登录
+    print(f"\n2. 登录: {login_url}")
+    login_data = {
+        "USERNAME": username,
+        "PASSWORD": password,
+        "RANDOMCODE": code
+    }
+    
+    response = session.post(login_url, data=login_data, timeout=10)
+    print(f"   状态码: {response.status_code}")
+    print(f"   响应URL: {response.url}")
+    print(f"   Cookies: {dict(session.cookies)}")
+    
+    # 检查结果
+    content = response.text
+    print(f"\n3. 检查结果:")
+    print(f"   内容长度: {len(content)}")
+    print(f"   包含 'framework': {'framework' in content}")
+    print(f"   包含 'LoginToXkLdap': {'LoginToXkLdap' in content}")
+    
+    if "framework" in response.url or "/jsxsd/framework/" in content:
+        print("\n✅ 登录成功！")
+    else:
+        print("\n❌ 登录失败！")
 
-        print('\n   最近5门课程:')
-        for i, grade in enumerate(grades['data'][:5], 1):
-            print(f"      {i}. {grade.get('课程名称', 'N/A')} - {grade.get('成绩', 'N/A')} ({grade.get('开课学期', 'N/A')})")
 
-    # 测试其他功能
-    print('\n6. 测试其他功能:')
-    print('   a. 获取课表')
-    print('   b. 获取我的培养方案（详细）')
-    print('   c. 获取学业进度（主修/辅修）')
-    print('   d. 获取考试安排')
-    print('   e. 获取执行计划')
-    print('   f. 跳过')
-
-    test_choice = input('   请选择(a-f，默认f): ').strip() or 'f'
-
-    if test_choice == 'a':
-        semester = input('   输入学期(如2024-2025-2，直接回车获取当前): ')
-        week = input('   输入周次(1-30，直接回车获取全部): ')
-        print(f'\n   正在获取课表...')
-        schedule = scraper.get_schedule(semester=semester, week=week)
-        print(f"\n   课表课程数: {schedule.get('count', 0)}")
-        if schedule.get('data'):
-            print('   示例课程:')
-            for i, course in enumerate(schedule['data'][:5], 1):
-                print(f"      {i}. {course.get('课程名称', 'N/A')}")
-                print(f"         时间: {course.get('星期', 'N/A')} 第{course.get('节次', 'N/A')}节")
-                print(f"         地点: {course.get('地点', 'N/A')}")
-                print(f"         周次: {course.get('周次', 'N/A')}")
-                if course.get('教师'):
-                    print(f"         教师: {course.get('教师', 'N/A')}")
-        if schedule.get('未安排时间课程'):
-            print(f"\n   未安排时间课程: {', '.join(schedule['未安排时间课程'])}")
-
-    elif test_choice == 'b':
-        print('\n   正在获取我的培养方案...')
-        plan = scraper.get_my_training_plan()
-        print(f"\n   培养方案课程数: {plan.get('count', 0)}")
-        if plan.get('data'):
-            basic_info = plan['data'].get('基本信息', {})
-            credit_stats = plan['data'].get('学分统计', {})
-            print(f"   专业版本: {basic_info.get('专业版本', 'N/A')}")
-            print(f"   学院: {basic_info.get('学院', 'N/A')}")
-            print(f"   总学分要求: {credit_stats.get('总学分要求', 0)}")
-            print(f"   计划学分: {credit_stats.get('计划学分', 0)}")
-            if plan['data'].get('课程列表'):
-                print('   示例课程:')
-                for i, course in enumerate(plan['data']['课程列表'][:3], 1):
-                    print(f"      {i}. {course.get('课程名称', 'N/A')} ({course.get('课程代码', 'N/A')}) - {course.get('学分', 'N/A')}学分")
-
-    elif test_choice == 'c':
-        print('\n   选择修读类型:')
-        print('   0. 主修')
-        print('   1. 辅修')
-        study_type = input('   请选择(0-1，默认0): ').strip() or '0'
-
-        print(f'\n   正在获取{"辅修" if study_type == "1" else "主修"}学业进度...')
-        progress = scraper.get_academic_progress(study_type=study_type)
-        if progress.get('success'):
-            data = progress.get('data', {})
-            print(f"\n   修读类型: {data.get('修读类型', 'N/A')}")
-            print(f"   总学分要求: {data.get('总学分要求', 0)}")
-            print(f"   已获学分: {data.get('已获学分', 0)}")
-            print(f"   还需学分: {data.get('还需学分', 0)}")
-            print(f"   课程数量: {progress.get('count', 0)}")
-            if data.get('课程列表'):
-                print('   示例课程:')
-                for i, course in enumerate(data['课程列表'][:3], 1):
-                    status = "✓" if course.get('已获学分') else "✗"
-                    print(f"      {status} {i}. {course.get('课程名称', 'N/A')} - 已获{course.get('已获学分', '0')}学分")
-
-    elif test_choice == 'd':
-        semester = input('   输入学期(如2024-2025-1): ')
-        exams = scraper.get_exam_schedule(semester=semester)
-        print(f"\n   考试安排数: {exams.get('count', 0)}")
-        if exams.get('data'):
-            print('   考试列表:')
-            for i, exam in enumerate(exams['data'][:3], 1):
-                print(f"      {i}. {exam.get('课程名称', 'N/A')} - {exam.get('考试时间', 'N/A')}")
-
-    elif test_choice == 'e':
-        print('\n   正在获取执行计划...')
-        plan = scraper.get_execution_plan()
-        print(f"\n   执行计划课程数: {plan.get('count', 0)}")
-        if plan.get('data'):
-            plan_info = plan['data'].get('计划信息', {})
-            print(f"   计划信息: {plan_info}")
+if __name__ == "__main__":
+    print("教务系统登录测试")
+    print("=" * 50)
+    
+    # 先测试外网
+    test_login_external()
+    
+    # 询问是否测试内网
+    # test_internal = input("\n是否测试内网服务器? (y/n): ")
+    # if test_internal.lower() == 'y':
+    #     test_login_internal()
