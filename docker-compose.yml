@@ -94,7 +94,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev  # 开发模式，支持热重载
     container_name: campus-ai-frontend
     restart: unless-stopped
     ports:
@@ -103,10 +103,19 @@ services:
       - backend
     environment:
       - NEXT_PUBLIC_API_URL=/api
-    # 开发模式：挂载代码目录，改代码后自动刷新（需要重新构建一次）
-    # volumes:
-    #   - ./frontend/src:/app/src
-    #   - ./frontend/public:/app/public
+      - WATCHPACK_POLLING=true  # 支持文件监听
+    # 开发模式：挂载代码目录，改代码后自动刷新
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/package.json:/app/package.json
+      - ./frontend/next.config.ts:/app/next.config.ts
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+      - ./frontend/postcss.config.mjs:/app/postcss.config.mjs
+      - ./frontend/components.json:/app/components.json
+      # 排除 node_modules，使用容器内的
+      - /app/node_modules
+      - /app/.next
 
   backend:
     build:

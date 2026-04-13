@@ -1,0 +1,25 @@
+# 开发模式 Dockerfile - 使用 Next.js 开发服务器，支持热重载
+FROM node:20-alpine
+
+WORKDIR /app
+
+# 安装 pnpm
+RUN npm install -g pnpm
+
+# 配置镜像源
+RUN pnpm config set registry https://registry.npmmirror.com
+
+# 先复制依赖文件，利用 Docker 缓存
+COPY package.json pnpm-lock.yaml* ./
+
+# 安装依赖
+RUN pnpm install
+
+# 复制代码
+COPY . .
+
+# 暴露端口
+EXPOSE 3000
+
+# 开发模式启动（支持热重载）
+CMD ["pnpm", "dev"]
