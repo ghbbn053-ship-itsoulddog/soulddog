@@ -21,11 +21,20 @@ class JwxtScraper:
 
     def _fix_encoding(self, response) -> None:
         """自动修正响应编码，适配教务系统 GBK/UTF-8 混合场景"""
+        import re
+        # 先尝试 GB18030（兼容 GBK/GB2312）
+        response.encoding = 'gb18030'
+        text_gb = response.text
+        # 如果 GB18030 解码后有中文，就用它
+        if re.search(r'[\u4e00-\u9fff]', text_gb):
+            response.encoding = 'gb18030'
+            return
+        # 否则尝试 UTF-8
         try:
             response.content.decode('utf-8')
             response.encoding = 'utf-8'
         except UnicodeDecodeError:
-            response.encoding = 'gb18030'  # gb18030 兼容 gbk 和 gb2312
+            response.encoding = 'gb18030'
 
     def get_captcha(self) -> bytes:
         """获取验证码图片"""
