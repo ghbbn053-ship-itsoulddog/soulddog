@@ -18,6 +18,8 @@
 - 更新了所有学术数据端点的URL构造方式
 - 修复了验证码、登录、数据查询等接口的URL拼接问题
 - 统一了服务器URL和页面URL的构造逻辑
+- 增强了个人信息提取过程的调试能力
+- 改进了中文字符编码处理逻辑
 
 ## 目录
 1. [简介](#简介)
@@ -36,7 +38,7 @@
 
 该系统采用现代化的技术栈，包括Python 3.9+、FastAPI、SQLAlchemy、BeautifulSoup等，实现了高可靠性的数据爬取和处理功能。系统支持多种查询条件和筛选参数，提供灵活的数据查询能力，并具备良好的扩展性和维护性。
 
-**更新** 本版本修复了URL构造中的重复jsxsd前缀问题，确保所有接口的URL拼接正确无误。
+**更新** 本版本修复了URL构造中的重复jsxsd前缀问题，确保所有接口的URL拼接正确无误。同时增强了调试能力，改进了中文字符编码处理逻辑，提升了系统的稳定性和可靠性。
 
 ## 项目结构
 
@@ -104,7 +106,7 @@ SERVICE --> AUTH
 4. **API接口模块**: 提供RESTful API接口
 5. **数据存储模块**: 管理用户数据的持久化存储
 
-**更新** URL构造逻辑已优化，消除了重复的jsxsd前缀，提高了URL拼接的准确性。
+**更新** URL构造逻辑已优化，消除了重复的jsxsd前缀，提高了URL拼接的准确性。调试能力得到显著增强，特别是在个人信息提取过程中提供了更详细的日志输出。
 
 **章节来源**
 - [main.py:1-853](file://backend/main.py#L1-L853)
@@ -214,7 +216,7 @@ AuthError --> End
 curl -X GET "http://localhost:8000/api/grades?username=2024110101&kcxz=01&fxkc=0&xsfs=all"
 ```
 
-**更新** URL构造已修复，确保正确的/jxsd/前缀拼接，避免重复jsxsd问题。
+**更新** URL构造已修复，确保正确的/jxsd/前缀拼接，避免重复jsxsd问题。调试日志现在包含详细的URL信息和响应状态。
 
 **章节来源**
 - [main.py:426-463](file://backend/main.py#L426-L463)
@@ -262,7 +264,7 @@ curl -X GET "http://localhost:8000/api/grades?username=2024110101&kcxz=01&fxkc=0
 curl -X GET "http://localhost:8000/api/schedule?username=2024110101&semester=2024-2025-2&week=1"
 ```
 
-**更新** 课表查询URL已修正，确保正确的页面路径拼接。
+**更新** 课表查询URL已修正，确保正确的页面路径拼接。调试日志现在包含详细的课表解析信息。
 
 **章节来源**
 - [main.py:480-510](file://backend/main.py#L480-L510)
@@ -321,7 +323,7 @@ curl -X GET "http://localhost:8000/api/schedule?username=2024110101&semester=202
 curl -X GET "http://localhost:8000/api/training-plan/my?username=2024110101"
 ```
 
-**更新** 培养方案URL已修复，确保正确的/pyfa/路径拼接。
+**更新** 培养方案URL已修复，确保正确的/pyfa/路径拼接。调试日志现在包含详细的培养方案解析过程。
 
 **章节来源**
 - [main.py:512-536](file://backend/main.py#L512-L536)
@@ -370,7 +372,7 @@ curl -X GET "http://localhost:8000/api/training-plan/my?username=2024110101"
 curl -X GET "http://localhost:8000/api/academic-progress?username=2024110101&study_type=0"
 ```
 
-**更新** 学业进度URL已修正，确保正确的/pyfa/路径拼接。
+**更新** 学业进度URL已修正，确保正确的/pyfa/路径拼接。调试日志现在包含详细的学分统计解析信息。
 
 **章节来源**
 - [main.py:538-564](file://backend/main.py#L538-L564)
@@ -414,7 +416,7 @@ curl -X GET "http://localhost:8000/api/academic-progress?username=2024110101&stu
 curl -X GET "http://localhost:8000/api/exam-schedule?username=2024110101&semester=2024-2025-1"
 ```
 
-**更新** 考试安排URL已修复，确保正确的/xsks/路径拼接。
+**更新** 考试安排URL已修复，确保正确的/xsks/路径拼接。调试日志现在包含详细的考试安排解析过程。
 
 **章节来源**
 - [main.py:566-593](file://backend/main.py#L566-L593)
@@ -455,7 +457,7 @@ curl -X GET "http://localhost:8000/api/exam-schedule?username=2024110101&semeste
 curl -X GET "http://localhost:8000/api/teacher/search?name=李&department=11"
 ```
 
-**更新** 教师查询URL已修正，确保正确的/jsxx/路径拼接。
+**更新** 教师查询URL已修正，确保正确的/jsxx/路径拼接。调试日志现在包含详细的教师信息提取过程。
 
 **章节来源**
 - [main.py:595-622](file://backend/main.py#L595-L622)
@@ -499,7 +501,7 @@ curl -X GET "http://localhost:8000/api/teacher/search?name=李&department=11"
 curl -X GET "http://localhost:8000/api/course/search?course_name=数据结构&department=11"
 ```
 
-**更新** 课程查询URL已修复，确保正确的/kbcx/路径拼接。
+**更新** 课程查询URL已修复，确保正确的/kbcx/路径拼接。调试日志现在包含详细的课程信息解析过程。
 
 **章节来源**
 - [main.py:624-652](file://backend/main.py#L624-L652)
@@ -577,7 +579,7 @@ TEST_LOGIN --> MAIN
 3. **认证服务**: JWT令牌认证系统
 4. **网络服务**: 需要稳定的网络连接访问教务系统
 
-**更新** URL构造修复确保了与教务系统的正确通信，消除了重复前缀导致的连接问题。
+**更新** URL构造修复确保了与教务系统的正确通信，消除了重复前缀导致的连接问题。调试增强提供了更好的问题诊断能力。
 
 **章节来源**
 - [main.py:50-71](file://backend/main.py#L50-L71)
@@ -609,7 +611,7 @@ TEST_LOGIN --> MAIN
 - 内存使用情况
 - 错误率统计
 
-**更新** URL构造优化减少了无效的URL重定向和重复请求，提升了整体性能。
+**更新** URL构造优化减少了无效的URL重定向和重复请求，提升了整体性能。调试增强使得性能问题更容易定位和解决。
 
 ## 故障排除指南
 
@@ -664,7 +666,21 @@ TEST_LOGIN --> MAIN
 4. 异步处理
 5. **减少无效的URL重定向**
 
-**更新** URL构造修复解决了重复前缀导致的额外请求和重定向问题。
+#### 编码问题
+
+**问题症状**: 中文字符显示乱码
+**可能原因**:
+1. 页面编码不一致
+2. 字符串解码错误
+3. 编码检测失败
+
+**解决步骤**:
+1. 检查页面实际编码
+2. 实现多编码尝试解码
+3. 使用正则表达式检测中文字符
+4. 回退到兼容编码方案
+
+**更新** URL构造修复解决了重复前缀导致的额外请求和重定向问题。调试增强提供了详细的日志信息，包括URL构造过程、编码检测逻辑和数据解析步骤。
 
 **章节来源**
 - [main.py:187-328](file://backend/main.py#L187-L328)
@@ -679,7 +695,7 @@ TEST_LOGIN --> MAIN
 3. **日志系统**: 完整的日志记录和错误追踪
 4. **健康检查**: `/api/health` - 系统健康状态检查
 
-**更新** 调试工具现在可以正确测试修复后的URL构造逻辑。
+**更新** 调试工具现在可以正确测试修复后的URL构造逻辑。个人信息提取过程的调试能力得到显著增强，提供了详细的日志输出和错误诊断信息。
 
 **章节来源**
 - [test_login.py:1-152](file://backend/test_login.py#L1-L152)
@@ -699,6 +715,8 @@ TEST_LOGIN --> MAIN
 - **URL构造修复**: 成功消除了重复的'/jsxsd/'前缀问题
 - **稳定性提升**: 统一了所有接口的URL拼接逻辑
 - **兼容性改善**: 确保与不同服务器配置的兼容性
+- **调试能力增强**: 提供了详细的日志输出和错误诊断
+- **编码处理优化**: 改进了中文字符编码处理逻辑
 
 系统在实际部署中建议：
 - 生产环境使用Redis作为缓存存储

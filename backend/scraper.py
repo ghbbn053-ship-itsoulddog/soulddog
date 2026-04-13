@@ -22,23 +22,30 @@ class JwxtScraper:
     def _fix_encoding(self, response) -> None:
         """自动修正响应编码，适配教务系统 GBK/UTF-8 混合场景"""
         import re
-        # 先尝试 GB18030（兼容 GBK/GB2312）
-        response.encoding = 'gb18030'
-        text_gb = response.text
-        # 如果 GB18030 解码后有中文，就用它
-        has_chinese = re.search(r'[\u4e00-\u9fff]', text_gb)
+        # 先检查原始字节内容是否包含中文（用 GB18030 解码）
+        raw_bytes = response.content
+        text_gb18030 = raw_bytes.decode('gb18030', errors='ignore')
+        
+        has_chinese = re.search(r'[\u4e00-\u9fff]', text_gb18030)
         if has_chinese:
+            # 清除缓存的 text，强制重新解码
+            if hasattr(response, '_text'):
+                del response._text
             response.encoding = 'gb18030'
             logger.debug(f"【编码】使用 GB18030，检测到中文")
-            return
-        # 否则尝试 UTF-8
-        try:
-            response.content.decode('utf-8')
-            response.encoding = 'utf-8'
-            logger.debug(f"【编码】使用 UTF-8")
-        except UnicodeDecodeError:
-            response.encoding = 'gb18030'
-            logger.debug(f"【编码】UTF-8 解码失败，回退到 GB18030")
+        else:
+            # 尝试 UTF-8
+            try:
+                raw_bytes.decode('utf-8')
+                if hasattr(response, '_text'):
+                    del response._text
+                response.encoding = 'utf-8'
+                logger.debug(f"【编码】使用 UTF-8")
+            except UnicodeDecodeError:
+                if hasattr(response, '_text'):
+                    del response._text
+                response.encoding = 'gb18030'
+                logger.debug(f"【编码】UTF-8 解码失败，回退到 GB18030")
 
     def get_captcha(self) -> bytes:
         """获取验证码图片"""
