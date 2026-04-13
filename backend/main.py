@@ -146,6 +146,7 @@ async def get_captcha(username: str = None):
             server_url = SERVERS[server_index]
         else:
             # 默认使用第一个服务器
+            server_index = 0
             server_url = SERVERS[0]
         
         captcha_url = f"{server_url}verifycode.servlet"
@@ -267,11 +268,26 @@ async def login(request: Request):
                 detail=f"登录请求失败: {response.status_code}"
             )
 
-        # 检查是否登录成功（根据教务系统返回的页面判断）
-        response.encoding = "utf-8"
-        content = response.text
+        logger.info(f"【登录】响应内容长度: {len(response.content)}")
 
-        logger.info(f"【登录】响应内容长度: {len(content)}")
+        # 尝试多种编码解析响应内容
+        # 教务系统通常使用 GBK/GB2312 编码
+        for encoding in ['utf-8', 'gbk', 'gb2312', 'gb18030']:
+            try:
+                response.encoding = encoding
+                content = response.text
+                # 如果能正常解码且包含中文，就使用这个编码
+                if any(c in content for c in ['用户', '密码', '验证', '登录', 'framework']):
+                    logger.info(f"【登录】使用编码: {encoding}")
+                    break
+            except Exception:
+                continue
+        else:
+            response.encoding = response.apparent_encoding
+            content = response.text
+        
+        logger.info(f"【登录】响应编码: {response.encoding}")
+        logger.info(f"【登录】响应内容预览: {content[:200]}")
 
         # 检查登录失败的明确标志
         if "密码错误" in content or "验证码错误" in content or "用户名不存在" in content:
@@ -284,7 +300,7 @@ async def login(request: Request):
         # 检查是否停留在登录页面（说明登录失败）
         # 登录页面特征：包含登录表单且 URL 不是 framework
         is_login_page = (
-            ("LoginToXkLdap" in content or "用户名" in content and "密码" in content and "验证码" in content)
+            ("LoginToXkLdap" in content or ("用户名" in content and "密码" in content and "验证码" in content))
             and "framework" not in response.url
         )
         if is_login_page:

@@ -18,17 +18,19 @@ export default function LoginPage() {
   const API_BASE = "";  // 使用相对路径，通过 Nginx 反向代理
 
   // 获取验证码
-  const fetchCaptcha = async () => {
+  const fetchCaptcha = async (currentUsername?: string) => {
     try {
+      const uname = currentUsername ?? username;
       // 如果已输入用户名，传递给后端用于选择服务器
-      const url = username 
-        ? `${API_BASE}/api/captcha?username=${encodeURIComponent(username)}`
+      const url = uname 
+        ? `${API_BASE}/api/captcha?username=${encodeURIComponent(uname)}`
         : `${API_BASE}/api/captcha`;
       const res = await fetch(url);
       const data = await res.json();
       if (data.success) {
         setCaptchaImage(data.image);
         setCaptchaSessionId(data.captcha_session_id);
+        setCaptcha(""); // 刷新验证码时清空输入
       }
     } catch (error) {
       console.error("获取验证码失败:", error);
@@ -41,11 +43,13 @@ export default function LoginPage() {
   }, []);
 
   // 当用户输入用户名后，延迟刷新验证码（确保服务器匹配）
+  const usernameRef = React.useRef(username);
+  usernameRef.current = username;
   React.useEffect(() => {
     if (username && username.length >= 10) {
       // 用户名输入完成后，刷新验证码
       const timer = setTimeout(() => {
-        fetchCaptcha();
+        fetchCaptcha(usernameRef.current);
       }, 500);
       return () => clearTimeout(timer);
     }
@@ -188,7 +192,7 @@ export default function LoginPage() {
                   <img
                     src={captchaImage}
                     alt="验证码"
-                    onClick={fetchCaptcha}
+                    onClick={() => fetchCaptcha()}
                     className="h-12 w-28 object-contain rounded-xl cursor-pointer hover:opacity-80 bg-gray-100"
                   />
                 )}
