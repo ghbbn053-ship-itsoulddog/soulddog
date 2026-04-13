@@ -71,6 +71,7 @@ SERVERS = [
 ]
 
 # Session 存储（生产环境应使用 Redis）
+# 结构: {username: {"session": requests.Session, "server_url": str}}
 SESSIONS = {}
 
 # 注册 Chat API 路由（如果可用）
@@ -320,9 +321,13 @@ async def login(request: Request):
 
         # 检查是否成功跳转到主页
         if "/jsxsd/framework/" in content or "framework" in response.url:
-            # 保存 session
-            SESSIONS[username] = session
+            # 保存 session 和 server_url
+            SESSIONS[username] = {
+                "session": session,
+                "server_url": server_url
+            }
             logger.info(f"【登录】登录成功，session 已保存，当前 session 数量: {len(SESSIONS)}")
+            logger.info(f"【登录】服务器 URL: {server_url}")
 
             return {
                 "success": True,
@@ -345,6 +350,21 @@ async def login(request: Request):
 
 # ===== 数据爬取接口 =====
 
+def get_user_session(username: str):
+    """
+    获取用户的 session 和 server_url
+    返回: (session, server_url) 或抛出 HTTPException
+    """
+    if username not in SESSIONS:
+        logger.warning(f"【Session】用户 {username} 未登录")
+        raise HTTPException(status_code=401, detail="未登录，请先登录")
+    
+    user_data = SESSIONS[username]
+    session = user_data["session"]
+    server_url = user_data["server_url"]
+    logger.info(f"【Session】用户 {username} - 服务器: {server_url}")
+    return session, server_url
+
 @app.get("/api/user/info")
 async def get_user_info(username: str):
     """
@@ -355,15 +375,10 @@ async def get_user_info(username: str):
         logger.info(f"【个人信息】当前 session 数量: {len(SESSIONS)}")
         logger.info(f"【个人信息】当前 session keys: {list(SESSIONS.keys())}")
 
-        # 检查 session 是否存在
-        if username not in SESSIONS:
-            logger.warning(f"【个人信息】用户 {username} 未登录")
-            raise HTTPException(status_code=401, detail="未登录，请先登录")
-
-        session = SESSIONS[username]
+        session, server_url = get_user_session(username)
         logger.info(f"【个人信息】找到用户 {username} 的 session，开始爬取...")
 
-        scraper = JwxtScraper(session, JWXT_BASE_URL)
+        scraper = JwxtScraper(session, server_url)
 
         result = scraper.get_personal_info()
 
@@ -389,11 +404,8 @@ async def get_user_card(username: str):
     获取学籍卡片详细信息
     """
     try:
-        if username not in SESSIONS:
-            raise HTTPException(status_code=401, detail="未登录，请先登录")
-
-        session = SESSIONS[username]
-        scraper = JwxtScraper(session, JWXT_BASE_URL)
+        session, server_url = get_user_session(username)
+        scraper = JwxtScraper(session, server_url)
 
         result = scraper.get_student_card()
 
@@ -430,11 +442,8 @@ async def get_grades(
     - xsfs: 显示方式 (all=显示全部成绩, max=显示最好成绩)
     """
     try:
-        if username not in SESSIONS:
-            raise HTTPException(status_code=401, detail="未登录，请先登录")
-
-        session = SESSIONS[username]
-        scraper = JwxtScraper(session, JWXT_BASE_URL)
+        session, server_url = get_user_session(username)
+        scraper = JwxtScraper(session, server_url)
 
         result = scraper.get_grades(kksj=kksj, kcxz=kcxz, kcmc=kcmc, fxkc=fxkc, xsfs=xsfs)
 
@@ -477,11 +486,8 @@ async def get_schedule_api(username: str, semester: str = "", week: str = ""):
     - week: 周次，如 "1", "5"，为空则获取全部周次
     """
     try:
-        if username not in SESSIONS:
-            raise HTTPException(status_code=401, detail="未登录，请先登录")
-
-        session = SESSIONS[username]
-        scraper = JwxtScraper(session, JWXT_BASE_URL)
+        session, server_url = get_user_session(username)
+        scraper = JwxtScraper(session, server_url)
 
         result = scraper.get_schedule(semester=semester, week=week)
 
@@ -509,11 +515,8 @@ async def get_my_training_plan_api(username: str):
     获取我的培养方案
     """
     try:
-        if username not in SESSIONS:
-            raise HTTPException(status_code=401, detail="未登录，请先登录")
-
-        session = SESSIONS[username]
-        scraper = JwxtScraper(session, JWXT_BASE_URL)
+        session, server_url = get_user_session(username)
+        scraper = JwxtScraper(session, server_url)
 
         result = scraper.get_my_training_plan()
 
@@ -540,11 +543,8 @@ async def get_academic_progress_api(username: str, study_type: str = "0"):
     - study_type: 修读类型 (0=主修, 1=辅修)
     """
     try:
-        if username not in SESSIONS:
-            raise HTTPException(status_code=401, detail="未登录，请先登录")
-
-        session = SESSIONS[username]
-        scraper = JwxtScraper(session, JWXT_BASE_URL)
+        session, server_url = get_user_session(username)
+        scraper = JwxtScraper(session, server_url)
 
         result = scraper.get_academic_progress(study_type=study_type)
 
@@ -571,11 +571,8 @@ async def get_exam_schedule_api(username: str, semester: str = ""):
     - semester: 学期，如 "2024-2025-1"
     """
     try:
-        if username not in SESSIONS:
-            raise HTTPException(status_code=401, detail="未登录，请先登录")
-
-        session = SESSIONS[username]
-        scraper = JwxtScraper(session, JWXT_BASE_URL)
+        session, server_url = get_user_session(username)
+        scraper = JwxtScraper(session, server_url)
 
         result = scraper.get_exam_schedule(semester=semester)
 
@@ -660,11 +657,8 @@ async def get_course_selection_api(username: str):
     获取选课信息
     """
     try:
-        if username not in SESSIONS:
-            raise HTTPException(status_code=401, detail="未登录，请先登录")
-
-        session = SESSIONS[username]
-        scraper = JwxtScraper(session, JWXT_BASE_URL)
+        session, server_url = get_user_session(username)
+        scraper = JwxtScraper(session, server_url)
 
         result = scraper.get_course_selection_info()
 
@@ -688,11 +682,8 @@ async def get_execution_plan_api(username: str):
     获取执行计划
     """
     try:
-        if username not in SESSIONS:
-            raise HTTPException(status_code=401, detail="未登录，请先登录")
-
-        session = SESSIONS[username]
-        scraper = JwxtScraper(session, JWXT_BASE_URL)
+        session, server_url = get_user_session(username)
+        scraper = JwxtScraper(session, server_url)
 
         result = scraper.get_execution_plan()
 
@@ -718,11 +709,8 @@ async def get_all_data_api(username: str):
     聚合所有类型的数据，便于一次性存储到向量数据库
     """
     try:
-        if username not in SESSIONS:
-            raise HTTPException(status_code=401, detail="未登录，请先登录")
-
-        session = SESSIONS[username]
-        scraper = JwxtScraper(session, JWXT_BASE_URL)
+        session, server_url = get_user_session(username)
+        scraper = JwxtScraper(session, server_url)
 
         result = scraper.get_all_data_for_vectorization()
 
