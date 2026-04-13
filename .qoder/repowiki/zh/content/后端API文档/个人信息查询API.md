@@ -15,6 +15,7 @@
 
 ## 更新摘要
 **变更内容**
+- **重大改进** 个人信息解析功能从单一的 #Top1_divLoginName 元素解析转变为双重解析策略，优先使用结构化 div.block1text 元素，同时保留降级机制以确保向后兼容性
 - 新增统一的会话管理机制：所有用户数据查询API端点现在使用`get_user_session()`函数进行会话管理
 - 提高系统一致性：确保登录和爬取使用同一服务器实例，增强了系统可靠性
 - 改进错误处理：集中化的会话验证和错误处理机制
@@ -270,15 +271,52 @@ Success --> End
 - 爬取结果分析
 - 错误追踪和诊断
 
-**图表来源**
-- [backend/main.py:368-398](file://backend/main.py#L368-L398)
-- [backend/main.py:353-366](file://backend/main.py#L353-L366)
-- [backend/scraper.py:78-128](file://backend/scraper.py#L78-L128)
-
 **章节来源**
 - [backend/main.py:368-398](file://backend/main.py#L368-L398)
 - [backend/main.py:353-366](file://backend/main.py#L353-L366)
 - [backend/scraper.py:78-128](file://backend/scraper.py#L78-L128)
+
+### 个人信息解析策略
+
+**重大更新** 个人信息解析功能现在采用双重解析策略：
+
+```mermaid
+flowchart TD
+Start([开始解析]) --> FindBlock1Text["查找 div.block1text 元素"]
+FindBlock1Text --> Block1TextExists{"找到元素?"}
+Block1TextExists --> |是| ParseBlock1Text["解析结构化元素"]
+ParseBlock1Text --> ExtractNameStudent["提取姓名和学号"]
+ExtractNameStudent --> Success["解析成功"]
+Block1TextExists --> |否| FindTop1Div["查找 #Top1_divLoginName 元素"]
+FindTop1Div --> Top1DivExists{"找到元素?"}
+Top1DivExists --> |是| ParseTop1Div["解析降级元素"]
+ParseTop1Div --> ExtractNameStudent2["提取姓名和学号"]
+ExtractNameStudent2 --> Success
+Top1DivExists --> |否| LogWarning["记录警告：未找到任何个人信息元素"]
+LogWarning --> Success
+Success --> End([结束])
+```
+
+**更新** 双重解析策略的具体实现：
+
+1. **优先策略**：查找 `div.block1text` 元素
+   - HTML结构：`<div class="block1text"> 姓名：张靖<br/> 学号：24251102121<br/></div>`
+   - 优点：结构化程度高，解析准确度更高
+   - 日志记录：`【个人信息】从 block1text 解析: name=张靖, student_id=24251102121`
+
+2. **降级策略**：查找 `#Top1_divLoginName` 元素
+   - HTML结构：`<div id="Top1_divLoginName">张靖(24251102121)</div>`
+   - 优点：向后兼容，确保在旧系统中也能正常工作
+   - 日志记录：`【个人信息】从 Top1_divLoginName 降级解析: name=张靖, student_id=24251102121`
+
+3. **错误处理**：如果两种策略都失败，记录警告并返回空值
+   - 日志记录：`【个人信息】未找到任何个人信息元素`
+
+**图表来源**
+- [backend/scraper.py:99-133](file://backend/scraper.py#L99-L133)
+
+**章节来源**
+- [backend/scraper.py:99-133](file://backend/scraper.py#L99-L133)
 
 ### 学籍卡片查询接口
 
@@ -633,6 +671,23 @@ RemoveSession --> Memory
 - 清理会话数据
 - 确认服务器实例配置
 
+#### 6. 个人信息解析问题
+
+**重大更新** 由于采用了双重解析策略，可能出现以下问题：
+
+**问题**: 个人信息解析失败
+**原因**:
+- `div.block1text` 元素结构发生变化
+- `#Top1_divLoginName` 元素不存在
+- 教务系统页面结构变化
+- 编码问题影响解析
+
+**解决方案**:
+- 检查页面结构变化
+- 增加更多日志记录
+- 更新解析策略
+- 检查编码处理
+
 ### 调试工具
 
 系统提供了完整的测试脚本和增强的调试功能：
@@ -665,6 +720,13 @@ RemoveSession --> Memory
 5. ****统一会话管理**: 通过`get_user_session()`函数确保所有API端点的一致性
 6. ****提高可靠性**: 登录和爬取使用同一服务器实例
 7. **新增** **增强的调试能力**: 详细的日志记录改善问题诊断能力
+
+### 重大改进
+**更新** 个人信息解析功能的重大改进：
+- **双重解析策略**：优先使用结构化 `div.block1text` 元素，确保更高的解析准确性
+- **向后兼容性**：保留 `#Top1_divLoginName` 元素的降级解析机制
+- **错误处理**：完善的日志记录和错误追踪
+- **性能提升**：结构化元素解析比降级方案更高效
 
 ### 改进建议
 1. **认证安全**: 引入JWT令牌认证机制
@@ -759,6 +821,31 @@ INFO:     【个人信息】URL: http://172.19.13.60:80/jsxsd/framework/xsMain.j
 INFO:     【个人信息】响应编码: gb18030
 INFO:     【个人信息】响应长度: 12345
 INFO:     【个人信息】内容预览: <!DOCTYPE html><html>...
+INFO:     【个人信息】从 block1text 解析: name=张靖, student_id=24251102121
 ```
 
 这些日志提供了完整的请求跟踪、响应分析和内容监控，大大改善了问题诊断能力。
+
+### 个人信息解析策略详解
+
+**重大更新** 双重解析策略的技术细节：
+
+1. **结构化解析（优先）**
+   - 查找 `div.block1text` 元素
+   - 解析结构化文本内容
+   - 提取姓名和学号字段
+   - 优点：解析准确度高，结构清晰
+
+2. **降级解析（备用）**
+   - 查找 `#Top1_divLoginName` 元素
+   - 解析合并的文本格式
+   - 提取姓名和学号字段
+   - 优点：向后兼容性强
+
+3. **错误恢复机制**
+   - 两种策略都失败时记录警告
+   - 返回空值并继续处理
+   - 便于上层逻辑处理
+
+**章节来源**
+- [backend/scraper.py:99-133](file://backend/scraper.py#L99-L133)

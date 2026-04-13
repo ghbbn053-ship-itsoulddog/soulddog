@@ -16,8 +16,8 @@ class JwxtScraper:
     def __init__(self, session: requests.Session = None, base_url: str = "http://jwxt.gdufe.edu.cn"):
         self.session = session or requests.Session()
         self.base_url = base_url
-        self.captcha_url = f"{base_url}/jsxsd/verifycode.servlet"
-        self.login_url = f"{base_url}/jsxsd/xk/LoginToXkLdap"
+        self.captcha_url = f"{base_url}/verifycode.servlet"
+        self.login_url = f"{base_url}/xk/LoginToXkLdap"
 
     def _fix_encoding(self, response) -> None:
         """自动修正响应编码，适配教务系统 GBK/UTF-8 混合场景"""
@@ -86,7 +86,7 @@ class JwxtScraper:
         HTML 结构参考：.qoder/教务系统源代码/登陆界面.txt
         """
         try:
-            url = f"{self.base_url}/jsxsd/framework/xsMain.jsp"
+            url = f"{self.base_url}/framework/xsMain.jsp"
             response = self.session.get(url, timeout=10)
             self._fix_encoding(response)
             
@@ -163,7 +163,7 @@ class JwxtScraper:
         URL: /jsxsd/grxx/xsxx
         """
         try:
-            url = f"{self.base_url}/jsxsd/grxx/xsxx"
+            url = f"{self.base_url}/grxx/xsxx"
             response = self.session.get(url, timeout=10)
             self._fix_encoding(response)
 
@@ -219,7 +219,7 @@ class JwxtScraper:
             }
 
             # 提交成绩查询
-            url = f"{self.base_url}/jsxsd/kscj/cjcx_list"
+            url = f"{self.base_url}/kscj/cjcx_list"
             response = self.session.post(url, data=params, timeout=10)
             self._fix_encoding(response)
 
@@ -355,7 +355,7 @@ class JwxtScraper:
         """
         try:
             # 课表查询页面
-            url = f"{self.base_url}/jsxsd/xskb/xskb_list.do"
+            url = f"{self.base_url}/xskb/xskb_list.do"
 
             # 构建表单数据
             data = {}
@@ -527,7 +527,7 @@ class JwxtScraper:
         try:
             # 如果提供了完整参数，直接查询结果
             if department and grade and major:
-                url = f"{self.base_url}/jsxsd/jspyfa/zypyfa_query"
+                url = f"{self.base_url}/jspyfa/zypyfa_query"
                 data = {
                     "xsyx": department,
                     "xsnj": grade,
@@ -536,7 +536,7 @@ class JwxtScraper:
                 response = self.session.post(url, data=data, timeout=10)
             else:
                 # 否则获取查询页面
-                url = f"{self.base_url}/jsxsd/jspyfa/pyfa_find"
+                url = f"{self.base_url}/jspyfa/pyfa_find"
                 response = self.session.get(url, timeout=10)
 
             self._fix_encoding(response)
@@ -610,7 +610,7 @@ class JwxtScraper:
         返回详细的培养方案，包括课程类别、模块、学分要求等
         """
         try:
-            url = f"{self.base_url}/jsxsd/pyfa/pyfazd_query"
+            url = f"{self.base_url}/pyfa/pyfazd_query"
             response = self.session.get(url, timeout=10)
             self._fix_encoding(response)
 
@@ -738,7 +738,7 @@ class JwxtScraper:
         返回: 学业完成情况，包括各模块学分要求与已修学分
         """
         try:
-            url = f"{self.base_url}/jsxsd/pyfa/xyjdcx"
+            url = f"{self.base_url}/pyfa/xyjdcx"
 
             # 如果有study_type参数，提交表单查询
             if study_type:
@@ -837,7 +837,7 @@ class JwxtScraper:
         返回: 考试安排列表
         """
         try:
-            url = f"{self.base_url}/jsxsd/xsks/xsksap_query"
+            url = f"{self.base_url}/xsks/xsksap_query"
             params = {}
             if semester:
                 params["xnxqid"] = semester
@@ -910,7 +910,7 @@ class JwxtScraper:
                 data["kkyx"] = department
 
             # 提交查询
-            url = f"{self.base_url}/jsxsd/jsxx/jsxx_list"
+            url = f"{self.base_url}/jsxx/jsxx_list"
             response = self.session.post(url, data=data, timeout=10)
             self._fix_encoding(response)
 
@@ -977,7 +977,7 @@ class JwxtScraper:
         返回: 教师详细信息
         """
         try:
-            url = f"{self.base_url}/jsxsd/jsxx/jsxx_detail"
+            url = f"{self.base_url}/jsxx/jsxx_detail"
             params = {"jg0101id": teacher_id}
 
             response = self.session.get(url, params=params, timeout=10)
@@ -1024,7 +1024,7 @@ class JwxtScraper:
         """
         try:
             # 课程课表查询页面
-            url = f"{self.base_url}/jsxsd/kbcx/kbxx_kc"
+            url = f"{self.base_url}/kbcx/kbxx_kc"
 
             data = {}
             if course_name:
@@ -1096,7 +1096,7 @@ class JwxtScraper:
         返回: 可选课程列表和选课状态
         """
         try:
-            url = f"{self.base_url}/jsxsd/xsxk/xklc_list"
+            url = f"{self.base_url}/xsxk/xklc_list"
             response = self.session.get(url, timeout=10)
             self._fix_encoding(response)
 
