@@ -1,9 +1,9 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // outputFileTracingRoot: path.resolve(__dirname, '../../'),  // Uncomment and add 'import path from "path"' if needed
   /* config options here */
-  output: 'export',
+  // 开发模式不使用静态导出，以支持 rewrites 反向代理
+  // output: 'export',
   distDir: 'dist',
   allowedDevOrigins: ['*.dev.coze.site'],
   images: {
@@ -14,6 +14,15 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+  },
+  // 反向代理：将 /api 请求转发到后端
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://backend:8000/api/:path*',
+      },
+    ];
   },
 };
 
