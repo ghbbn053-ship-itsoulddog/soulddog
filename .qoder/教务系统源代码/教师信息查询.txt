@@ -1,0 +1,785 @@
+!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+
+<head id="headerid1">
+	<base target='_self'>
+	<title>教师信息查询查询</title>	
+	<meta http-equiv="pragma" content="no-cache">
+	<meta http-equiv="cache-control" content="no-cache">
+	<meta http-equiv="expires" content="0">
+	<meta http-equiv="keywords" content="湖南强智科技教务系统">
+	<meta http-equiv="description" content="湖南强智科技教务系统">
+	<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE8" />
+<script type="text/javascript" src="/jsxsd/js/jquery-min.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/common.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/validate.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/iepngfix_tilebg.js" language="javascript" ></script>
+<link href="/jsxsd/framework/images/common.css" rel="stylesheet" type="text/css" />
+<link href="/jsxsd/framework/images/blue.css" rel="stylesheet" type="text/css" id="link_theme" />
+<link href="/jsxsd/framework/images/workstation.css" rel="stylesheet" type="text/css" /> 
+</head>
+<iframe id="notSession" name="notSession" style="display: none;" src=""></iframe>
+<script type="text/javascript">
+jQuery(document).ready(function(){
+	window.setInterval(function(){
+		 document.getElementById("notSession").src = "/jsxsd/framework/blankPage.jsp";
+	 }, 1000 * 60 * 10);
+});
+</script>
+<body>
+ 
+
+
+
+
+
+
+
+<div class="Nsb_pw">
+  <div class="Nsb_top">
+    <div class="Nsb_top_logo"><table border="0" cellpadding="0" cellspacing="0"><tr><td height="75" valign="middle"><img style="display:;" id="imgLogo" src="/jsxsd/framework/images/index_logo.gif" /></td></tr></table></div>
+    <div class="Nsb_top_menu">        
+        <div id="Top1_divLoginName" class="Nsb_top_menu_nc" style="color: #000000;">张靖(24251102121)</div>
+        <ul>
+            <li><a id="TopUserSetting" info="个人设置" href="#" class="Nsb_top_menu_id"><img src="/jsxsd/framework/images/Nsb_top_p1.jpg" id="Top1_imgTopSmallUserPhoto" /></a></li>
+            <span></span>
+                          
+            
+            <li><a id="TopTheme" info="切换主题" href="#" class="Nsb_top_menu_style" onclick="changeDisplay('divTopTheme')"></a></li>
+            <span id="Top1_LBackManageSpliter"></span>
+            <span id="Top1_LExitSpliter"></span>
+            <li id="Top1_LBackManage">
+            	<a info="个人设置" href="/jsxsd/grsz/grsz_xggrxx.do?Ves632DSdyV=NEW_JSD_WDZM" class="Nsb_top_menu_options"></a>
+            </li>
+            <li id="Top1_LExit"><a info="退出" href="javascript:Logout('/jsxsd');"   class="Nsb_top_menu_exit"></a></li>
+        </ul>            
+     </div>   
+     <div id="divTopTheme" group="topDiv" style="display:none;z-index:10000">      
+        <div class="Nsb_top_c Nsb_top_c3">
+          <ul>
+            <li id="theme_blue" theme="blue" index="1" class="Nsb_top_c3_11" onclick="javascript:changeTheme('/jsxsd','blue',this);"></li>
+            <li id="theme_green" theme="green" index="2" class="Nsb_top_c3_2"  onclick="javascript:changeTheme('/jsxsd','green',this);"></li>
+            <li id="theme_orange" theme="orange" index="3" class="Nsb_top_c3_3" onclick="javascript:changeTheme('/jsxsd','orange',this);"></li>
+            <li id="theme_red" theme="red" index="4" class="Nsb_top_c3_4"  onclick="javascript:changeTheme('/jsxsd','red',this);"></li>
+            <li id="theme_purple" theme="purple" index="5" class="Nsb_top_c3_5" onclick="javascript:changeTheme('/jsxsd','purple',this);"></li>
+            <li id="theme_gray" theme="gray" index="6" class="Nsb_top_c3_6"  onclick="javascript:changeTheme('/jsxsd','gray',this);"></li>
+          </ul>
+        </div>
+     </div>
+   </div>
+</div>
+<div class="Nsb_menu_pw">
+  <div class="Nsb_pw">
+    <div id="divFirstMenuClass" class="Nsb_menu menu_cn">
+      <ul>         
+         <li class="Nsb_menu_li_now" title="首页">
+         	<a class="Nsb_menu_li_h" id="homepage" href="/jsxsd/framework/main.jsp"><span></span></a>
+         </li>
+         
+         	<li title="我的桌面">
+         		<a id="calender_user_schedule" href="/jsxsd/jxzl/jxzl_query?Ves632DSdyV=NEW_XSD_WDZM">我的桌面</a>
+         	</li>
+         
+         	<li title="学籍成绩">
+         		<a id="calender_user_schedule" href="/jsxsd/xsxj/xjxxgl.do?Ves632DSdyV=NEW_XSD_XJCJ">学籍成绩</a>
+         	</li>
+         
+         	<li title="培养管理">
+         		<a id="calender_user_schedule" href="/jsxsd/jsxx/jsxx_query?Ves632DSdyV=NEW_XSD_PYGL">培养管理</a>
+         	</li>
+         
+         	<li title="考试报名">
+         		<a id="calender_user_schedule" href="/jsxsd/xsks/xsksap_query?Ves632DSdyV=NEW_XSD_KSBM">考试报名</a>
+         	</li>
+         
+         	<li title="教学评价">
+         		<a id="calender_user_schedule" href="/jsxsd/xspj/xspj_find.do?Ves632DSdyV=NEW_XSD_JXPJ">教学评价</a>
+         	</li>
+         
+      </ul>
+    </div>
+  </div>
+</div>
+<div class="Nsb_pw">   
+	
+
+
+
+
+
+
+  
+<div id="LeftMenu1_divChildMenu" class="Nsb_layout_l Nsb_l_list">
+	<div class="Nsb_l_list_top"></div>
+	
+			<h4 class="exam_user_exam">教师查询</h4>
+			<ul>			
+	
+				<li><a class='Nsb_l_list_now' href="/jsxsd/jsxx/jsxx_query">教师信息查询</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">培养方案</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/jspyfa/pyfa_find">人才培养方案</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/pyfazd_query">我的培养方案</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/xyjdcx">学业进度查询</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/pyfa_query">执行计划</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/txxxjh_query.do">填写教学计划</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">我的课表</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/xskb/xskb_list.do">学期课表</a></li>
+	
+				<li><a  href="/jsxsd/kbcx/kbxx_kc">课程课表</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">选课管理</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/xsxk/xklc_list">学生选课中心</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">辅修管理</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/fxgl/fxbmxx_query">辅修报名</a></li>
+	
+				<li><a  href="/jsxsd/fxgl/fxzcxx">辅修注册</a></li>
+	
+			</ul>
+	
+</div>
+	<div class="Nsb_layout_r">
+
+		<form action="" name="jsxxQueryForm" id="jsxxQueryForm" method="post">
+			<div class="Nsb_r_title"><a href="/jsxsd/framework/main.jsp"">首页</a> » 教师信息查询  » 查询</div>
+			<br/><br/>
+			<table width="100%" border="0" cellspacing="0" cellpadding="0" class="no_border_table">
+				<tr>
+					<th width="40%" align="right">教师姓名：</th>
+					<td>
+						<input type="text" id="jsxm" name="jsxm" style="width:200px;"/>
+						
+						<font color="red">*</font>
+					</td>
+				</tr>
+				<tr>
+					<th width="40%" align="right">所属院系：</th>
+					<td>
+						<select id="kkyx" name="kkyx" style="width:205px;">
+							<option value="" >--请选择--</option>
+							
+								<option value="10000">校领导</option>
+							
+								<option value="10100">党委办公室、校长办公室（法制办公室、档案馆、校史馆）</option>
+							
+								<option value="10600">教师工作部、人力资源部、离退休工作部</option>
+							
+								<option value="10800">科研部</option>
+							
+								<option value="11000">国际交流与合作部（港澳台事务办公室）</option>
+							
+								<option value="11200">审计部</option>
+							
+								<option value="11300">资产与实验室管理部</option>
+							
+								<option value="11400">基建与后勤部</option>
+							
+								<option value="11500">保卫部</option>
+							
+								<option value="11800">发展规划部</option>
+							
+								<option value="12100">法制办公室</option>
+							
+								<option value="22000">国际学院</option>
+							
+								<option value="22100">粤商学院（MBA学院）</option>
+							
+								<option value="22200">粤港澳大湾区广州税务学院</option>
+							
+								<option value="30300">国民经济研究中心</option>
+							
+								<option value="30400">法治与经济发展研究所</option>
+							
+								<option value="30500">佛山现代服务业研究院</option>
+							
+								<option value="30700">县域经济研究所</option>
+							
+								<option value="30800">旅游管理与规划设计研究院、岭南旅游研究院（合署）</option>
+							
+								<option value="30900">大湾区双循环发展研究院（商贸流通研究院）</option>
+							
+								<option value="31000">发展与改革研究院</option>
+							
+								<option value="31100">电子商务研究院</option>
+							
+								<option value="31200">珠三角科技金融产业协同创新发展中心</option>
+							
+								<option value="40100">校工会</option>
+							
+								<option value="40300">校友工作与社会合作办公室</option>
+							
+								<option value="50200">期刊中心</option>
+							
+								<option value="50500">网络信息与教育技术中心</option>
+							
+								<option value="70100">华商学院党委</option>
+							
+								<option value="90200">人才交流中心</option>
+							
+								<option value="03">财政税务学院（税务师学院）</option>
+							
+								<option value="05">金融学院</option>
+							
+								<option value="06">经济学院</option>
+							
+								<option value="09">外国语学院</option>
+							
+								<option value="12">人文与传播学院（网络传播学院、出版学院）</option>
+							
+								<option value="11">大数据与人工智能学院</option>
+							
+								<option value="10">统计与数据科学学院</option>
+							
+								<option value="30">教务部</option>
+							
+								<option value="31">图书馆</option>
+							
+								<option value="32">门诊部</option>
+							
+								<option value="33">宣传部、统战部</option>
+							
+								<option value="01">工商管理学院（粤商学院、创新创业学院）</option>
+							
+								<option value="35">教师发展与教育技术中心</option>
+							
+								<option value="14">马克思主义学院</option>
+							
+								<option value="37">财务部</option>
+							
+								<option value="15">公共管理学院</option>
+							
+								<option value="17">艺术与设计学院</option>
+							
+								<option value="18">公共外语教学部</option>
+							
+								<option value="19">创业教育学院（国家级人才培养模式创新实验区）</option>
+							
+								<option value="39">校团委</option>
+							
+								<option value="99">其它</option>
+							
+								<option value="20">继续教育学院（培训学院、全民数字教育学院）</option>
+							
+								<option value="40">招生考试部</option>
+							
+								<option value="98">佛山校区工作部（省市共建办公室）</option>
+							
+								<option value="41">广东省电子商务市场应用技术重点实验室</option>
+							
+								<option value="ekAYtew1NK">研究生处</option>
+							
+								<option value="22300">国际商学院</option>
+							
+								<option value="22400">湾区影视产业学院</option>
+							
+								<option value="31300">中国特色社会主义政治经济学研究中心</option>
+							
+								<option value="22600">智能财会管理学院</option>
+							
+								<option value="22700">数字经济学院</option>
+							
+								<option value="22800">人力资源学院</option>
+							
+								<option value="rzzhe4mTSY">东莞职业技术学院</option>
+							
+								<option value="cxFYqCqIjg">广东工贸职业技术学院</option>
+							
+								<option value="07">法学院</option>
+							
+								<option value="10200">纪检监察室</option>
+							
+								<option value="10900">研究生工作部、研究生院</option>
+							
+								<option value="11600">后勤处</option>
+							
+								<option value="11900">采购与招投标中心</option>
+							
+								<option value="21000">地理与环境经济学院</option>
+							
+								<option value="30200">广州市现代物流与电子商务协同创新中心</option>
+							
+								<option value="38">组织部（党校办公室）、机关党委</option>
+							
+								<option value="22500">佛山研究生院</option>
+							
+								<option value="oat6Vs3CJa">国际商学院</option>
+							
+								<option value="31500">粤港澳大湾区资本市场与审计治理研究院</option>
+							
+								<option value="31600">粤港澳大湾区创新竞争力研究院</option>
+							
+								<option value="31700">广东省智能商务工程技术研究中心</option>
+							
+								<option value="31800">大数据与教育统计应用实验室</option>
+							
+								<option value="31900">人权研究院</option>
+							
+								<option value="12200">社会合作处</option>
+							
+								<option value="32000">粤港澳大湾区人才评价与开发研究院</option>
+							
+								<option value="90300">广东财大资产经营有限公司</option>
+							
+								<option value="32100">国家安全与发展研究院</option>
+							
+								<option value="70200">云浮发展研究院</option>
+							
+								<option value="08">文化旅游学院</option>
+							
+								<option value="lVmobpvXTd">广东食品药品职业学院</option>
+							
+								<option value="mLdTtgT8eu">广东科学技术职业学院</option>
+							
+								<option value="8bYdL0jiUL">广东轻工职业技术学院</option>
+							
+								<option value="fextKrl5hV">广东水利电力职业技术学院</option>
+							
+								<option value="02">会计学院</option>
+							
+								<option value="36">经济与管理实验教学中心</option>
+							
+								<option value="31400">广东地方公共财政研究中心</option>
+							
+								<option value="10105">档案馆、校史馆</option>
+							
+								<option value="13">体育学院</option>
+							
+								<option value="34">学生工作部（武装部、学生就业指导中心）</option>
+							
+								<option value="16">资源与环境学院</option>
+							
+								<option value="50600">教学质量监控与评估中心</option>
+							
+						</select>
+					</td>
+				</tr>
+			<!-- 	<tr>
+					<th width="40%" align="right">课程名称：</th>
+					<td>
+						<input type="text" id="kcmc" name="kcmc" size="27"/>
+					</td>
+				</tr> -->
+				
+				<tr>
+					<td colspan="2" align="center">
+						<input class="button" type="button" id="btn_query" value="查 询" onclick="querySkjhxx()"/>
+					</td>
+				</tr>
+			</table>
+		</form>
+	</div>
+</div>
+
+<div id="Footer1_divCopyright" class="Nsb_pw" style="display:;">
+  <div class="Nsb_rights">Copyright (C) 湖南强智科技发展有限公司 2003-2013 All Rights Reserved 湘ICP 备12010071号</div>
+</div>
+<script language="javascript">
+ 
+function querySkjhxx(){
+	var jsxm = document.getElementById("jsxm").value;
+	if(isEmpty(trim(jsxm))){
+		alert("‘教师姓名’必须填写！");
+		return;
+	} 
+	document.forms["jsxxQueryForm"].action = "/jsxsd/jsxx/jsxx_list";
+	document.forms["jsxxQueryForm"].submit();
+}
+
+</script>
+</body>
+</html>
+
+
+标头：content-language
+zh-CN
+content-type
+text/html;charset=UTF-8
+date
+Thu, 09 Apr 2026 02:56:55 GMT
+server
+Apache-Coyote/1.1
+transfer-encoding
+chunked
+accept
+text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+accept-encoding
+gzip, deflate
+accept-language
+zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6
+cache-control
+max-age=0
+connection
+keep-alive
+content-length
+25
+content-type
+application/x-www-form-urlencoded
+cookie
+JSESSIONID=E42F27C3D997A3162ED51D2AC7746D6B
+dnt
+1
+host
+jwxt.gdufe.edu.cn
+origin
+http://jwxt.gdufe.edu.cn
+referer
+http://jwxt.gdufe.edu.cn/jsxsd/jsxx/jsxx_query
+upgrade-insecure-requests
+1
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0
+
+表单数据：jsxm=%E5%BC%A0&kkyx=10800
+
+
+
+返回结果样式：
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+	
+
+<head id="headerid1">
+	<base target='_self'>
+	<title>教师信息查询</title>	
+	<meta http-equiv="pragma" content="no-cache">
+	<meta http-equiv="cache-control" content="no-cache">
+	<meta http-equiv="expires" content="0">
+	<meta http-equiv="keywords" content="湖南强智科技教务系统">
+	<meta http-equiv="description" content="湖南强智科技教务系统">
+	<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE8" />
+<script type="text/javascript" src="/jsxsd/js/jquery-min.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/common.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/validate.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/iepngfix_tilebg.js" language="javascript" ></script>
+<link href="/jsxsd/framework/images/common.css" rel="stylesheet" type="text/css" />
+<link href="/jsxsd/framework/images/blue.css" rel="stylesheet" type="text/css" id="link_theme" />
+<link href="/jsxsd/framework/images/workstation.css" rel="stylesheet" type="text/css" /> 
+</head>
+<iframe id="notSession" name="notSession" style="display: none;" src=""></iframe>
+<script type="text/javascript">
+jQuery(document).ready(function(){
+	window.setInterval(function(){
+		 document.getElementById("notSession").src = "/jsxsd/framework/blankPage.jsp";
+	 }, 1000 * 60 * 10);
+});
+</script>
+
+<body>
+
+
+
+
+
+
+
+<div class="Nsb_pw">
+  <div class="Nsb_top">
+    <div class="Nsb_top_logo"><table border="0" cellpadding="0" cellspacing="0"><tr><td height="75" valign="middle"><img style="display:;" id="imgLogo" src="/jsxsd/framework/images/index_logo.gif" /></td></tr></table></div>
+    <div class="Nsb_top_menu">        
+        <div id="Top1_divLoginName" class="Nsb_top_menu_nc" style="color: #000000;">张靖(24251102121)</div>
+        <ul>
+            <li><a id="TopUserSetting" info="个人设置" href="#" class="Nsb_top_menu_id"><img src="/jsxsd/framework/images/Nsb_top_p1.jpg" id="Top1_imgTopSmallUserPhoto" /></a></li>
+            <span></span>
+                          
+            
+            <li><a id="TopTheme" info="切换主题" href="#" class="Nsb_top_menu_style" onclick="changeDisplay('divTopTheme')"></a></li>
+            <span id="Top1_LBackManageSpliter"></span>
+            <span id="Top1_LExitSpliter"></span>
+            <li id="Top1_LBackManage">
+            	<a info="个人设置" href="/jsxsd/grsz/grsz_xggrxx.do?Ves632DSdyV=NEW_JSD_WDZM" class="Nsb_top_menu_options"></a>
+            </li>
+            <li id="Top1_LExit"><a info="退出" href="javascript:Logout('/jsxsd');"   class="Nsb_top_menu_exit"></a></li>
+        </ul>            
+     </div>   
+     <div id="divTopTheme" group="topDiv" style="display:none;z-index:10000">      
+        <div class="Nsb_top_c Nsb_top_c3">
+          <ul>
+            <li id="theme_blue" theme="blue" index="1" class="Nsb_top_c3_11" onclick="javascript:changeTheme('/jsxsd','blue',this);"></li>
+            <li id="theme_green" theme="green" index="2" class="Nsb_top_c3_2"  onclick="javascript:changeTheme('/jsxsd','green',this);"></li>
+            <li id="theme_orange" theme="orange" index="3" class="Nsb_top_c3_3" onclick="javascript:changeTheme('/jsxsd','orange',this);"></li>
+            <li id="theme_red" theme="red" index="4" class="Nsb_top_c3_4"  onclick="javascript:changeTheme('/jsxsd','red',this);"></li>
+            <li id="theme_purple" theme="purple" index="5" class="Nsb_top_c3_5" onclick="javascript:changeTheme('/jsxsd','purple',this);"></li>
+            <li id="theme_gray" theme="gray" index="6" class="Nsb_top_c3_6"  onclick="javascript:changeTheme('/jsxsd','gray',this);"></li>
+          </ul>
+        </div>
+     </div>
+   </div>
+</div>
+<div class="Nsb_menu_pw">
+  <div class="Nsb_pw">
+    <div id="divFirstMenuClass" class="Nsb_menu menu_cn">
+      <ul>         
+         <li class="Nsb_menu_li_now" title="首页">
+         	<a class="Nsb_menu_li_h" id="homepage" href="/jsxsd/framework/main.jsp"><span></span></a>
+         </li>
+         
+         	<li title="我的桌面">
+         		<a id="calender_user_schedule" href="/jsxsd/jxzl/jxzl_query?Ves632DSdyV=NEW_XSD_WDZM">我的桌面</a>
+         	</li>
+         
+         	<li title="学籍成绩">
+         		<a id="calender_user_schedule" href="/jsxsd/xsxj/xjxxgl.do?Ves632DSdyV=NEW_XSD_XJCJ">学籍成绩</a>
+         	</li>
+         
+         	<li title="培养管理">
+         		<a id="calender_user_schedule" href="/jsxsd/jsxx/jsxx_query?Ves632DSdyV=NEW_XSD_PYGL">培养管理</a>
+         	</li>
+         
+         	<li title="考试报名">
+         		<a id="calender_user_schedule" href="/jsxsd/xsks/xsksap_query?Ves632DSdyV=NEW_XSD_KSBM">考试报名</a>
+         	</li>
+         
+         	<li title="教学评价">
+         		<a id="calender_user_schedule" href="/jsxsd/xspj/xspj_find.do?Ves632DSdyV=NEW_XSD_JXPJ">教学评价</a>
+         	</li>
+         
+      </ul>
+    </div>
+  </div>
+</div>
+<div class="Nsb_pw">   
+ 
+ 	
+
+
+
+
+
+
+  
+<div id="LeftMenu1_divChildMenu" class="Nsb_layout_l Nsb_l_list">
+	<div class="Nsb_l_list_top"></div>
+	
+			<h4 class="exam_user_exam">教师查询</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/jsxx/jsxx_query">教师信息查询</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">培养方案</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/jspyfa/pyfa_find">人才培养方案</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/pyfazd_query">我的培养方案</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/xyjdcx">学业进度查询</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/pyfa_query">执行计划</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/txxxjh_query.do">填写教学计划</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">我的课表</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/xskb/xskb_list.do">学期课表</a></li>
+	
+				<li><a  href="/jsxsd/kbcx/kbxx_kc">课程课表</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">选课管理</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/xsxk/xklc_list">学生选课中心</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">辅修管理</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/fxgl/fxbmxx_query">辅修报名</a></li>
+	
+				<li><a  href="/jsxsd/fxgl/fxzcxx">辅修注册</a></li>
+	
+			</ul>
+	
+</div>
+ 
+ <div class="Nsb_layout_r">
+ <iframe style="display:none" name="hidfrm" id="hidfrm"></iframe>
+ <form action="/jsxsd/jsxx/jsxx_list" name="Form1" id="Form1" target="" method="post">
+        <div class="Nsb_r_title"><a href="/jsxsd/framework/main.jsp">首页</a> » 教师信息查询 » 教师列表</div>
+        
+         <input type="button" id="btn_back" class="button" value="返 回" onclick="window.location.href='/jsxsd/jsxx/jsxx_query';"/>
+		<table width="100%" border="0" cellspacing="0" cellpadding="0" class="Nsb_r_list Nsb_table">
+            <input type = "hidden" name="jsxm" value="张"></input>
+            <input type = "hidden" name="ssxy" value=""></input>
+            <tr>
+                <th  class="Nsb_r_list_thb" scope="col">序号</th>
+                <th  class="Nsb_r_list_thb" scope="col">教职工号</th>
+                <th  class="Nsb_r_list_thb" scope="col">教师姓名</th>
+                <th  class="Nsb_r_list_thb" scope="col">所属院系</th>
+               	<th class="Nsb_r_list_thb" scope="col">操作</th>
+            </tr>
+            
+            
+            
+				<tr>
+					<td>1</td>
+					<td align="left">20102116</td>
+					<td align="left">张李敏</td>
+					<td align="left"></td>
+					<td><a href="/jsxsd/jsxx/jsxx_query_detail?jg0101id=20102116" >查看</a></td>
+				</tr>
+			
+				<tr>
+					<td>2</td>
+					<td align="left">20112122</td>
+					<td align="left">张磊</td>
+					<td align="left"></td>
+					<td><a href="/jsxsd/jsxx/jsxx_query_detail?jg0101id=20112122" >查看</a></td>
+				</tr>
+			
+				<tr>
+					<td>3</td>
+					<td align="left">20122110</td>
+					<td align="left">张杰</td>
+					<td align="left"></td>
+					<td><a href="/jsxsd/jsxx/jsxx_query_detail?jg0101id=20122110" >查看</a></td>
+				</tr>
+			
+				<tr>
+					<td>4</td>
+					<td align="left">20152021</td>
+					<td align="left">张燕</td>
+					<td align="left"></td>
+					<td><a href="/jsxsd/jsxx/jsxx_query_detail?jg0101id=20152021" >查看</a></td>
+				</tr>
+			
+				<tr>
+					<td>5</td>
+					<td align="left">20142102</td>
+					<td align="left">张素花</td>
+					<td align="left"></td>
+					<td><a href="/jsxsd/jsxx/jsxx_query_detail?jg0101id=20142102" >查看</a></td>
+				</tr>
+			
+				<tr>
+					<td>6</td>
+					<td align="left">20032106</td>
+					<td align="left">张利忙</td>
+					<td align="left"></td>
+					<td><a href="/jsxsd/jsxx/jsxx_query_detail?jg0101id=20032106" >查看</a></td>
+				</tr>
+			
+				<tr>
+					<td>7</td>
+					<td align="left">20122117</td>
+					<td align="left">张春蕾</td>
+					<td align="left"></td>
+					<td><a href="/jsxsd/jsxx/jsxx_query_detail?jg0101id=20122117" >查看</a></td>
+				</tr>
+			
+				<tr>
+					<td>8</td>
+					<td align="left">20092110</td>
+					<td align="left">张迪</td>
+					<td align="left"></td>
+					<td><a href="/jsxsd/jsxx/jsxx_query_detail?jg0101id=20092110" >查看</a></td>
+				</tr>
+			
+				<tr>
+					<td>9</td>
+					<td align="left">19981815</td>
+					<td align="left">张东海</td>
+					<td align="left"></td>
+					<td><a href="/jsxsd/jsxx/jsxx_query_detail?jg0101id=19981815" >查看</a></td>
+				</tr>
+			
+				<tr>
+					<td>10</td>
+					<td align="left">20182029</td>
+					<td align="left">张志金</td>
+					<td align="left"></td>
+					<td><a href="/jsxsd/jsxx/jsxx_query_detail?jg0101id=20182029" >查看</a></td>
+				</tr>
+			
+				<tr>
+					<td>11</td>
+					<td align="left">20182042</td>
+					<td align="left">张勤</td>
+					<td align="left"></td>
+					<td><a href="/jsxsd/jsxx/jsxx_query_detail?jg0101id=20182042" >查看</a></td>
+				</tr>
+			
+				<tr>
+					<td>12</td>
+					<td align="left">20192098</td>
+					<td align="left">张群</td>
+					<td align="left"></td>
+					<td><a href="/jsxsd/jsxx/jsxx_query_detail?jg0101id=20192098" >查看</a></td>
+				</tr>
+			
+				<tr>
+					<td>13</td>
+					<td align="left">20192421</td>
+					<td align="left">张波涛</td>
+					<td align="left"></td>
+					<td><a href="/jsxsd/jsxx/jsxx_query_detail?jg0101id=20192421" >查看</a></td>
+				</tr>
+			
+				<tr>
+					<td>14</td>
+					<td align="left">20182162</td>
+					<td align="left">张金娣</td>
+					<td align="left"></td>
+					<td><a href="/jsxsd/jsxx/jsxx_query_detail?jg0101id=20182162" >查看</a></td>
+				</tr>
+			
+				<tr>
+					<td>15</td>
+					<td align="left">20202066</td>
+					<td align="left">张颖怡</td>
+					<td align="left"></td>
+					<td><a href="/jsxsd/jsxx/jsxx_query_detail?jg0101id=20202066" >查看</a></td>
+				</tr>
+			
+			
+			
+			
+        </table>
+        <div id="PagingControl1_divOuterClass" class="Nsb_r_list_tdfy"> <div class="Nsb_r_list_fy" ><div class="Nsb_r_list_fy2"><span>转到</span><input name="pageIndex" type="text" value="1" id="pageIndex" onkeyup="keyUpNum(this);"  onafterpaste="keyUpNum(this);" onkeydown="paginationKeyDown()"/> </div><div class="Nsb_r_list_fy3"> <span> 共1页&nbsp;15条</span></div><div class="Nsb_r_list_fy4"><a id="PagingControl1_btnPrevPage" disabled="disabled" title='第一页'></a><a id="PagingControl1_btnNextPage" disabled="disabled" title='最后一页'></a></div></div></div>				
+		</form>
+</div> 
+</div>
+
+<div id="Footer1_divCopyright" class="Nsb_pw" style="display:;">
+  <div class="Nsb_rights">Copyright (C) 湖南强智科技发展有限公司 2003-2013 All Rights Reserved 湘ICP 备12010071号</div>
+</div>
+
+</body>
+</html>
+<script type="text/javascript">
+
+</script>
+
+
+注意：必须要教师名字可以不具体，但是不能为空，为空查不了
+

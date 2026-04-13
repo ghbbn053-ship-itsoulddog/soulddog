@@ -19,6 +19,7 @@
 - 提高系统一致性：确保登录和爬取使用同一服务器实例，增强了系统可靠性
 - 改进错误处理：集中化的会话验证和错误处理机制
 - 统一的API模式：所有受保护的API端点都遵循相同的会话管理模式
+- **新增** 调试增强：增加了详细的日志记录来改善问题诊断能力，包括URL访问跟踪、响应特征监控、内容分析等
 
 ## 目录
 1. [简介](#简介)
@@ -42,7 +43,7 @@
 - 成绩查询、课表查询等扩展功能
 - 教师查询、课程查询等辅助功能
 
-**更新** 系统现已引入统一的会话管理机制，所有用户数据查询API端点都使用`get_user_session()`函数确保登录和爬取操作使用同一服务器实例，提高了系统的一致性和可靠性。
+**更新** 系统现已引入统一的会话管理机制，所有用户数据查询API端点都使用`get_user_session()`函数确保登录和爬取操作使用同一服务器实例，提高了系统的一致性和可靠性。**新增** 系统还增强了调试能力，通过详细的日志记录来改善问题诊断，包括URL访问跟踪、响应特征监控、内容分析等。
 
 ## 项目结构
 
@@ -56,29 +57,31 @@ D[models/ - 数据模型]
 E[app/api/ - API路由]
 F[services/ - 服务层]
 G[get_user_session() - 会话管理]
+H[日志记录系统 - 调试增强]
 end
 subgraph "前端应用"
-H[frontend/src/app/ - Next.js应用]
-I[components/ui/ - UI组件]
+I[frontend/src/app/ - Next.js应用]
+J[components/ui/ - UI组件]
 end
 subgraph "外部系统"
-J[教务系统(jwxt.gdufe.edu.cn)]
-K[Redis缓存]
-L[向量数据库]
+K[教务系统(jwxt.gdufe.edu.cn)]
+L[Redis缓存]
+M[向量数据库]
 end
 A --> B
 A --> C
 A --> D
 A --> G
-H --> A
-B --> J
-A --> K
+A --> H
+I --> A
+B --> K
 A --> L
+A --> M
 ```
 
 **图表来源**
 - [backend/main.py:1-857](file://backend/main.py#L1-L857)
-- [backend/scraper.py:1-1237](file://backend/scraper.py#L1-L1237)
+- [backend/scraper.py:1-1257](file://backend/scraper.py#L1-L1257)
 
 **章节来源**
 - [backend/main.py:1-857](file://backend/main.py#L1-L857)
@@ -95,12 +98,14 @@ A --> L
    - 参数：username (必需)
    - 功能：获取用户的个人信息，包括姓名、学号、专业、班级等
    - **更新**：使用`get_user_session()`函数进行统一会话管理
+   - **新增**：详细的日志记录，包括请求参数、会话状态、爬取结果等
 
 2. **学籍卡片查询接口** (`/api/user/card`)
    - 方法：GET
    - 参数：username (必需)
    - 功能：获取详细的学籍卡片信息
    - **更新**：使用`get_user_session()`函数进行统一会话管理
+   - **新增**：详细的日志记录，包括URL访问跟踪、响应特征监控、内容分析等
 
 3. **验证码接口** (`/api/captcha`)
    - 方法：GET
@@ -111,6 +116,7 @@ A --> L
    - 方法：POST
    - 参数：username, password, code, captcha_session_id
    - 功能：用户身份验证
+   - **新增**：增强的调试日志，包括服务器选择、响应状态码、编码检测等
 
 **章节来源**
 - [backend/main.py:368-398](file://backend/main.py#L368-L398)
@@ -173,7 +179,7 @@ JwxtScraper --> BeautifulSoup : "使用"
 ```
 
 **图表来源**
-- [backend/scraper.py:13-1237](file://backend/scraper.py#L13-L1237)
+- [backend/scraper.py:13-1257](file://backend/scraper.py#L13-L1257)
 
 **章节来源**
 - [backend/scraper.py:13-200](file://backend/scraper.py#L13-L200)
@@ -258,6 +264,12 @@ Return401 --> End([结束])
 Success --> End
 ```
 
+**新增** 调试增强功能：
+- 详细的请求日志记录
+- 会话状态监控
+- 爬取结果分析
+- 错误追踪和诊断
+
 **图表来源**
 - [backend/main.py:368-398](file://backend/main.py#L368-L398)
 - [backend/main.py:353-366](file://backend/main.py#L353-L366)
@@ -334,6 +346,13 @@ Scraper-->>API : 返回解析结果
 API-->>Client : {success, data}
 ```
 
+**新增** 调试增强功能：
+- URL访问跟踪
+- 响应特征监控
+- 内容分析
+- 编码检测
+- 页面结构验证
+
 **图表来源**
 - [backend/main.py:401-423](file://backend/main.py#L401-L423)
 - [backend/main.py:353-366](file://backend/main.py#L353-L366)
@@ -360,6 +379,13 @@ ReturnError --> End([结束])
 ReturnSuccess --> End
 ```
 
+**新增** 增强的调试日志：
+- 验证码获取过程跟踪
+- 登录服务器选择记录
+- 响应状态码监控
+- 编码检测分析
+- 错误信息提取
+
 **图表来源**
 - [backend/main.py:194-348](file://backend/main.py#L194-L348)
 - [backend/test_login.py:19-74](file://backend/test_login.py#L19-L74)
@@ -384,6 +410,12 @@ LogSession --> ReturnTuple["返回(session, server_url)"]
 Raise401 --> End([结束])
 ReturnTuple --> End
 ```
+
+**新增** 调试增强功能：
+- 会话状态监控
+- 用户活动跟踪
+- 服务器实例验证
+- 性能指标记录
 
 **图表来源**
 - [backend/main.py:353-366](file://backend/main.py#L353-L366)
@@ -451,11 +483,11 @@ Models --> Database[(数据库)]
 
 **图表来源**
 - [backend/main.py:1-857](file://backend/main.py#L1-L857)
-- [backend/scraper.py:1-1237](file://backend/scraper.py#L1-L1237)
+- [backend/scraper.py:1-1257](file://backend/scraper.py#L1-L1257)
 
 **章节来源**
 - [backend/main.py:1-857](file://backend/main.py#L1-L857)
-- [backend/scraper.py:1-1237](file://backend/scraper.py#L1-L1237)
+- [backend/scraper.py:1-1257](file://backend/scraper.py#L1-L1257)
 
 ## 性能考虑
 
@@ -519,10 +551,11 @@ RemoveSession --> Memory
 3. **错误重试**: 对于临时性错误提供重试机制
 4. **连接复用**: 使用requests.Session复用连接
 5. ****统一会话管理**: 通过`get_user_session()`函数确保会话一致性
+6. **新增** **增强的调试日志**: 提供详细的性能监控和问题诊断信息
 
 **章节来源**
 - [backend/main.py:83-93](file://backend/main.py#L83-L93)
-- [backend/scraper.py:1-1237](file://backend/scraper.py#L1-L1237)
+- [backend/scraper.py:1-1257](file://backend/scraper.py#L1-L1257)
 - [backend/main.py:353-366](file://backend/main.py#L353-L366)
 
 ## 故障排除指南
@@ -600,20 +633,21 @@ RemoveSession --> Memory
 - 清理会话数据
 - 确认服务器实例配置
 
-**章节来源**
-- [backend/main.py:136-348](file://backend/main.py#L136-L348)
-- [backend/scraper.py:78-168](file://backend/scraper.py#L78-L168)
-- [backend/main.py:353-366](file://backend/main.py#L353-L366)
-
 ### 调试工具
 
-系统提供了完整的测试脚本：
+系统提供了完整的测试脚本和增强的调试功能：
 
 1. **test_scraper.py**: 爬虫功能测试
 2. **test_login.py**: 登录功能测试
 3. **education_options.py**: 选项数据测试
+4. **新增** **详细日志记录**: 提供完整的请求跟踪和响应分析
 
-这些测试脚本可以帮助开发者快速定位问题并验证修复效果。
+**新增** 调试增强功能：
+- URL访问跟踪
+- 响应特征监控
+- 内容分析
+- 编码检测
+- 性能指标记录
 
 **章节来源**
 - [backend/test_scraper.py:1-280](file://backend/test_scraper.py#L1-L280)
@@ -630,6 +664,7 @@ RemoveSession --> Memory
 4. **错误处理**: 完善的异常处理和错误反馈
 5. ****统一会话管理**: 通过`get_user_session()`函数确保所有API端点的一致性
 6. ****提高可靠性**: 登录和爬取使用同一服务器实例
+7. **新增** **增强的调试能力**: 详细的日志记录改善问题诊断能力
 
 ### 改进建议
 1. **认证安全**: 引入JWT令牌认证机制
@@ -638,6 +673,7 @@ RemoveSession --> Memory
 4. **缓存策略**: 实现数据缓存减少重复爬取
 5. **监控告警**: 添加系统监控和错误告警
 6. ****会话管理优化**: 进一步优化`get_user_session()`函数的性能
+7. **新增** **日志分析工具**: 建立专门的日志分析和监控系统
 
 ### 使用场景
 - 学生自助查询个人信息
@@ -684,6 +720,7 @@ curl -X GET "http://localhost:8000/api/user/card?username=2024123456"
 4. **日志记录**: 敏感信息不在日志中记录
 5. **权限控制**: 受保护资源仅对已认证用户开放
 6. ****会话一致性**: 统一的会话管理确保数据完整性
+7. **新增** **日志安全**: 调试日志不包含敏感数据，仅记录必要的诊断信息
 
 ### 性能优化建议
 
@@ -694,6 +731,7 @@ curl -X GET "http://localhost:8000/api/user/card?username=2024123456"
 5. **监控指标**: 添加性能监控和指标收集
 6. ****会话管理优化**: 优化`get_user_session()`函数的性能
 7. ****服务器实例管理**: 确保所有API端点使用同一服务器实例
+8. **新增** **日志性能优化**: 使用异步日志记录，避免阻塞请求处理
 
 ### 会话管理最佳实践
 
@@ -704,3 +742,23 @@ curl -X GET "http://localhost:8000/api/user/card?username=2024123456"
 3. **日志记录**: 记录会话管理过程的关键信息
 4. **性能监控**: 监控会话管理的响应时间和成功率
 5. ****一致性保证**: 确保所有API端点使用相同的会话管理逻辑
+6. **新增** **调试日志**: 利用详细的日志记录进行问题诊断和性能分析
+
+### 调试日志示例
+
+**新增** 系统提供的调试日志示例：
+
+```
+INFO:     【验证码】使用服务器: http://172.19.13.60:80/jsxsd/
+INFO:     【验证码】生成 session: captcha_1712345678.901234_0
+INFO:     【登录】使用验证码时的服务器: http://172.19.13.60:80/jsxsd/
+INFO:     【登录】响应状态码: 200
+INFO:     【登录】响应 URL: http://172.19.13.60:80/jsxsd/jsxsd/framework/xsMain.jsp
+INFO:     【登录】响应内容长度: 12345
+INFO:     【个人信息】URL: http://172.19.13.60:80/jsxsd/framework/xsMain.jsp
+INFO:     【个人信息】响应编码: gb18030
+INFO:     【个人信息】响应长度: 12345
+INFO:     【个人信息】内容预览: <!DOCTYPE html><html>...
+```
+
+这些日志提供了完整的请求跟踪、响应分析和内容监控，大大改善了问题诊断能力。

@@ -1,0 +1,795 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+
+<head id="headerid1">
+	<base target='_self'>
+	<title>学业进度查询</title>	
+	<meta http-equiv="pragma" content="no-cache">
+	<meta http-equiv="cache-control" content="no-cache">
+	<meta http-equiv="expires" content="0">
+	<meta http-equiv="keywords" content="湖南强智科技教务系统">
+	<meta http-equiv="description" content="湖南强智科技教务系统">
+	<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE8" />
+<script type="text/javascript" src="/jsxsd/js/jquery-min.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/common.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/validate.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/iepngfix_tilebg.js" language="javascript" ></script>
+<link href="/jsxsd/framework/images/common.css" rel="stylesheet" type="text/css" />
+<link href="/jsxsd/framework/images/blue.css" rel="stylesheet" type="text/css" id="link_theme" />
+<link href="/jsxsd/framework/images/workstation.css" rel="stylesheet" type="text/css" /> 
+</head>
+<iframe id="notSession" name="notSession" style="display: none;" src=""></iframe>
+<script type="text/javascript">
+jQuery(document).ready(function(){
+	window.setInterval(function(){
+		 document.getElementById("notSession").src = "/jsxsd/framework/blankPage.jsp";
+	 }, 1000 * 60 * 10);
+});
+</script>
+<body>
+ 
+
+
+
+
+
+
+
+<div class="Nsb_pw">
+  <div class="Nsb_top">
+    <div class="Nsb_top_logo"><table border="0" cellpadding="0" cellspacing="0"><tr><td height="75" valign="middle"><img style="display:;" id="imgLogo" src="/jsxsd/framework/images/index_logo.gif" /></td></tr></table></div>
+    <div class="Nsb_top_menu">        
+        <div id="Top1_divLoginName" class="Nsb_top_menu_nc" style="color: #000000;">张靖(24251102121)</div>
+        <ul>
+            <li><a id="TopUserSetting" info="个人设置" href="#" class="Nsb_top_menu_id"><img src="/jsxsd/framework/images/Nsb_top_p1.jpg" id="Top1_imgTopSmallUserPhoto" /></a></li>
+            <span></span>
+                          
+            
+            <li><a id="TopTheme" info="切换主题" href="#" class="Nsb_top_menu_style" onclick="changeDisplay('divTopTheme')"></a></li>
+            <span id="Top1_LBackManageSpliter"></span>
+            <span id="Top1_LExitSpliter"></span>
+            <li id="Top1_LBackManage">
+            	<a info="个人设置" href="/jsxsd/grsz/grsz_xggrxx.do?Ves632DSdyV=NEW_JSD_WDZM" class="Nsb_top_menu_options"></a>
+            </li>
+            <li id="Top1_LExit"><a info="退出" href="javascript:Logout('/jsxsd');"   class="Nsb_top_menu_exit"></a></li>
+        </ul>            
+     </div>   
+     <div id="divTopTheme" group="topDiv" style="display:none;z-index:10000">      
+        <div class="Nsb_top_c Nsb_top_c3">
+          <ul>
+            <li id="theme_blue" theme="blue" index="1" class="Nsb_top_c3_11" onclick="javascript:changeTheme('/jsxsd','blue',this);"></li>
+            <li id="theme_green" theme="green" index="2" class="Nsb_top_c3_2"  onclick="javascript:changeTheme('/jsxsd','green',this);"></li>
+            <li id="theme_orange" theme="orange" index="3" class="Nsb_top_c3_3" onclick="javascript:changeTheme('/jsxsd','orange',this);"></li>
+            <li id="theme_red" theme="red" index="4" class="Nsb_top_c3_4"  onclick="javascript:changeTheme('/jsxsd','red',this);"></li>
+            <li id="theme_purple" theme="purple" index="5" class="Nsb_top_c3_5" onclick="javascript:changeTheme('/jsxsd','purple',this);"></li>
+            <li id="theme_gray" theme="gray" index="6" class="Nsb_top_c3_6"  onclick="javascript:changeTheme('/jsxsd','gray',this);"></li>
+          </ul>
+        </div>
+     </div>
+   </div>
+</div>
+<div class="Nsb_menu_pw">
+  <div class="Nsb_pw">
+    <div id="divFirstMenuClass" class="Nsb_menu menu_cn">
+      <ul>         
+         <li class="Nsb_menu_li_now" title="首页">
+         	<a class="Nsb_menu_li_h" id="homepage" href="/jsxsd/framework/main.jsp"><span></span></a>
+         </li>
+         
+         	<li title="我的桌面">
+         		<a id="calender_user_schedule" href="/jsxsd/jxzl/jxzl_query?Ves632DSdyV=NEW_XSD_WDZM">我的桌面</a>
+         	</li>
+         
+         	<li title="学籍成绩">
+         		<a id="calender_user_schedule" href="/jsxsd/xsxj/xjxxgl.do?Ves632DSdyV=NEW_XSD_XJCJ">学籍成绩</a>
+         	</li>
+         
+         	<li title="培养管理">
+         		<a id="calender_user_schedule" href="/jsxsd/jsxx/jsxx_query?Ves632DSdyV=NEW_XSD_PYGL">培养管理</a>
+         	</li>
+         
+         	<li title="考试报名">
+         		<a id="calender_user_schedule" href="/jsxsd/xsks/xsksap_query?Ves632DSdyV=NEW_XSD_KSBM">考试报名</a>
+         	</li>
+         
+         	<li title="教学评价">
+         		<a id="calender_user_schedule" href="/jsxsd/xspj/xspj_find.do?Ves632DSdyV=NEW_XSD_JXPJ">教学评价</a>
+         	</li>
+         
+      </ul>
+    </div>
+  </div>
+</div>
+<div class="Nsb_pw">   
+	
+
+
+
+
+
+
+  
+<div id="LeftMenu1_divChildMenu" class="Nsb_layout_l Nsb_l_list">
+	<div class="Nsb_l_list_top"></div>
+	
+			<h4 class="exam_user_exam">教师查询</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/jsxx/jsxx_query">教师信息查询</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">培养方案</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/jspyfa/pyfa_find">人才培养方案</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/pyfazd_query">我的培养方案</a></li>
+	
+				<li><a class='Nsb_l_list_now' href="/jsxsd/pyfa/xyjdcx">学业进度查询</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/pyfa_query">执行计划</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/txxxjh_query.do">填写教学计划</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">我的课表</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/xskb/xskb_list.do">学期课表</a></li>
+	
+				<li><a  href="/jsxsd/kbcx/kbxx_kc">课程课表</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">选课管理</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/xsxk/xklc_list">学生选课中心</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">辅修管理</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/fxgl/fxbmxx_query">辅修报名</a></li>
+	
+				<li><a  href="/jsxsd/fxgl/fxzcxx">辅修注册</a></li>
+	
+			</ul>
+	
+</div>
+	<div class="Nsb_layout_r">
+
+		<form action="" name="jsxxQueryForm" id="jsxxQueryForm" method="post">
+			<div class="Nsb_r_title"><a href="/jsxsd/framework/main.jsp"">首页</a> » 学业进度查询 » 查询</div>
+			<br/><br/>
+			<table width="100%" border="0" cellspacing="0" cellpadding="0" class="no_border_table">
+				<tr>
+					<th width="40%" align="right">修读类型：</th>
+					<td>
+					<select style="width: 150px" name="xdlx" id="xdlx" >
+						<option value="0">主修</option>
+						<option value="1">辅修</option>
+						<font color="red">*</font>
+					</select>	
+					</td>
+				</tr>
+				<tr>
+					<td colspan="2" align="center">
+						<input class="button" type="button" id="btn_query" value="查 询" onclick="querySkjhxx()"/>
+					</td>
+				</tr>
+			</table>
+		</form>
+	</div>
+</div>
+
+<div id="Footer1_divCopyright" class="Nsb_pw" style="display:;">
+  <div class="Nsb_rights">Copyright (C) 湖南强智科技发展有限公司 2003-2013 All Rights Reserved 湘ICP 备12010071号</div>
+</div>
+<script language="javascript">
+ 
+function querySkjhxx(){
+	var xdlx = document.getElementById("xdlx").value;
+	if(isEmpty(trim(xdlx))){
+		alert("请选择修读类型！");
+		return;
+	} 
+	document.forms["jsxxQueryForm"].action = "/jsxsd/pyfa/xyjdcx?type=cx";
+	document.forms["jsxxQueryForm"].submit();
+}
+
+</script>
+</body>
+</html>
+
+
+提交标头：content-language
+zh-CN
+content-type
+text/html;charset=UTF-8
+date
+Thu, 09 Apr 2026 03:13:26 GMT
+server
+Apache-Coyote/1.1
+transfer-encoding
+chunked
+accept
+text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+accept-encoding
+gzip, deflate
+accept-language
+zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6
+cache-control
+max-age=0
+connection
+keep-alive
+content-length
+6
+content-type
+application/x-www-form-urlencoded
+cookie
+JSESSIONID=E42F27C3D997A3162ED51D2AC7746D6B
+dnt
+1
+host
+jwxt.gdufe.edu.cn
+origin
+http://jwxt.gdufe.edu.cn
+referer
+http://jwxt.gdufe.edu.cn/jsxsd/pyfa/xyjdcx
+upgrade-insecure-requests
+1
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0
+
+
+提交负载：
+查询字符串参数type=cx
+表单数据xdlx=1
+
+
+返回样式：<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html>
+	<head>
+		<base target='_self'>
+		
+
+<head id="headerid1">
+	<base target='_self'>
+	<title>学业进度查询</title>	
+	<meta http-equiv="pragma" content="no-cache">
+	<meta http-equiv="cache-control" content="no-cache">
+	<meta http-equiv="expires" content="0">
+	<meta http-equiv="keywords" content="湖南强智科技教务系统">
+	<meta http-equiv="description" content="湖南强智科技教务系统">
+	<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE8" />
+<script type="text/javascript" src="/jsxsd/js/jquery-min.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/common.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/validate.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/iepngfix_tilebg.js" language="javascript" ></script>
+<link href="/jsxsd/framework/images/common.css" rel="stylesheet" type="text/css" />
+<link href="/jsxsd/framework/images/blue.css" rel="stylesheet" type="text/css" id="link_theme" />
+<link href="/jsxsd/framework/images/workstation.css" rel="stylesheet" type="text/css" /> 
+</head>
+<iframe id="notSession" name="notSession" style="display: none;" src=""></iframe>
+<script type="text/javascript">
+jQuery(document).ready(function(){
+	window.setInterval(function(){
+		 document.getElementById("notSession").src = "/jsxsd/framework/blankPage.jsp";
+	 }, 1000 * 60 * 10);
+});
+</script>
+	</head>
+ 
+	<body style="margin:0px;">
+		
+
+
+
+
+
+
+<div class="Nsb_pw">
+  <div class="Nsb_top">
+    <div class="Nsb_top_logo"><table border="0" cellpadding="0" cellspacing="0"><tr><td height="75" valign="middle"><img style="display:;" id="imgLogo" src="/jsxsd/framework/images/index_logo.gif" /></td></tr></table></div>
+    <div class="Nsb_top_menu">        
+        <div id="Top1_divLoginName" class="Nsb_top_menu_nc" style="color: #000000;">张靖(24251102121)</div>
+        <ul>
+            <li><a id="TopUserSetting" info="个人设置" href="#" class="Nsb_top_menu_id"><img src="/jsxsd/framework/images/Nsb_top_p1.jpg" id="Top1_imgTopSmallUserPhoto" /></a></li>
+            <span></span>
+                          
+            
+            <li><a id="TopTheme" info="切换主题" href="#" class="Nsb_top_menu_style" onclick="changeDisplay('divTopTheme')"></a></li>
+            <span id="Top1_LBackManageSpliter"></span>
+            <span id="Top1_LExitSpliter"></span>
+            <li id="Top1_LBackManage">
+            	<a info="个人设置" href="/jsxsd/grsz/grsz_xggrxx.do?Ves632DSdyV=NEW_JSD_WDZM" class="Nsb_top_menu_options"></a>
+            </li>
+            <li id="Top1_LExit"><a info="退出" href="javascript:Logout('/jsxsd');"   class="Nsb_top_menu_exit"></a></li>
+        </ul>            
+     </div>   
+     <div id="divTopTheme" group="topDiv" style="display:none;z-index:10000">      
+        <div class="Nsb_top_c Nsb_top_c3">
+          <ul>
+            <li id="theme_blue" theme="blue" index="1" class="Nsb_top_c3_11" onclick="javascript:changeTheme('/jsxsd','blue',this);"></li>
+            <li id="theme_green" theme="green" index="2" class="Nsb_top_c3_2"  onclick="javascript:changeTheme('/jsxsd','green',this);"></li>
+            <li id="theme_orange" theme="orange" index="3" class="Nsb_top_c3_3" onclick="javascript:changeTheme('/jsxsd','orange',this);"></li>
+            <li id="theme_red" theme="red" index="4" class="Nsb_top_c3_4"  onclick="javascript:changeTheme('/jsxsd','red',this);"></li>
+            <li id="theme_purple" theme="purple" index="5" class="Nsb_top_c3_5" onclick="javascript:changeTheme('/jsxsd','purple',this);"></li>
+            <li id="theme_gray" theme="gray" index="6" class="Nsb_top_c3_6"  onclick="javascript:changeTheme('/jsxsd','gray',this);"></li>
+          </ul>
+        </div>
+     </div>
+   </div>
+</div>
+<div class="Nsb_menu_pw">
+  <div class="Nsb_pw">
+    <div id="divFirstMenuClass" class="Nsb_menu menu_cn">
+      <ul>         
+         <li class="Nsb_menu_li_now" title="首页">
+         	<a class="Nsb_menu_li_h" id="homepage" href="/jsxsd/framework/main.jsp"><span></span></a>
+         </li>
+         
+         	<li title="我的桌面">
+         		<a id="calender_user_schedule" href="/jsxsd/jxzl/jxzl_query?Ves632DSdyV=NEW_XSD_WDZM">我的桌面</a>
+         	</li>
+         
+         	<li title="学籍成绩">
+         		<a id="calender_user_schedule" href="/jsxsd/xsxj/xjxxgl.do?Ves632DSdyV=NEW_XSD_XJCJ">学籍成绩</a>
+         	</li>
+         
+         	<li title="培养管理">
+         		<a id="calender_user_schedule" href="/jsxsd/jsxx/jsxx_query?Ves632DSdyV=NEW_XSD_PYGL">培养管理</a>
+         	</li>
+         
+         	<li title="考试报名">
+         		<a id="calender_user_schedule" href="/jsxsd/xsks/xsksap_query?Ves632DSdyV=NEW_XSD_KSBM">考试报名</a>
+         	</li>
+         
+         	<li title="教学评价">
+         		<a id="calender_user_schedule" href="/jsxsd/xspj/xspj_find.do?Ves632DSdyV=NEW_XSD_JXPJ">教学评价</a>
+         	</li>
+         
+      </ul>
+    </div>
+  </div>
+</div>
+		<div class="Nsb_pw">
+		 	
+
+
+
+
+
+
+  
+<div id="LeftMenu1_divChildMenu" class="Nsb_layout_l Nsb_l_list">
+	<div class="Nsb_l_list_top"></div>
+	
+			<h4 class="exam_user_exam">教师查询</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/jsxx/jsxx_query">教师信息查询</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">培养方案</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/jspyfa/pyfa_find">人才培养方案</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/pyfazd_query">我的培养方案</a></li>
+	
+				<li><a class='Nsb_l_list_now' href="/jsxsd/pyfa/xyjdcx">学业进度查询</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/pyfa_query">执行计划</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/txxxjh_query.do">填写教学计划</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">我的课表</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/xskb/xskb_list.do">学期课表</a></li>
+	
+				<li><a  href="/jsxsd/kbcx/kbxx_kc">课程课表</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">选课管理</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/xsxk/xklc_list">学生选课中心</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">辅修管理</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/fxgl/fxbmxx_query">辅修报名</a></li>
+	
+				<li><a  href="/jsxsd/fxgl/fxzcxx">辅修注册</a></li>
+	
+			</ul>
+	
+</div>
+			<div class="Nsb_layout_r"> 
+				<div class="Nsb_r_title">
+					<a href="/jsxsd/framework/main.jsp"">首页</a>» 学业进度查询 » 学业进度查询(辅修)
+				</div>
+				<br />
+				<table  style="border-collapse: collapse;" width="100%" border="0" cellspacing="0" cellpadding="0" class="Nsb_r_list Nsb_table">
+							
+					<tr style="border-bottom: 1px solid red;" align="left">
+					<th colspan="7">
+					 需修读总学分：45
+					</th>
+					</tr>
+					<tr style="height:25px;background-color:#D1E4F8;" align="left">
+			
+						<th class="Nsb_r_list_thb" scope="col" align="center"  >课程性质</th>
+						<th class="Nsb_r_list_thb" scope="col" align="center"  >课程代码</th>						
+						<th class="Nsb_r_list_thb" scope="col" align="center"  >课程名称</th>
+						<th class="Nsb_r_list_thb" scope="col" align="center"  >学分</th>
+						<th class="Nsb_r_list_thb" scope="col" align="center"  >建议修读学期</th>
+						<th class="Nsb_r_list_thb" scope="col" align="center"  >免听、免修</th>
+						<th class="Nsb_r_list_thb" scope="col" align="center"  >已获学分</th>
+					</tr>
+					 
+					
+					 
+					 
+
+					 	
+					 
+					 
+					<tr>
+					 <td>必修</td>
+					 <td>18110043</td>
+					 <td>程序设计基础</td>
+					 <td>3</td>
+					 <td>1</td>
+					 <td></td>
+					 <td>
+					 
+					 
+					 
+					    3.0
+					      
+					 
+					 
+					 
+					</td>
+					</tr>
+					
+					 
+					 
+					<tr>
+					 <td>必修</td>
+					 <td>16162804</td>
+					 <td>数据结构</td>
+					 <td>4</td>
+					 <td>3</td>
+					 <td></td>
+					 <td>
+					 
+					 
+					 
+					    4.0
+					      
+					 
+					 
+					 
+					</td>
+					</tr>
+					
+					 
+					 
+					<tr>
+					 <td>必修</td>
+					 <td>19110034</td>
+					 <td>计算机组成原理</td>
+					 <td>4</td>
+					 <td>3</td>
+					 <td></td>
+					 <td>
+					 
+					 
+					 
+					    4.0
+					      
+					 
+					 
+					 
+					</td>
+					</tr>
+					
+					 
+					 
+					<tr>
+					 <td>必修</td>
+					 <td>22110063</td>
+					 <td>操作系统</td>
+					 <td>3</td>
+					 <td>4</td>
+					 <td></td>
+					 <td>
+					 
+					 
+					 
+					    
+					      
+					 
+					 
+					 
+					</td>
+					</tr>
+					
+					 
+					 
+					<tr>
+					 <td>必修</td>
+					 <td>16168003</td>
+					 <td>计算机网络</td>
+					 <td>3</td>
+					 <td>5</td>
+					 <td></td>
+					 <td>
+					 
+					 
+					 
+					    
+					      
+					 
+					 
+					 
+					</td>
+					</tr>
+					
+					 
+					 
+					<tr>
+					 <td>必修</td>
+					 <td>16013406</td>
+					 <td>高等数学 I</td>
+					 <td>6</td>
+					 <td>1</td>
+					 <td></td>
+					 <td>
+					 
+					 
+					 
+					    6.0
+					      
+					 
+					 
+					 
+					</td>
+					</tr>
+					
+					 
+					 
+					<tr>
+					 <td>必修</td>
+					 <td>16043004</td>
+					 <td>高等数学II</td>
+					 <td>4</td>
+					 <td>2</td>
+					 <td></td>
+					 <td>
+					 
+					 
+					 
+					    4.0
+					      
+					 
+					 
+					 
+					</td>
+					</tr>
+					
+					 
+					 
+					<tr>
+					 <td>必修</td>
+					 <td>16071103</td>
+					 <td>线性代数a</td>
+					 <td>3</td>
+					 <td>3</td>
+					 <td></td>
+					 <td>
+					 
+					 
+					 
+					    3.0
+					      
+					 
+					 
+					 
+					</td>
+					</tr>
+					
+					
+					 	
+					 
+					 
+					<tr>
+					 <td>必修</td>
+					 <td>22110031</td>
+					 <td>计算机科学导论</td>
+					 <td>1</td>
+					 <td>1</td>
+					 <td></td>
+					 <td>
+					 
+					 
+					 
+					    1.0
+					      
+					 
+					 
+					 
+					</td>
+					</tr>
+					
+					 
+					 
+					<tr>
+					 <td>必修</td>
+					 <td>16084903</td>
+					 <td>编译原理</td>
+					 <td>3</td>
+					 <td>4</td>
+					 <td></td>
+					 <td>
+					 
+					 
+					 
+					    
+					      
+					 
+					 
+					 
+					</td>
+					</tr>
+					
+					 
+					 
+					<tr>
+					 <td>必修</td>
+					 <td>16158603</td>
+					 <td>算法分析与设计</td>
+					 <td>3</td>
+					 <td>5</td>
+					 <td></td>
+					 <td>
+					 
+					 
+					 
+					    
+					      
+					 
+					 
+					 
+					</td>
+					</tr>
+					
+					 
+					 
+					<tr>
+					 <td>必修</td>
+					 <td>16159703</td>
+					 <td>软件工程</td>
+					 <td>3</td>
+					 <td>5</td>
+					 <td></td>
+					 <td>
+					 
+					 
+					 
+					    
+					      
+					 
+					 
+					 
+					</td>
+					</tr>
+					
+					 
+					 
+					<tr>
+					 <td>必修</td>
+					 <td>16235305</td>
+					 <td>毕业设计</td>
+					 <td>5</td>
+					 <td>8</td>
+					 <td></td>
+					 <td>
+					 
+					 
+					 
+					    
+					      
+					 
+					 
+					 
+					</td>
+					</tr>
+					
+					
+					
+				  <tr>
+					<td colspan="5">合计</td>
+					<td>
+					
+					 </td>
+					<td >
+					
+					  25.0
+					  
+					</td>
+				</tr>	
+					
+					
+				</table>
+					
+			</div>
+		</div>
+		
+<div id="Footer1_divCopyright" class="Nsb_pw" style="display:;">
+  <div class="Nsb_rights">Copyright (C) 湖南强智科技发展有限公司 2003-2013 All Rights Reserved 湘ICP 备12010071号</div>
+</div>
+	</body>
+	
+	<script language="javascript">
+	 	
+	 	
+	 	
+	function wzopen(url){ 	
+	 var iTop = (window.screen.height-30-900)/2;       //获得窗口的垂直位置;
+  var iLeft = (window.screen.width-10-800)/2;        //获得窗口的水平位置;
+  var urlpath=url;
+ window.open(urlpath,"newwindow","height=900,width=800, top ="+iTop+",left="+iLeft+",toolbar=no, menubar=no, scrollbars=no, resizable=no, location=no, status=no");
+	 	
+	
+	
+	
+	
+	}
+	 	
+	 	
+	 	
+	 	function mkxx(lbm,sxdm){
+ var iTop = (window.screen.height-30-550)/2;       //获得窗口的垂直位置;
+  var iLeft = (window.screen.width-10-930)/2;        //获得窗口的水平位置;
+  var urlpath='/jsxsd/pyfa/xyjdcx?type=mkxx&lbm='+lbm+"&sxdm="+sxdm;
+ window.open(urlpath,"newwindow","height=550,width=930, top ="+iTop+",left="+iLeft+",toolbar=no, menubar=no, scrollbars=no, resizable=no, location=no, status=no");
+	 	
+
+	 	
+	 	}
+	 	
+	 	
+	 	
+	 	
+	 	
+	 	
+	 	
+	 	
+	 	
+	 	
+	 	
+	 	function comeInXkIndx(jx0502zbid){ 
+	 		var swidth = window.screen.availWidth-10;
+	 		var sheight = window.screen.availHeight-30;
+	 		var sUrl="/jsxsd/xsxk/xsxk_index?jx0502zbid="+jx0502zbid;
+	 		window.open(sUrl, "printsetup", "toolbar=no,location=no,directories=no,status=no,menubar=no,scrollbars=no,resizable=no,width="+swidth+",height="+sheight);
+	 	}
+	</script> 
+</html>
+

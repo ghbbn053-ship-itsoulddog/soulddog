@@ -83,6 +83,7 @@ class JwxtScraper:
         """
         获取个人信息
         从主页面解析姓名、学号等基本信息
+        HTML 结构参考：.qoder/教务系统源代码/登陆界面.txt
         """
         try:
             url = f"{self.base_url}/jsxsd/framework/xsMain.jsp"
@@ -92,35 +93,44 @@ class JwxtScraper:
             logger.info(f"【个人信息】URL: {url}")
             logger.info(f"【个人信息】响应编码: {response.encoding}")
             logger.info(f"【个人信息】响应长度: {len(response.text)}")
-            logger.info(f"【个人信息】内容预览: {response.text[:300]}")
 
             soup = BeautifulSoup(response.text, 'html.parser')
 
-            # 提取姓名和学号
-            login_name_div = soup.find(id="Top1_divLoginName")
-            logger.info(f"【个人信息】找到 Top1_divLoginName: {login_name_div is not None}")
+            # 从 div.block1text 提取姓名和学号
+            # HTML 结构：
+            # <div class="block1text"> 
+            #     姓名：张靖<br/> 
+            #     学号：24251102121<br/>
+            # </div>
+            block1text = soup.find('div', class_='block1text')
             
-            if login_name_div:
-                login_name = login_name_div.get_text(strip=True)
-                logger.info(f"【个人信息】login_name 原始值: {login_name}")
-                # 格式：张靖(24251102121)
-                if '(' in login_name and ')' in login_name:
-                    name = login_name.split('(')[0]
-                    student_id = login_name.split('(')[1].split(')')[0]
-                else:
-                    name = login_name
-                    student_id = ""
+            name = ""
+            student_id = ""
+            
+            if block1text:
+                # 获取所有文本行
+                text = block1text.get_text()
+                lines = [line.strip() for line in text.split('\n') if line.strip()]
+                
+                for line in lines:
+                    if line.startswith('姓名：'):
+                        name = line.replace('姓名：', '').strip()
+                    elif line.startswith('学号：'):
+                        student_id = line.replace('学号：', '').strip()
+                
+                logger.info(f"【个人信息】从 block1text 解析: name={name}, student_id={student_id}")
             else:
-                name = ""
-                student_id = ""
-                # 尝试查找所有 div，看有没有类似的
-                all_divs = soup.find_all('div')
-                logger.info(f"【个人信息】页面共有 {len(all_divs)} 个 div")
-                for div in all_divs[:10]:
-                    div_id = div.get('id', '')
-                    div_text = div.get_text(strip=True)[:50]
-                    if div_id or div_text:
-                        logger.info(f"【个人信息】div id='{div_id}' text='{div_text}'")
+                # 降级方案：从 Top1_divLoginName 提取
+                # HTML: <div id="Top1_divLoginName">张靖(24251102121)</div>
+                login_name_div = soup.find(id="Top1_divLoginName")
+                if login_name_div:
+                    login_name = login_name_div.get_text(strip=True)
+                    if '(' in login_name and ')' in login_name:
+                        name = login_name.split('(')[0]
+                        student_id = login_name.split('(')[1].split(')')[0]
+                    logger.info(f"【个人信息】从 Top1_divLoginName 降级解析: name={name}, student_id={student_id}")
+                else:
+                    logger.warning(f"【个人信息】未找到任何个人信息元素")
 
             # 提取主页面的个人信息块
             personal_info = {
