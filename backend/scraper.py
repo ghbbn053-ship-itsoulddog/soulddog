@@ -96,27 +96,39 @@ class JwxtScraper:
 
             soup = BeautifulSoup(response.text, 'html.parser')
 
-            # 从 div.block1text 提取姓名和学号
-            # HTML 结构：
-            # <div class="block1text"> 
-            #     姓名：张靖<br/> 
-            #     学号：24251102121<br/>
-            # </div>
+            # 调试：查看页面中是否有 block1text
             block1text = soup.find('div', class_='block1text')
+            logger.info(f"【个人信息】找到 block1text: {block1text is not None}")
+            if block1text:
+                logger.info(f"【个人信息】block1text 内容: {block1text.text.strip()}")
+            else:
+                # 如果没有找到，打印所有 div 的 class 用于调试
+                all_divs = soup.find_all('div')
+                div_classes = [div.get('class', []) for div in all_divs if div.get('class')]
+                logger.info(f"【个人信息】页面中所有 div class: {div_classes[:20]}")
             
             name = ""
             student_id = ""
             
             if block1text:
-                # 获取所有文本行
+                # 获取所有文本
                 text = block1text.get_text()
+                logger.info(f"【个人信息】block1text 完整文本: {repr(text)}")
+                
                 lines = [line.strip() for line in text.split('\n') if line.strip()]
                 
                 for line in lines:
-                    if line.startswith('姓名：'):
-                        name = line.replace('姓名：', '').strip()
-                    elif line.startswith('学号：'):
-                        student_id = line.replace('学号：', '').strip()
+                    if '姓名' in line:
+                        # 匹配 "姓名：张靖" 或 "姓名:张靖"
+                        import re
+                        match = re.search(r'姓名[：:](.+)', line)
+                        if match:
+                            name = match.group(1).strip()
+                    elif '学号' in line:
+                        import re
+                        match = re.search(r'学号[：:](.+)', line)
+                        if match:
+                            student_id = match.group(1).strip()
                 
                 logger.info(f"【个人信息】从 block1text 解析: name={name}, student_id={student_id}")
             else:
