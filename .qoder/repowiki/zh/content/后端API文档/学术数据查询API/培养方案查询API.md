@@ -11,6 +11,13 @@
 - [test_scraper.py](file://backend/test_scraper.py)
 </cite>
 
+## 更新摘要
+**所做更改**
+- 更新了URL构造修复相关的章节内容
+- 修正了培养方案查询端点的URL构造逻辑说明
+- 补充了JwxtScraper类中URL构造的具体实现细节
+- 更新了相关API接口的使用示例和数据结构说明
+
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
@@ -31,6 +38,8 @@
 - 解析培养方案中的课程要求和学分要求
 - 支持按学期和课程性质进行筛选
 - 提供培养方案与实际课程安排的关联分析
+
+**更新** 本次更新重点关注URL构造修复，确保培养方案查询端点能够正确访问培养计划数据
 
 ## 项目结构
 
@@ -81,6 +90,8 @@ B --> A
 
 JwxtScraper类负责与教务系统的交互，实现了多种数据抓取功能，包括培养方案、成绩、课表等。该类使用BeautifulSoup库解析HTML内容，提取所需的数据结构。
 
+**更新** JwxtScraper类中的URL构造逻辑经过修复，确保能够正确访问培养方案查询端点
+
 ### 数据模型层
 
 EducationData模型定义了存储培养方案数据的数据库结构，采用JSON格式存储，支持灵活的数据扩展和查询。
@@ -127,6 +138,8 @@ Note over Client,EduSystem : 异步数据处理流程
 - **异步处理**：使用异步编程模式提高并发性能
 - **错误处理**：完善的异常捕获和错误响应机制
 - **数据验证**：对返回数据进行结构化验证
+
+**更新** 接口现在使用正确的URL构造逻辑，确保能够稳定访问培养方案数据
 
 #### 数据结构定义
 
@@ -276,6 +289,71 @@ F --> G
 - [education_options.py:69-86](file://backend/education_options.py#L69-L86)
 - [education_options.py:58-66](file://backend/education_options.py#L58-L66)
 
+### URL构造修复详解
+
+**更新** 本次更新重点修复了培养方案查询端点的URL构造逻辑
+
+#### JwxtScraper类中的URL构造
+
+在JwxtScraper类中，培养方案查询的URL构造经过了重要修复：
+
+```python
+def get_my_training_plan(self) -> Dict:
+    """
+    获取"我的培养方案"（当前登录学生）
+     URL: /jsxsd/pyfa/pyfazd_query
+    返回详细的培养方案，包括课程类别、模块、学分要求等
+    """
+    try:
+        url = f"{self.base_url}/pyfa/pyfazd_query"
+        response = self.session.get(url, timeout=10)
+        # ... 解析逻辑
+    except Exception as e:
+        # ... 错误处理
+```
+
+#### 基础URL管理
+
+JwxtScraper类的初始化确保了正确的基础URL设置：
+
+```python
+def __init__(self, session: requests.Session = None, base_url: str = "http://jwxt.gdufe.edu.cn"):
+    self.session = session or requests.Session()
+    self.base_url = base_url
+    self.captcha_url = f"{base_url}/verifycode.servlet"
+    self.login_url = f"{base_url}/xk/LoginToXkLdap"
+```
+
+#### API路由中的URL使用
+
+在FastAPI路由中，正确的URL被传递给爬虫实例：
+
+```python
+@app.get("/api/training-plan/my")
+async def get_my_training_plan_api(username: str):
+    """
+    获取我的培养方案
+    """
+    try:
+        session, server_url = get_user_session(username)
+        scraper = JwxtScraper(session, server_url)
+        
+        result = scraper.get_my_training_plan()
+        
+        # ... 返回结果
+    except Exception as e:
+        # ... 错误处理
+```
+
+**更新** 修复后的URL构造逻辑确保了：
+- 正确的基础URL拼接
+- 稳定的培养方案查询端点访问
+- 与教务系统预期的URL结构匹配
+
+**章节来源**
+- [scraper.py:606-731](file://backend/scraper.py#L606-L731)
+- [main.py:512-535](file://backend/main.py#L512-L535)
+
 ## 依赖关系分析
 
 ### 外部依赖
@@ -406,6 +484,11 @@ C --> H
 3. **性能监控**：跟踪API响应时间和错误率
 4. **日志分析**：记录详细的错误信息和调试信息
 
+**更新** 针对URL构造修复，新增了以下调试要点：
+- 验证基础URL配置是否正确
+- 检查URL拼接逻辑是否符合预期
+- 确认服务器URL与验证码获取URL的一致性
+
 **章节来源**
 - [test_login.py:1-152](file://backend/test_login.py#L1-L152)
 - [test_scraper.py:240-280](file://backend/test_scraper.py#L240-L280)
@@ -420,6 +503,11 @@ C --> H
 2. **实时更新**：直接从教务系统抓取最新数据
 3. **灵活扩展**：支持多种课程性质和学期组合
 4. **性能优化**：异步处理和缓存策略提升响应速度
+
+**更新** 最重要的改进是URL构造逻辑的修复，确保了：
+- 稳定的培养方案数据访问
+- 正确的基础URL拼接
+- 与教务系统预期的URL结构完全匹配
 
 ### 未来改进方向
 

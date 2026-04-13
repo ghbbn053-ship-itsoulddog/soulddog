@@ -12,6 +12,13 @@
 - [test_login.py](file://backend/test_login.py)
 </cite>
 
+## 更新摘要
+**所做更改**
+- 修正了URL构造逻辑，消除了重复的'/jsxsd/'前缀问题
+- 更新了所有学术数据端点的URL构造方式
+- 修复了验证码、登录、数据查询等接口的URL拼接问题
+- 统一了服务器URL和页面URL的构造逻辑
+
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
@@ -28,6 +35,8 @@
 本项目是一个基于FastAPI的学术数据查询系统，为广东财经大学的学生提供一站式教务数据查询服务。系统集成了多个核心功能模块，包括成绩查询、课表查询、培养方案查询、学业进度查询、考试安排查询等，为学生提供全面的学术数据服务。
 
 该系统采用现代化的技术栈，包括Python 3.9+、FastAPI、SQLAlchemy、BeautifulSoup等，实现了高可靠性的数据爬取和处理功能。系统支持多种查询条件和筛选参数，提供灵活的数据查询能力，并具备良好的扩展性和维护性。
+
+**更新** 本版本修复了URL构造中的重复jsxsd前缀问题，确保所有接口的URL拼接正确无误。
 
 ## 项目结构
 
@@ -95,6 +104,8 @@ SERVICE --> AUTH
 4. **API接口模块**: 提供RESTful API接口
 5. **数据存储模块**: 管理用户数据的持久化存储
 
+**更新** URL构造逻辑已优化，消除了重复的jsxsd前缀，提高了URL拼接的准确性。
+
 **章节来源**
 - [main.py:1-853](file://backend/main.py#L1-L853)
 - [scraper.py:1-1220](file://backend/scraper.py#L1-L1220)
@@ -116,7 +127,7 @@ API->>Auth : 验证用户身份
 Auth-->>API : 认证结果
 API->>Service : 调用业务逻辑
 Service->>Scraper : 执行数据爬取
-Scraper->>JWXT : 请求数据
+Scraper->>JWXT : 请求数据正确URL
 JWXT-->>Scraper : 返回HTML数据
 Scraper-->>Service : 解析后的数据
 Service-->>API : 格式化响应
@@ -203,9 +214,11 @@ AuthError --> End
 curl -X GET "http://localhost:8000/api/grades?username=2024110101&kcxz=01&fxkc=0&xsfs=all"
 ```
 
+**更新** URL构造已修复，确保正确的/jxsd/前缀拼接，避免重复jsxsd问题。
+
 **章节来源**
-- [main.py:398-438](file://backend/main.py#L398-L438)
-- [scraper.py:153-237](file://backend/scraper.py#L153-L237)
+- [main.py:426-463](file://backend/main.py#L426-L463)
+- [scraper.py:200-284](file://backend/scraper.py#L200-L284)
 
 ### 课表查询接口
 
@@ -249,9 +262,11 @@ curl -X GET "http://localhost:8000/api/grades?username=2024110101&kcxz=01&fxkc=0
 curl -X GET "http://localhost:8000/api/schedule?username=2024110101&semester=2024-2025-2&week=1"
 ```
 
+**更新** 课表查询URL已修正，确保正确的页面路径拼接。
+
 **章节来源**
-- [main.py:455-488](file://backend/main.py#L455-L488)
-- [scraper.py:301-469](file://backend/scraper.py#L301-L469)
+- [main.py:480-510](file://backend/main.py#L480-L510)
+- [scraper.py:348-517](file://backend/scraper.py#L348-L517)
 
 ### 培养方案查询接口
 
@@ -306,9 +321,11 @@ curl -X GET "http://localhost:8000/api/schedule?username=2024110101&semester=202
 curl -X GET "http://localhost:8000/api/training-plan/my?username=2024110101"
 ```
 
+**更新** 培养方案URL已修复，确保正确的/pyfa/路径拼接。
+
 **章节来源**
-- [main.py:490-517](file://backend/main.py#L490-L517)
-- [scraper.py:559-684](file://backend/scraper.py#L559-L684)
+- [main.py:512-536](file://backend/main.py#L512-L536)
+- [scraper.py:606-732](file://backend/scraper.py#L606-L732)
 
 ### 学业进度查询接口
 
@@ -353,9 +370,11 @@ curl -X GET "http://localhost:8000/api/training-plan/my?username=2024110101"
 curl -X GET "http://localhost:8000/api/academic-progress?username=2024110101&study_type=0"
 ```
 
+**更新** 学业进度URL已修正，确保正确的/pyfa/路径拼接。
+
 **章节来源**
-- [main.py:519-548](file://backend/main.py#L519-L548)
-- [scraper.py:686-783](file://backend/scraper.py#L686-L783)
+- [main.py:538-564](file://backend/main.py#L538-L564)
+- [scraper.py:733-831](file://backend/scraper.py#L733-L831)
 
 ### 考试安排查询接口
 
@@ -395,9 +414,11 @@ curl -X GET "http://localhost:8000/api/academic-progress?username=2024110101&stu
 curl -X GET "http://localhost:8000/api/exam-schedule?username=2024110101&semester=2024-2025-1"
 ```
 
+**更新** 考试安排URL已修复，确保正确的/xsks/路径拼接。
+
 **章节来源**
-- [main.py:550-580](file://backend/main.py#L550-L580)
-- [scraper.py:785-850](file://backend/scraper.py#L785-L850)
+- [main.py:566-593](file://backend/main.py#L566-L593)
+- [scraper.py:832-895](file://backend/scraper.py#L832-L895)
 
 ### 教师查询接口
 
@@ -434,8 +455,11 @@ curl -X GET "http://localhost:8000/api/exam-schedule?username=2024110101&semeste
 curl -X GET "http://localhost:8000/api/teacher/search?name=李&department=11"
 ```
 
+**更新** 教师查询URL已修正，确保正确的/jsxx/路径拼接。
+
 **章节来源**
-- [main.py:582-609](file://backend/main.py#L582-L609)
+- [main.py:595-622](file://backend/main.py#L595-L622)
+- [scraper.py:896-971](file://backend/scraper.py#L896-L971)
 
 ### 课程查询接口
 
@@ -475,8 +499,11 @@ curl -X GET "http://localhost:8000/api/teacher/search?name=李&department=11"
 curl -X GET "http://localhost:8000/api/course/search?course_name=数据结构&department=11"
 ```
 
+**更新** 课程查询URL已修复，确保正确的/kbcx/路径拼接。
+
 **章节来源**
-- [main.py:611-639](file://backend/main.py#L611-L639)
+- [main.py:624-652](file://backend/main.py#L624-L652)
+- [scraper.py:1016-1092](file://backend/scraper.py#L1016-L1092)
 
 ### 选项查询接口
 
@@ -502,7 +529,7 @@ curl -X GET "http://localhost:8000/api/course/search?course_name=数据结构&de
 - **认证**: 无需登录
 
 **章节来源**
-- [main.py:729-791](file://backend/main.py#L729-L791)
+- [main.py:733-775](file://backend/main.py#L733-L775)
 - [education_options.py:1-420](file://backend/education_options.py#L1-L420)
 
 ## 依赖关系分析
@@ -550,6 +577,8 @@ TEST_LOGIN --> MAIN
 3. **认证服务**: JWT令牌认证系统
 4. **网络服务**: 需要稳定的网络连接访问教务系统
 
+**更新** URL构造修复确保了与教务系统的正确通信，消除了重复前缀导致的连接问题。
+
 **章节来源**
 - [main.py:50-71](file://backend/main.py#L50-L71)
 - [scraper.py:16-21](file://backend/scraper.py#L16-L21)
@@ -580,6 +609,8 @@ TEST_LOGIN --> MAIN
 - 内存使用情况
 - 错误率统计
 
+**更新** URL构造优化减少了无效的URL重定向和重复请求，提升了整体性能。
+
 ## 故障排除指南
 
 ### 常见问题及解决方案
@@ -592,12 +623,14 @@ TEST_LOGIN --> MAIN
 2. 验证码过期
 3. 用户名或密码错误
 4. 教务系统维护
+5. **URL构造错误**（已修复）
 
 **解决步骤**:
 1. 检查网络连接状态
 2. 重新获取验证码
 3. 验证用户名密码格式
 4. 稍后重试或联系管理员
+5. **确认URL构造正确，避免重复jsxsd前缀**
 
 #### 数据获取失败
 
@@ -606,12 +639,14 @@ TEST_LOGIN --> MAIN
 1. 教务系统页面结构变化
 2. 网络超时
 3. 服务器负载过高
+4. **URL路径错误**（已修复）
 
 **解决步骤**:
 1. 检查教务系统页面结构
 2. 增加超时时间
 3. 实现重试机制
 4. 降级处理策略
+5. **验证URL拼接逻辑，确保正确路径**
 
 #### 性能问题
 
@@ -620,12 +655,16 @@ TEST_LOGIN --> MAIN
 1. 数据库查询效率低
 2. 网络延迟
 3. 并发请求过多
+4. **重复URL请求**（已优化）
 
 **解决步骤**:
 1. 优化数据库查询语句
 2. 实施缓存策略
 3. 负载均衡
 4. 异步处理
+5. **减少无效的URL重定向**
+
+**更新** URL构造修复解决了重复前缀导致的额外请求和重定向问题。
 
 **章节来源**
 - [main.py:187-328](file://backend/main.py#L187-L328)
@@ -640,6 +679,8 @@ TEST_LOGIN --> MAIN
 3. **日志系统**: 完整的日志记录和错误追踪
 4. **健康检查**: `/api/health` - 系统健康状态检查
 
+**更新** 调试工具现在可以正确测试修复后的URL构造逻辑。
+
 **章节来源**
 - [test_login.py:1-152](file://backend/test_login.py#L1-L152)
 - [test_scraper.py:1-280](file://backend/test_scraper.py#L1-L280)
@@ -653,6 +694,11 @@ TEST_LOGIN --> MAIN
 3. **性能优良**: 通过缓存、异步处理等技术手段保证系统性能
 4. **易于扩展**: 模块化设计便于功能扩展和维护
 5. **安全可靠**: 完善的认证机制和错误处理
+
+**更新亮点**:
+- **URL构造修复**: 成功消除了重复的'/jsxsd/'前缀问题
+- **稳定性提升**: 统一了所有接口的URL拼接逻辑
+- **兼容性改善**: 确保与不同服务器配置的兼容性
 
 系统在实际部署中建议：
 - 生产环境使用Redis作为缓存存储

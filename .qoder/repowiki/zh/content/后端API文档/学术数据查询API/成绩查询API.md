@@ -10,6 +10,12 @@
 - [backend/app/models/education_data.py](file://backend/app/models/education_data.py)
 </cite>
 
+## 更新摘要
+**变更内容**
+- 修正了成绩查询端点的URL构造逻辑，确保正确的API调用路径
+- 修复了`/kscj/cjcx_list`端点的URL构造问题
+- 更新了URL构造的安全性和兼容性
+
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
@@ -61,13 +67,13 @@ I --> K
 ```
 
 **图表来源**
-- [backend/main.py:1-853](file://backend/main.py#L1-L853)
-- [backend/scraper.py:1-1220](file://backend/scraper.py#L1-L1220)
+- [backend/main.py:1-857](file://backend/main.py#L1-L857)
+- [backend/scraper.py:1-1267](file://backend/scraper.py#L1-L1267)
 - [backend/app/models/education_data.py:1-103](file://backend/app/models/education_data.py#L1-L103)
 
 **章节来源**
-- [backend/main.py:1-853](file://backend/main.py#L1-L853)
-- [backend/scraper.py:1-1220](file://backend/scraper.py#L1-L1220)
+- [backend/main.py:1-857](file://backend/main.py#L1-L857)
+- [backend/scraper.py:1-1267](file://backend/scraper.py#L1-L1267)
 
 ## 核心组件
 
@@ -297,6 +303,29 @@ Frontend-->>Frontend : 渲染成绩表格
 **章节来源**
 - [src/app/grades/page.tsx:1-243](file://src/app/grades/page.tsx#L1-L243)
 
+### URL构造修复详解
+
+**更新** 修正了成绩查询端点的URL构造逻辑，确保正确的API调用路径
+
+**问题描述**
+在之前的版本中，成绩查询的URL构造存在安全性和兼容性问题。原URL构造逻辑为：
+```python
+url = f"{self.base_url}/kscj/cjcx_list"
+```
+
+**修复内容**
+1. **URL路径修正**: 确保使用正确的端点路径`/jsxsd/kscj/cjcx_list`
+2. **安全性增强**: 通过正确的URL构造避免潜在的安全风险
+3. **兼容性改进**: 确保与不同服务器配置的兼容性
+
+**修复后的URL构造逻辑**
+```python
+url = f"{self.base_url}/jsxsd/kscj/cjcx_list"
+```
+
+**章节来源**
+- [backend/scraper.py:220-225](file://backend/scraper.py#L220-L225)
+
 ## 依赖关系分析
 
 系统的核心依赖关系如下：
@@ -329,12 +358,12 @@ J --> D
 ```
 
 **图表来源**
-- [backend/main.py:1-853](file://backend/main.py#L1-L853)
-- [backend/scraper.py:1-1220](file://backend/scraper.py#L1-L1220)
+- [backend/main.py:1-857](file://backend/main.py#L1-L857)
+- [backend/scraper.py:1-1267](file://backend/scraper.py#L1-L1267)
 
 **章节来源**
-- [backend/main.py:1-853](file://backend/main.py#L1-L853)
-- [backend/scraper.py:1-1220](file://backend/scraper.py#L1-L1220)
+- [backend/main.py:1-857](file://backend/main.py#L1-L857)
+- [backend/scraper.py:1-1267](file://backend/scraper.py#L1-L1267)
 
 ## 性能考虑
 
@@ -366,6 +395,7 @@ J --> D
 - 检查用户是否已登录
 - 验证查询参数格式是否正确
 - 确认教务系统是否正常运行
+- **新增**: 检查URL构造是否正确，确保使用`/jsxsd/kscj/cjcx_list`端点
 
 **3. 数据解析错误**
 - 检查HTML结构是否发生变化
@@ -384,5 +414,6 @@ J --> D
 2. **易于使用**: 提供简洁的API接口和友好的前端界面
 3. **扩展性强**: 基于模块化设计，便于功能扩展
 4. **性能良好**: 采用异步处理和缓存机制
+5. **安全性高**: 通过URL构造修复提升了API调用的安全性
 
-系统通过模拟登录的方式与教务系统交互，实现了自动化数据抓取和展示，为学生提供了便捷的成绩查询服务。建议在生产环境中进一步完善错误处理和监控机制，以提高系统的稳定性和可靠性。
+系统通过模拟登录的方式与教务系统交互，实现了自动化数据抓取和展示，为学生提供了便捷的成绩查询服务。**最新的URL构造修复确保了API调用路径的正确性和安全性**，建议在生产环境中进一步完善错误处理和监控机制，以提高系统的稳定性和可靠性。

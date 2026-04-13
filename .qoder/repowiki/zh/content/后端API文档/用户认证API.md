@@ -12,10 +12,9 @@
 
 ## 更新摘要
 **变更内容**
-- 修复了会话管理和基础URL一致性问题
-- 增强了会话存储结构，从简单的session对象改为包含会话数据和服务器URL的嵌套结构
-- 新增了get_user_session()辅助函数来统一处理会话检索逻辑
-- 改进了服务器URL管理机制，确保验证码和登录使用同一服务器实例
+- 修复了登录认证端点的URL构造逻辑，消除了重复的'/jsxsd/'前缀
+- 修正了服务器URL与登录URL的拼接方式，确保正确的认证流程
+- 更新了服务器选择算法和负载均衡机制的实现细节
 
 ## 目录
 1. [简介](#简介)
@@ -36,15 +35,15 @@
 - 完整的请求示例、响应格式和错误码定义
 - 前端集成指南，说明如何正确处理验证码刷新、登录状态维护和会话超时处理
 - 服务器选择算法和负载均衡机制
-- **新增**：增强的会话存储结构和基础URL一致性管理
+- **新增**：修正的URL构造逻辑，消除了重复的'/jsxsd/'前缀问题
 
 ## 项目结构
 该项目采用前后端分离架构，后端基于FastAPI提供RESTful API，前端基于Next.js构建用户界面。认证流程涉及以下关键组件：
 - 后端FastAPI应用：提供/api/captcha和/api/login等认证接口
 - 前端登录页面：负责用户输入、验证码展示和登录请求发送
 - 教务系统服务器：作为后端代理，处理真实的验证码获取和登录请求
-- 会话管理系统：维护用户登录状态和验证码session，**增强**支持基础URL一致性
-- **新增**：统一会话检索函数：get_user_session()提供标准化的会话访问接口
+- 会话管理系统：维护用户登录状态和验证码session
+- **新增**：修正的URL构造机制：确保服务器URL与登录URL拼接时不会产生重复的/jsxsd/前缀
 
 ```mermaid
 graph TB
@@ -56,8 +55,8 @@ subgraph "后端层"
 API[FastAPI应用<br/>main.py]
 Auth[认证模块]
 Proxy[代理模块]
-SessionMgr[会话管理器<br/>增强的存储结构]
-Helper[辅助函数<br/>get_user_session()]
+SessionMgr[会话管理器]
+URLBuilder[URL构造器<br/>修正重复前缀]
 end
 subgraph "外部系统"
 JWXT[教务系统服务器<br/>jwxt.gdufe.edu.cn]
@@ -68,10 +67,10 @@ Login --> API
 API --> Auth
 Auth --> Proxy
 Auth --> SessionMgr
-SessionMgr --> Helper
+SessionMgr --> URLBuilder
 Proxy --> JWXT
 JWXT --> Servers
-Helper --> SessionMgr
+URLBuilder --> Proxy
 ```
 
 **图表来源**
@@ -93,29 +92,28 @@ Helper --> SessionMgr
 ### 2. 用户登录组件
 - 接口：POST /api/login
 - 功能：验证用户凭据并建立会话
-- 特性：集成验证码验证、服务器选择、会话管理、**增强的会话存储结构**
+- 特性：集成验证码验证、服务器选择、会话管理、**修正的URL构造逻辑**
 
 ### 3. 服务器选择算法
 - 基于学号的哈希算法
 - 支持14个内网服务器实例
 - 确保相同学号用户始终路由到同一服务器
 
-### 4. **增强**：会话管理机制
+### 4. 会话管理机制
 - 验证码session存储（内存级别）
-- 用户登录会话存储（内存级别，**增强的嵌套结构**）
+- 用户登录会话存储（内存级别）
 - 自动清理过期session
-- **新增**：基础URL一致性管理
 
-### 5. **新增**：统一会话检索函数
-- get_user_session()函数提供标准化的会话访问接口
-- 统一处理会话数据和服务器URL的提取
-- 提供一致的错误处理机制
+### 5. **新增**：修正的URL构造机制
+- 登录URL构造：login_url = f"{server_url}xk/LoginToXkLdap"
+- 避免重复的/jsxsd/前缀：服务器URL已包含/jsxsd/，直接拼接xk/
+- 确保验证码和登录使用同一服务器实例
 
 **章节来源**
 - [backend/main.py:74-366](file://backend/main.py#L74-L366)
 
 ## 架构概览
-认证系统的整体架构遵循"前端-后端-教务系统"三层模式，**增强了会话管理中间层**：
+认证系统的整体架构遵循"前端-后端-教务系统"三层模式，**修正了URL构造中间层**：
 
 ```mermaid
 sequenceDiagram
@@ -123,8 +121,8 @@ participant Client as "客户端浏览器"
 participant Frontend as "前端登录页面"
 participant Backend as "后端FastAPI"
 participant Proxy as "代理服务器"
-participant SessionMgr as "增强的会话管理器"
-participant Helper as "get_user_session()"
+participant SessionMgr as "会话管理器"
+participant URLBuilder as "URL构造器<br/>修正重复前缀"
 participant JWXT as "教务系统服务器"
 Client->>Frontend : 访问登录页面
 Frontend->>Backend : GET /api/captcha
@@ -132,18 +130,17 @@ Backend->>Proxy : 选择服务器并获取验证码
 Proxy->>JWXT : 请求验证码图片
 JWXT-->>Proxy : 返回验证码图片
 Proxy-->>Backend : 返回验证码数据
-Backend->>SessionMgr : 存储验证码session包含服务器信息
+Backend->>SessionMgr : 存储验证码session
 Backend-->>Frontend : {image, captcha_session_id}
 Frontend->>Backend : POST /api/login {username, password, code, captcha_session_id}
 Backend->>SessionMgr : 检索验证码session
-SessionMgr->>Helper : 提取服务器URL
-Helper-->>Backend : 返回session和服务器URL
+SessionMgr->>URLBuilder : 构造登录URL避免重复前缀
+URLBuilder-->>Backend : 返回正确格式的login_url
 Backend->>Proxy : 使用相同服务器进行登录
 Proxy->>JWXT : 提交登录表单
 JWXT-->>Proxy : 返回登录结果
 Proxy-->>Backend : 返回响应
-Backend->>SessionMgr : 保存用户会话增强存储结构
-SessionMgr->>SessionMgr : {session : requests.Session, server_url : str}
+Backend->>SessionMgr : 保存用户会话
 Backend-->>Frontend : 返回登录结果
 ```
 
@@ -170,7 +167,7 @@ Backend-->>Frontend : 返回登录结果
 #### 验证码session管理
 - 生成唯一captcha_session_id，格式：captcha_{timestamp}_{server_index}
 - 将requests.Session对象与captcha_session_id关联存储
-- **增强**：自动清理机制：登录成功后立即删除对应session
+- 自动清理机制：登录成功后立即删除对应session
 
 #### 响应格式
 ```json
@@ -211,13 +208,14 @@ GetCaptchaSession --> SessionExists{"session存在?"}
 SessionExists --> |否| ReturnExpired["返回验证码过期错误"]
 SessionExists --> |是| ExtractServerIndex["提取服务器索引"]
 ExtractServerIndex --> SelectServer["选择服务器"]
-SelectServer --> BuildFormData["构建登录表单"]
+SelectServer --> BuildLoginURL["构造登录URL<br/>避免重复前缀"]
+BuildLoginURL --> BuildFormData["构建登录表单"]
 BuildFormData --> SendLogin["发送登录请求"]
 SendLogin --> CheckResult["检查登录结果"]
 CheckResult --> LoginSuccess{"登录成功?"}
-LoginSuccess --> |是| SaveEnhancedSession["保存增强会话结构"]
+LoginSuccess --> |是| SaveSession["保存用户会话"]
 LoginSuccess --> |否| ReturnFail["返回登录失败"]
-SaveEnhancedSession --> ReturnSuccess["返回登录成功"]
+SaveSession --> ReturnSuccess["返回登录成功"]
 Return400 --> End([结束])
 ReturnExpired --> End
 ReturnFail --> End
@@ -232,38 +230,23 @@ ReturnSuccess --> End
 2. **优先级2**：使用学号哈希算法选择服务器
 3. **优先级3**：回退到第一个服务器
 
-#### **增强**：会话管理
+#### **新增**：修正的URL构造机制
+- **问题**：之前的实现可能导致重复的/jsxsd/前缀
+- **解决方案**：login_url = f"{server_url}xk/LoginToXkLdap"
+- **原理**：服务器URL已包含/jsxsd/前缀，直接拼接xk/即可
+- **效果**：确保URL格式正确，避免重复前缀导致的404错误
+
+#### 会话管理
 - 用户登录成功后，将requests.Session对象和服务器URL存储在SESSIONS字典中
-- **新结构**：键为username，值为字典{session: requests.Session, server_url: str}
+- 键为username，值为字典{session: requests.Session, server_url: str}
 - 会话包含JSESSIONID Cookie，用于后续API调用
-- **增强**：确保验证码和登录使用同一服务器实例
-
-#### **新增**：统一会话检索函数
-系统提供了get_user_session()辅助函数，用于统一处理会话检索逻辑：
-
-```python
-def get_user_session(username: str):
-    """
-    获取用户的 session 和 server_url
-    返回: (session, server_url) 或抛出 HTTPException
-    """
-    if username not in SESSIONS:
-        logger.warning(f"【Session】用户 {username} 未登录")
-        raise HTTPException(status_code=401, detail="未登录，请先登录")
-    
-    user_data = SESSIONS[username]
-    session = user_data["session"]
-    server_url = user_data["server_url"]
-    logger.info(f"【Session】用户 {username} - 服务器: {server_url}")
-    return session, server_url
-```
+- 确保验证码和登录使用同一服务器实例
 
 #### 错误处理策略
 - 参数缺失：HTTP 400
 - 验证码过期：返回业务错误（success=false）
 - 登录失败：检查响应内容中的错误标志
 - 服务器错误：HTTP 500
-- **新增**：会话不存在：HTTP 401
 
 #### 响应格式
 成功响应：
@@ -368,10 +351,10 @@ Select --> Output["返回服务器URL"]
 - 端口：80或8380
 - 负载均衡：基于学号的哈希分布
 
-#### **增强**：基础URL一致性保证
+#### **新增**：修正的URL构造保证
 - 验证码获取时确定服务器索引并存储在captcha_session_id中
 - 登录时从captcha_session_id提取服务器索引，确保使用同一服务器
-- **新增**：get_user_session()函数返回正确的服务器URL
+- **修正**：login_url = f"{server_url}xk/LoginToXkLdap" 避免重复/jsxsd/前缀
 - 确保验证码和登录操作的一致性
 
 #### 负载均衡策略
@@ -390,8 +373,8 @@ graph TB
 subgraph "认证相关"
 CaptchaAPI["/api/captcha"]
 LoginAPI["/api/login"]
-SessionMgr["增强的会话管理器"]
-Helper["get_user_session()"]
+SessionMgr["会话管理器"]
+URLBuilder["URL构造器<br/>修正重复前缀"]
 EncodingSystem["编码检测系统"]
 end
 subgraph "前端集成"
@@ -409,10 +392,10 @@ LoginPage --> CaptchaAPI
 LoginPage --> LoginAPI
 CaptchaAPI --> SessionMgr
 LoginAPI --> SessionMgr
-LoginAPI --> Helper
+LoginAPI --> URLBuilder
 LoginAPI --> EncodingSystem
 SessionMgr --> Requests
-Helper --> SessionMgr
+URLBuilder --> SessionMgr
 EncodingSystem --> BeautifulSoup
 CaptchaAPI --> JWXT
 LoginAPI --> JWXT
@@ -442,25 +425,28 @@ LoginPage --> LoginForm
 - 哈希计算简单，服务器选择快速
 - 减少跨服务器请求导致的网络延迟
 
-### 2. **增强**：会话管理性能
+### 2. 会话管理性能
 - 内存存储：SESSIONS和CAPTCHA_SESSIONS字典
-- **新结构**：每个用户会话包含session对象和server_url
 - 查找复杂度：O(1)
 - 适合小规模并发场景
-- **新增**：get_user_session()函数提供统一访问接口
 
 ### 3. 网络性能优化
 - 单个requests.Session复用连接
 - 超时设置：10秒
 - User-Agent模拟真实浏览器
 
-### 4. **新增**：编码检测性能
+### 4. **新增**：URL构造性能优化
+- **修正**：避免重复的/jsxsd/前缀检查
+- **效果**：减少字符串处理开销
+- **稳定性**：确保URL格式正确，避免重试和错误处理
+
+### 5. 编码检测性能
 - 多编码尝试：最多4次编码尝试
 - 早期退出：一旦找到合适编码立即停止
 - 内存效率：每次只尝试一种编码格式
 - 日志记录：仅在调试模式下记录详细信息
 
-### 5. 生产环境建议
+### 6. 生产环境建议
 - 使用Redis替代内存存储
 - 实现session过期清理机制
 - 添加缓存层减少重复请求
@@ -490,46 +476,44 @@ LoginPage --> LoginForm
 - 凭证错误
 - 验证码过期
 - 服务器不一致
-- **新增**：会话数据不完整
+- **新增**：URL构造错误（重复/jsxsd/前缀）
 
 **解决方案**：
 - 重新获取验证码
 - 确认学号格式
 - 检查密码正确性
-- **新增**：检查会话存储结构是否正确
+- **新增**：检查服务器URL格式是否正确
 
-#### 3. **增强**：会话管理问题
-**症状**：登录后无法访问受保护资源
+#### 3. **新增**：URL构造问题
+**症状**：登录请求返回404或格式错误
 **原因**：
-- JSESSIONID丢失
-- 会话过期
-- 服务器选择不一致
-- **新增**：get_user_session()函数返回错误
+- 重复的/jsxsd/前缀
+- 服务器URL格式不正确
+- 登录URL拼接错误
 
 **解决方案**：
-- 检查Cookie设置
-- 验证服务器一致性
-- 实现会话续期机制
-- **新增**：检查SESSIONS字典结构
+- 确认服务器URL已包含/jsxsd/
+- 检查login_url = f"{server_url}xk/LoginToXkLdap"的构造逻辑
+- 验证服务器选择算法的正确性
 
-#### 4. **新增**：基础URL一致性问题
-**症状**：验证码和登录使用不同服务器
+#### 4. 编码检测问题
+**症状**：登录响应乱码或解析失败
 **原因**：
-- 服务器索引提取失败
-- 会话数据损坏
-- get_user_session()函数异常
+- 编码检测失败
+- 多种编码格式混合
+- 响应内容解析错误
 
 **解决方案**：
-- 检查captcha_session_id格式
-- 验证SESSIONS字典结构
-- 确认get_user_session()函数正常工作
+- 检查编码检测逻辑
+- 确认GBK/UTF-8编码处理
+- 验证BeautifulSoup解析
 
 ### 调试工具
 系统提供了专门的测试脚本：
 - 支持外网和内网服务器测试
 - 手动输入验证码进行验证
 - 详细的响应内容输出
-- **新增**：会话管理测试功能
+- **新增**：URL构造和服务器选择测试功能
 
 **章节来源**
 - [backend/test_login.py:1-152](file://backend/test_login.py#L1-L152)
@@ -542,14 +526,13 @@ LoginPage --> LoginForm
 - **简单可靠**：基于现有教务系统接口，无需额外开发
 - **前端友好**：提供完整的前端集成示例
 - **可扩展性**：支持多种服务器配置和负载均衡策略
-- **增强** **会话管理**：新的嵌套存储结构提供更好的数据组织
-- **统一接口**：get_user_session()函数提供标准化的会话访问
+- **URL构造修正**：消除了重复的/jsxsd/前缀问题，确保正确的认证流程
 
 ### 局限性
 - **内存存储**：生产环境需要替换为Redis等持久化存储
 - **单机部署**：当前实现为单实例，需要集群化改造
 - **安全考虑**：需要添加JWT令牌、HTTPS等安全措施
-- **增强** **会话结构复杂度**：新的存储结构增加了代码复杂度
+- **URL构造复杂度**：需要确保服务器URL格式的正确性
 
 ### 改进建议
 1. **存储层升级**：使用Redis或数据库存储会话
@@ -557,7 +540,7 @@ LoginPage --> LoginForm
 3. **监控告警**：添加API调用监控和异常告警
 4. **文档完善**：补充完整的API文档和SDK
 5. **性能优化**：考虑使用更高效的编码检测算法
-6. ****增强** **会话管理**：实现会话数据的自动清理和过期处理
+6. **URL构造验证**：添加URL格式验证机制
 
 ## 附录
 
@@ -581,32 +564,18 @@ LoginPage --> LoginForm
 - **401**: 未登录或会话无效
 - **500**: 服务器内部错误
 
-### **新增**：会话存储结构
-系统使用增强的嵌套存储结构：
+### **新增**：URL构造修正说明
+系统使用修正的URL构造逻辑：
 ```python
-# 旧结构
-SESSIONS = {
-    "username": requests.Session()
-}
+# 服务器URL已包含/jsxsd/前缀
+server_url = "http://172.19.13.60:80/jsxsd/"
 
-# 新结构
-SESSIONS = {
-    "username": {
-        "session": requests.Session(),
-        "server_url": "http://172.19.13.60:80/jsxsd/"
-    }
-}
-```
+# 正确的登录URL构造
+login_url = f"{server_url}xk/LoginToXkLdap"
+# 结果: http://172.19.13.60:80/jsxsd/xk/LoginToXkLdap
 
-### **新增**：get_user_session()函数
-统一的会话访问接口：
-```python
-def get_user_session(username: str):
-    """
-    获取用户的 session 和 server_url
-    返回: (session, server_url) 或抛出 HTTPException
-    """
-    # 实现细节...
+# 避免的错误方式
+# login_url = f"{server_url}/jsxsd/xk/LoginToXkLdap"  # 重复前缀
 ```
 
 ### 部署配置

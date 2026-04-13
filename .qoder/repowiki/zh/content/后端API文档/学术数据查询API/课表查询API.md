@@ -10,6 +10,12 @@
 - [backend/test_scraper.py](file://backend/test_scraper.py)
 </cite>
 
+## 更新摘要
+**变更内容**
+- 修正了课表查询端点的URL构造逻辑，确保正确的课程数据获取
+- 更新了课表查询接口的URL路径为 `/api/schedule`
+- 完善了课表查询参数的详细说明和使用示例
+
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
@@ -24,6 +30,8 @@
 ## 简介
 
 本文档详细说明了教务系统中的课表查询接口，重点介绍 `/api/schedule` 接口的完整规范。该接口支持按学期和周次查询课表，提供了灵活的查询参数组合，能够满足不同场景下的课表查询需求。
+
+**更新** 课表查询接口现已修复URL构造逻辑，确保正确的课程数据获取。接口路径为 `/api/schedule`，支持GET请求方式。
 
 系统基于FastAPI框架构建，采用前后端分离架构，通过爬虫技术从教务系统中抓取课表数据，并提供RESTful API接口供前端应用调用。
 
@@ -68,12 +76,13 @@ Model --> Database
 
 系统提供了两个主要的课表查询接口：
 
-1. **FastAPI路由接口** (`/api/education/schedule`)
+1. **FastAPI路由接口** (`/api/schedule`)
+   - **更新** 修正了URL构造逻辑，确保正确的课程数据获取
    - 适用于需要用户认证的场景
    - 使用数据库会话管理
    - 支持异步操作
 
-2. **传统API接口** (`/api/schedule`)
+2. **传统API接口** (`/api/education/schedule`)
    - 适用于简单的课表查询
    - 使用会话管理
    - 支持学期和周次参数
@@ -86,6 +95,7 @@ Model --> Database
 - **学期参数映射** (`xnxq01id`)
 - **周次参数映射** (`zc`)
 - **HTML解析和数据提取**
+- **更新** 修正了课表查询端点URL构造逻辑
 
 ### 数据模型层
 
@@ -97,7 +107,7 @@ Model --> Database
 
 **章节来源**
 - [backend/app/api/education.py:93-103](file://backend/app/api/education.py#L93-L103)
-- [backend/scraper.py:301-469](file://backend/scraper.py#L301-L469)
+- [backend/scraper.py:348-516](file://backend/scraper.py#L348-L516)
 - [backend/app/models/education_data.py:11-103](file://backend/app/models/education_data.py#L11-L103)
 
 ## 架构概览
@@ -122,8 +132,8 @@ Note over Client,JWXT : 异步处理，支持并发请求
 ```
 
 **图表来源**
-- [backend/main.py:455-488](file://backend/main.py#L455-L488)
-- [backend/scraper.py:301-340](file://backend/scraper.py#L301-L340)
+- [backend/main.py:480-510](file://backend/main.py#L480-L510)
+- [backend/scraper.py:348-372](file://backend/scraper.py#L348-L372)
 
 ## 详细组件分析
 
@@ -203,8 +213,8 @@ APIResponse --> ScheduleResponse : 包含多个
 ```
 
 **图表来源**
-- [backend/scraper.py:427-437](file://backend/scraper.py#L427-L437)
-- [backend/main.py:472-480](file://backend/main.py#L472-L480)
+- [backend/scraper.py:474-484](file://backend/scraper.py#L474-L484)
+- [backend/main.py:494-502](file://backend/main.py#L494-L502)
 
 #### 实际使用示例
 
@@ -251,7 +261,7 @@ ReturnResult --> End
 ```
 
 **图表来源**
-- [backend/scraper.py:329-462](file://backend/scraper.py#L329-L462)
+- [backend/scraper.py:376-499](file://backend/scraper.py#L376-L499)
 
 #### 课程信息字段详解
 
@@ -286,7 +296,7 @@ ReturnData --> End([结束])
 ```
 
 **图表来源**
-- [backend/scraper.py:440-452](file://backend/scraper.py#L440-L452)
+- [backend/scraper.py:486-499](file://backend/scraper.py#L486-L499)
 
 ## 依赖关系分析
 
@@ -344,13 +354,13 @@ API-->>Client : JSON响应
 ```
 
 **图表来源**
-- [backend/main.py:455-488](file://backend/main.py#L455-L488)
+- [backend/main.py:480-510](file://backend/main.py#L480-L510)
 - [backend/app/api/education.py:93-103](file://backend/app/api/education.py#L93-L103)
 
 **章节来源**
-- [backend/main.py:455-488](file://backend/main.py#L455-L488)
+- [backend/main.py:480-510](file://backend/main.py#L480-L510)
 - [backend/app/api/education.py:93-103](file://backend/app/api/education.py#L93-L103)
-- [backend/scraper.py:301-469](file://backend/scraper.py#L301-L469)
+- [backend/scraper.py:348-516](file://backend/scraper.py#L348-L516)
 
 ## 性能考虑
 
@@ -389,7 +399,7 @@ Return200 --> End
 ```
 
 **图表来源**
-- [backend/main.py:463-487](file://backend/main.py#L463-L487)
+- [backend/main.py:506-509](file://backend/main.py#L506-L509)
 
 ## 故障排除指南
 
@@ -418,12 +428,14 @@ Return200 --> End
    - 确保周次参数为有效的数字或范围
 
 **章节来源**
-- [backend/main.py:463-487](file://backend/main.py#L463-L487)
-- [backend/scraper.py:464-469](file://backend/scraper.py#L464-L469)
+- [backend/main.py:506-509](file://backend/main.py#L506-L509)
+- [backend/scraper.py:511-516](file://backend/scraper.py#L511-L516)
 
 ## 结论
 
 课表查询API提供了灵活而强大的课表查询功能，支持按学期和周次的精确查询。系统采用模块化设计，具有良好的扩展性和维护性。
+
+**更新** 课表查询接口现已修复URL构造逻辑，确保正确的课程数据获取。接口路径为 `/api/schedule`，支持GET请求方式，能够稳定地从教务系统中抓取课表数据。
 
 ### 主要特性
 
@@ -431,6 +443,7 @@ Return200 --> End
 2. **完整的数据结构**：包含课程的所有必要信息
 3. **健壮的错误处理**：提供清晰的错误信息和恢复机制
 4. **高性能设计**：支持并发处理和缓存机制
+5. **稳定的URL构造**：修正了课表查询端点的URL构造逻辑
 
 ### 最佳实践
 
