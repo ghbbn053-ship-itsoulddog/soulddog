@@ -26,15 +26,19 @@ class JwxtScraper:
         response.encoding = 'gb18030'
         text_gb = response.text
         # 如果 GB18030 解码后有中文，就用它
-        if re.search(r'[\u4e00-\u9fff]', text_gb):
+        has_chinese = re.search(r'[\u4e00-\u9fff]', text_gb)
+        if has_chinese:
             response.encoding = 'gb18030'
+            logger.debug(f"【编码】使用 GB18030，检测到中文")
             return
         # 否则尝试 UTF-8
         try:
             response.content.decode('utf-8')
             response.encoding = 'utf-8'
+            logger.debug(f"【编码】使用 UTF-8")
         except UnicodeDecodeError:
             response.encoding = 'gb18030'
+            logger.debug(f"【编码】UTF-8 解码失败，回退到 GB18030")
 
     def get_captcha(self) -> bytes:
         """获取验证码图片"""
@@ -84,13 +88,21 @@ class JwxtScraper:
             url = f"{self.base_url}/jsxsd/framework/xsMain.jsp"
             response = self.session.get(url, timeout=10)
             self._fix_encoding(response)
+            
+            logger.info(f"【个人信息】URL: {url}")
+            logger.info(f"【个人信息】响应编码: {response.encoding}")
+            logger.info(f"【个人信息】响应长度: {len(response.text)}")
+            logger.info(f"【个人信息】内容预览: {response.text[:300]}")
 
             soup = BeautifulSoup(response.text, 'html.parser')
 
             # 提取姓名和学号
             login_name_div = soup.find(id="Top1_divLoginName")
+            logger.info(f"【个人信息】找到 Top1_divLoginName: {login_name_div is not None}")
+            
             if login_name_div:
                 login_name = login_name_div.get_text(strip=True)
+                logger.info(f"【个人信息】login_name 原始值: {login_name}")
                 # 格式：张靖(24251102121)
                 if '(' in login_name and ')' in login_name:
                     name = login_name.split('(')[0]
@@ -101,6 +113,14 @@ class JwxtScraper:
             else:
                 name = ""
                 student_id = ""
+                # 尝试查找所有 div，看有没有类似的
+                all_divs = soup.find_all('div')
+                logger.info(f"【个人信息】页面共有 {len(all_divs)} 个 div")
+                for div in all_divs[:10]:
+                    div_id = div.get('id', '')
+                    div_text = div.get_text(strip=True)[:50]
+                    if div_id or div_text:
+                        logger.info(f"【个人信息】div id='{div_id}' text='{div_text}'")
 
             # 提取主页面的个人信息块
             personal_info = {
@@ -113,7 +133,7 @@ class JwxtScraper:
 
             # 从个人信息块提取更多信息
             info_text = soup.get_text()
-            logger.info(f"成功获取基本信息: {personal_info}")
+            logger.info(f"【个人信息】最终结果: {personal_info}")
 
             return {
                 "success": True,

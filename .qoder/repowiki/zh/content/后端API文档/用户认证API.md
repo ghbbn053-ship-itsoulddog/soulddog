@@ -12,10 +12,10 @@
 
 ## 更新摘要
 **变更内容**
-- 更新了登录响应处理机制，增加了多编码检测系统
-- 增强了对GBK/GB2312等中文编码的支持
-- 修复了验证码生成系统中的未定义变量问题
-- 改进了编码检测逻辑，支持多种中文编码格式
+- 修复了会话管理和基础URL一致性问题
+- 增强了会话存储结构，从简单的session对象改为包含会话数据和服务器URL的嵌套结构
+- 新增了get_user_session()辅助函数来统一处理会话检索逻辑
+- 改进了服务器URL管理机制，确保验证码和登录使用同一服务器实例
 
 ## 目录
 1. [简介](#简介)
@@ -36,15 +36,15 @@
 - 完整的请求示例、响应格式和错误码定义
 - 前端集成指南，说明如何正确处理验证码刷新、登录状态维护和会话超时处理
 - 服务器选择算法和负载均衡机制
-- **新增**：多编码检测系统和中文编码支持机制
+- **新增**：增强的会话存储结构和基础URL一致性管理
 
 ## 项目结构
 该项目采用前后端分离架构，后端基于FastAPI提供RESTful API，前端基于Next.js构建用户界面。认证流程涉及以下关键组件：
 - 后端FastAPI应用：提供/api/captcha和/api/login等认证接口
 - 前端登录页面：负责用户输入、验证码展示和登录请求发送
 - 教务系统服务器：作为后端代理，处理真实的验证码获取和登录请求
-- 会话管理系统：维护用户登录状态和验证码session
-- **新增**：多编码检测系统：自动识别和处理GBK/GB2312等中文编码
+- 会话管理系统：维护用户登录状态和验证码session，**增强**支持基础URL一致性
+- **新增**：统一会话检索函数：get_user_session()提供标准化的会话访问接口
 
 ```mermaid
 graph TB
@@ -56,7 +56,8 @@ subgraph "后端层"
 API[FastAPI应用<br/>main.py]
 Auth[认证模块]
 Proxy[代理模块]
-Encoding[编码检测系统<br/>GBK/GB2312支持]
+SessionMgr[会话管理器<br/>增强的存储结构]
+Helper[辅助函数<br/>get_user_session()]
 end
 subgraph "外部系统"
 JWXT[教务系统服务器<br/>jwxt.gdufe.edu.cn]
@@ -66,10 +67,11 @@ FE --> Login
 Login --> API
 API --> Auth
 Auth --> Proxy
-Auth --> Encoding
+Auth --> SessionMgr
+SessionMgr --> Helper
 Proxy --> JWXT
 JWXT --> Servers
-Encoding --> JWXT
+Helper --> SessionMgr
 ```
 
 **图表来源**
@@ -91,28 +93,29 @@ Encoding --> JWXT
 ### 2. 用户登录组件
 - 接口：POST /api/login
 - 功能：验证用户凭据并建立会话
-- 特性：集成验证码验证、服务器选择、会话管理、**多编码检测**
+- 特性：集成验证码验证、服务器选择、会话管理、**增强的会话存储结构**
 
 ### 3. 服务器选择算法
 - 基于学号的哈希算法
 - 支持14个内网服务器实例
 - 确保相同学号用户始终路由到同一服务器
 
-### 4. 会话管理机制
+### 4. **增强**：会话管理机制
 - 验证码session存储（内存级别）
-- 用户登录会话存储（内存级别）
+- 用户登录会话存储（内存级别，**增强的嵌套结构**）
 - 自动清理过期session
+- **新增**：基础URL一致性管理
 
-### 5. **新增**：多编码检测系统
-- 支持UTF-8、GBK、GB2312、GB18030等多种编码格式
-- 自动检测响应内容中的中文字符
-- 动态选择最适合的编码格式进行解析
+### 5. **新增**：统一会话检索函数
+- get_user_session()函数提供标准化的会话访问接口
+- 统一处理会话数据和服务器URL的提取
+- 提供一致的错误处理机制
 
 **章节来源**
-- [backend/main.py:132-327](file://backend/main.py#L132-L327)
+- [backend/main.py:74-366](file://backend/main.py#L74-L366)
 
 ## 架构概览
-认证系统的整体架构遵循"前端-后端-教务系统"三层模式，**新增**了编码检测中间层：
+认证系统的整体架构遵循"前端-后端-教务系统"三层模式，**增强了会话管理中间层**：
 
 ```mermaid
 sequenceDiagram
@@ -120,7 +123,8 @@ participant Client as "客户端浏览器"
 participant Frontend as "前端登录页面"
 participant Backend as "后端FastAPI"
 participant Proxy as "代理服务器"
-participant Encoding as "编码检测系统"
+participant SessionMgr as "增强的会话管理器"
+participant Helper as "get_user_session()"
 participant JWXT as "教务系统服务器"
 Client->>Frontend : 访问登录页面
 Frontend->>Backend : GET /api/captcha
@@ -128,22 +132,23 @@ Backend->>Proxy : 选择服务器并获取验证码
 Proxy->>JWXT : 请求验证码图片
 JWXT-->>Proxy : 返回验证码图片
 Proxy-->>Backend : 返回验证码数据
+Backend->>SessionMgr : 存储验证码session包含服务器信息
 Backend-->>Frontend : {image, captcha_session_id}
 Frontend->>Backend : POST /api/login {username, password, code, captcha_session_id}
-Backend->>Backend : 验证验证码session有效性
+Backend->>SessionMgr : 检索验证码session
+SessionMgr->>Helper : 提取服务器URL
+Helper-->>Backend : 返回session和服务器URL
 Backend->>Proxy : 使用相同服务器进行登录
 Proxy->>JWXT : 提交登录表单
 JWXT-->>Proxy : 返回登录结果
 Proxy-->>Backend : 返回响应
-Backend->>Encoding : 多编码检测处理
-Encoding->>Encoding : 尝试UTF-8,GBK,GB2312,GB18030
-Encoding-->>Backend : 返回正确编码的文本
-Backend->>Backend : 检查登录结果
+Backend->>SessionMgr : 保存用户会话增强存储结构
+SessionMgr->>SessionMgr : {session : requests.Session, server_url : str}
 Backend-->>Frontend : 返回登录结果
 ```
 
 **图表来源**
-- [backend/main.py:135-327](file://backend/main.py#L135-L327)
+- [backend/main.py:136-366](file://backend/main.py#L136-L366)
 - [frontend/src/app/login/page.tsx:20-107](file://frontend/src/app/login/page.tsx#L20-L107)
 
 ## 详细组件分析
@@ -165,7 +170,7 @@ Backend-->>Frontend : 返回登录结果
 #### 验证码session管理
 - 生成唯一captcha_session_id，格式：captcha_{timestamp}_{server_index}
 - 将requests.Session对象与captcha_session_id关联存储
-- 自动清理机制：登录成功后立即删除对应session
+- **增强**：自动清理机制：登录成功后立即删除对应session
 
 #### 响应格式
 ```json
@@ -182,7 +187,7 @@ Backend-->>Frontend : 返回登录结果
 - 参数验证失败：HTTP 400
 
 **章节来源**
-- [backend/main.py:135-190](file://backend/main.py#L135-L190)
+- [backend/main.py:136-192](file://backend/main.py#L136-L192)
 
 ### 用户登录接口 (/api/login)
 
@@ -208,12 +213,11 @@ SessionExists --> |是| ExtractServerIndex["提取服务器索引"]
 ExtractServerIndex --> SelectServer["选择服务器"]
 SelectServer --> BuildFormData["构建登录表单"]
 BuildFormData --> SendLogin["发送登录请求"]
-SendLogin --> MultiEncoding["多编码检测处理"]
-MultiEncoding --> CheckResult["检查登录结果"]
+SendLogin --> CheckResult["检查登录结果"]
 CheckResult --> LoginSuccess{"登录成功?"}
-LoginSuccess --> |是| SaveSession["保存用户session"]
+LoginSuccess --> |是| SaveEnhancedSession["保存增强会话结构"]
 LoginSuccess --> |否| ReturnFail["返回登录失败"]
-SaveSession --> ReturnSuccess["返回登录成功"]
+SaveEnhancedSession --> ReturnSuccess["返回登录成功"]
 Return400 --> End([结束])
 ReturnExpired --> End
 ReturnFail --> End
@@ -221,51 +225,45 @@ ReturnSuccess --> End
 ```
 
 **图表来源**
-- [backend/main.py:192-327](file://backend/main.py#L192-L327)
+- [backend/main.py:194-366](file://backend/main.py#L194-L366)
 
 #### 服务器选择策略
 1. **优先级1**：从captcha_session_id中提取服务器索引
 2. **优先级2**：使用学号哈希算法选择服务器
 3. **优先级3**：回退到第一个服务器
 
-#### 会话管理
-- 用户登录成功后，将requests.Session对象存储在SESSIONS字典中
-- 键为username，值为会话对象
+#### **增强**：会话管理
+- 用户登录成功后，将requests.Session对象和服务器URL存储在SESSIONS字典中
+- **新结构**：键为username，值为字典{session: requests.Session, server_url: str}
 - 会话包含JSESSIONID Cookie，用于后续API调用
+- **增强**：确保验证码和登录使用同一服务器实例
 
-#### **新增**：多编码检测系统
-系统实现了智能的多编码检测机制，能够自动识别和处理不同编码格式的响应内容：
+#### **新增**：统一会话检索函数
+系统提供了get_user_session()辅助函数，用于统一处理会话检索逻辑：
 
 ```python
-# 尝试多种编码解析响应内容
-# 教务系统通常使用 GBK/GB2312 编码
-for encoding in ['utf-8', 'gbk', 'gb2312', 'gb18030']:
-    try:
-        response.encoding = encoding
-        content = response.text
-        # 如果能正常解码且包含中文，就使用这个编码
-        if any(c in content for c in ['用户', '密码', '验证', '登录', 'framework']):
-            logger.info(f"使用编码: {encoding}")
-            break
-    except Exception:
-        continue
-else:
-    response.encoding = response.apparent_encoding
-    content = response.text
+def get_user_session(username: str):
+    """
+    获取用户的 session 和 server_url
+    返回: (session, server_url) 或抛出 HTTPException
+    """
+    if username not in SESSIONS:
+        logger.warning(f"【Session】用户 {username} 未登录")
+        raise HTTPException(status_code=401, detail="未登录，请先登录")
+    
+    user_data = SESSIONS[username]
+    session = user_data["session"]
+    server_url = user_data["server_url"]
+    logger.info(f"【Session】用户 {username} - 服务器: {server_url}")
+    return session, server_url
 ```
-
-**编码检测特点**：
-- **顺序尝试**：UTF-8 → GBK → GB2312 → GB18030
-- **中文字符验证**：检查响应内容中是否包含中文字符
-- **动态选择**：选择最适合的编码格式进行解析
-- **兼容性**：支持所有主流中文编码格式
 
 #### 错误处理策略
 - 参数缺失：HTTP 400
 - 验证码过期：返回业务错误（success=false）
 - 登录失败：检查响应内容中的错误标志
 - 服务器错误：HTTP 500
-- **新增**：编码解析失败：自动使用apparent_encoding
+- **新增**：会话不存在：HTTP 401
 
 #### 响应格式
 成功响应：
@@ -287,7 +285,7 @@ else:
 ```
 
 **章节来源**
-- [backend/main.py:192-327](file://backend/main.py#L192-L327)
+- [backend/main.py:194-366](file://backend/main.py#L194-L366)
 
 ### 前端集成指南
 
@@ -327,7 +325,7 @@ LoginPage --> AuthForm : "处理登录表单"
 ```
 
 **图表来源**
-- [frontend/src/app/login/page.tsx:1-224](file://frontend/src/app/login/page.tsx#L1-L224)
+- [frontend/src/app/login/page.tsx:1-228](file://frontend/src/app/login/page.tsx#L1-L228)
 
 #### 验证码刷新机制
 - 页面加载时自动获取验证码
@@ -362,7 +360,7 @@ Select --> Output["返回服务器URL"]
 ```
 
 **图表来源**
-- [backend/main.py:82-92](file://backend/main.py#L82-L92)
+- [backend/main.py:83-94](file://backend/main.py#L83-L94)
 
 #### 服务器配置
 系统配置了14个内网服务器实例：
@@ -370,13 +368,19 @@ Select --> Output["返回服务器URL"]
 - 端口：80或8380
 - 负载均衡：基于学号的哈希分布
 
+#### **增强**：基础URL一致性保证
+- 验证码获取时确定服务器索引并存储在captcha_session_id中
+- 登录时从captcha_session_id提取服务器索引，确保使用同一服务器
+- **新增**：get_user_session()函数返回正确的服务器URL
+- 确保验证码和登录操作的一致性
+
 #### 负载均衡策略
 - 均匀分布：相同学号始终路由到同一服务器
 - 容错机制：服务器不可用时自动选择下一个
 - 一致性保证：确保验证码和登录使用同一服务器实例
 
 **章节来源**
-- [backend/main.py:55-92](file://backend/main.py#L55-L92)
+- [backend/main.py:55-94](file://backend/main.py#L55-L94)
 
 ## 依赖分析
 
@@ -386,7 +390,8 @@ graph TB
 subgraph "认证相关"
 CaptchaAPI["/api/captcha"]
 LoginAPI["/api/login"]
-SessionMgr["会话管理器"]
+SessionMgr["增强的会话管理器"]
+Helper["get_user_session()"]
 EncodingSystem["编码检测系统"]
 end
 subgraph "前端集成"
@@ -404,8 +409,10 @@ LoginPage --> CaptchaAPI
 LoginPage --> LoginAPI
 CaptchaAPI --> SessionMgr
 LoginAPI --> SessionMgr
+LoginAPI --> Helper
 LoginAPI --> EncodingSystem
 SessionMgr --> Requests
+Helper --> SessionMgr
 EncodingSystem --> BeautifulSoup
 CaptchaAPI --> JWXT
 LoginAPI --> JWXT
@@ -414,15 +421,15 @@ LoginPage --> LoginForm
 ```
 
 **图表来源**
-- [backend/main.py:1-853](file://backend/main.py#L1-L853)
-- [frontend/src/app/login/page.tsx:1-224](file://frontend/src/app/login/page.tsx#L1-L224)
+- [backend/main.py:1-857](file://backend/main.py#L1-L857)
+- [frontend/src/app/login/page.tsx:1-228](file://frontend/src/app/login/page.tsx#L1-L228)
 
 ### 外部依赖
 - **Requests库**：HTTP请求处理
 - **Base64编码**：验证码图片传输
 - **Time模块**：验证码session时间戳
 - **Logging模块**：日志记录
-- ****新增** BeautifulSoup**：HTML解析和编码检测
+- **新增** **BeautifulSoup**：HTML解析和编码检测
 
 **章节来源**
 - [backend/main.py:1-50](file://backend/main.py#L1-L50)
@@ -435,10 +442,12 @@ LoginPage --> LoginForm
 - 哈希计算简单，服务器选择快速
 - 减少跨服务器请求导致的网络延迟
 
-### 2. 会话管理性能
+### 2. **增强**：会话管理性能
 - 内存存储：SESSIONS和CAPTCHA_SESSIONS字典
+- **新结构**：每个用户会话包含session对象和server_url
 - 查找复杂度：O(1)
 - 适合小规模并发场景
+- **新增**：get_user_session()函数提供统一访问接口
 
 ### 3. 网络性能优化
 - 单个requests.Session复用连接
@@ -446,10 +455,10 @@ LoginPage --> LoginForm
 - User-Agent模拟真实浏览器
 
 ### 4. **新增**：编码检测性能
-- **多编码尝试**：最多4次编码尝试
-- **早期退出**：一旦找到合适编码立即停止
-- **内存效率**：每次只尝试一种编码格式
-- **日志记录**：仅在调试模式下记录详细信息
+- 多编码尝试：最多4次编码尝试
+- 早期退出：一旦找到合适编码立即停止
+- 内存效率：每次只尝试一种编码格式
+- 日志记录：仅在调试模式下记录详细信息
 
 ### 5. 生产环境建议
 - 使用Redis替代内存存储
@@ -457,6 +466,7 @@ LoginPage --> LoginForm
 - 添加缓存层减少重复请求
 - 实现限流和防暴力破解
 - **新增**：考虑使用更高效的编码检测库
+- **新增**：实现会话数据的持久化存储
 
 ## 故障排除指南
 
@@ -480,44 +490,46 @@ LoginPage --> LoginForm
 - 凭证错误
 - 验证码过期
 - 服务器不一致
-- **新增**：编码解析失败
+- **新增**：会话数据不完整
 
 **解决方案**：
 - 重新获取验证码
 - 确认学号格式
 - 检查密码正确性
-- **新增**：检查网络连接稳定性
+- **新增**：检查会话存储结构是否正确
 
-#### 3. 会话管理问题
+#### 3. **增强**：会话管理问题
 **症状**：登录后无法访问受保护资源
 **原因**：
 - JSESSIONID丢失
 - 会话过期
 - 服务器选择不一致
+- **新增**：get_user_session()函数返回错误
 
 **解决方案**：
 - 检查Cookie设置
 - 验证服务器一致性
 - 实现会话续期机制
+- **新增**：检查SESSIONS字典结构
 
-#### 4. **新增**：编码相关问题
-**症状**：登录响应乱码或解析失败
+#### 4. **新增**：基础URL一致性问题
+**症状**：验证码和登录使用不同服务器
 **原因**：
-- 教务系统返回GBK编码
-- 编码检测逻辑异常
-- 字符串解码错误
+- 服务器索引提取失败
+- 会话数据损坏
+- get_user_session()函数异常
 
 **解决方案**：
-- 检查编码检测日志
-- 验证响应内容编码
-- 确认中文字符完整性
+- 检查captcha_session_id格式
+- 验证SESSIONS字典结构
+- 确认get_user_session()函数正常工作
 
 ### 调试工具
 系统提供了专门的测试脚本：
 - 支持外网和内网服务器测试
 - 手动输入验证码进行验证
 - 详细的响应内容输出
-- **新增**：编码检测测试功能
+- **新增**：会话管理测试功能
 
 **章节来源**
 - [backend/test_login.py:1-152](file://backend/test_login.py#L1-L152)
@@ -530,20 +542,22 @@ LoginPage --> LoginForm
 - **简单可靠**：基于现有教务系统接口，无需额外开发
 - **前端友好**：提供完整的前端集成示例
 - **可扩展性**：支持多种服务器配置和负载均衡策略
-- ****新增** 编码兼容性**：智能多编码检测系统，支持GBK/GB2312等中文编码
+- **增强** **会话管理**：新的嵌套存储结构提供更好的数据组织
+- **统一接口**：get_user_session()函数提供标准化的会话访问
 
 ### 局限性
 - **内存存储**：生产环境需要替换为Redis等持久化存储
 - **单机部署**：当前实现为单实例，需要集群化改造
 - **安全考虑**：需要添加JWT令牌、HTTPS等安全措施
-- ****新增** 编码检测复杂度**：多编码尝试可能影响响应时间
+- **增强** **会话结构复杂度**：新的存储结构增加了代码复杂度
 
 ### 改进建议
 1. **存储层升级**：使用Redis或数据库存储会话
 2. **安全加固**：添加JWT令牌、CSRF保护、速率限制
 3. **监控告警**：添加API调用监控和异常告警
 4. **文档完善**：补充完整的API文档和SDK
-5. ****新增** 性能优化**：考虑使用更高效的编码检测算法
+5. **性能优化**：考虑使用更高效的编码检测算法
+6. ****增强** **会话管理**：实现会话数据的自动清理和过期处理
 
 ## 附录
 
@@ -567,18 +581,33 @@ LoginPage --> LoginForm
 - **401**: 未登录或会话无效
 - **500**: 服务器内部错误
 
-### **新增**：编码检测机制
-系统支持以下编码格式的自动检测：
-- UTF-8：标准Unicode编码
-- GBK：简体中文编码
-- GB2312：简体中文编码
-- GB18030：简体中文编码（扩展）
+### **新增**：会话存储结构
+系统使用增强的嵌套存储结构：
+```python
+# 旧结构
+SESSIONS = {
+    "username": requests.Session()
+}
 
-编码检测逻辑：
-1. 依次尝试UTF-8、GBK、GB2312、GB18030
-2. 检查解码后的文本是否包含中文字符
-3. 选择能正确解析中文字符的编码格式
-4. 如所有编码都失败，使用apparent_encoding
+# 新结构
+SESSIONS = {
+    "username": {
+        "session": requests.Session(),
+        "server_url": "http://172.19.13.60:80/jsxsd/"
+    }
+}
+```
+
+### **新增**：get_user_session()函数
+统一的会话访问接口：
+```python
+def get_user_session(username: str):
+    """
+    获取用户的 session 和 server_url
+    返回: (session, server_url) 或抛出 HTTPException
+    """
+    # 实现细节...
+```
 
 ### 部署配置
 系统支持Docker容器化部署，包含：
@@ -589,5 +618,5 @@ LoginPage --> LoginForm
 - 前后端分离部署
 
 **章节来源**
-- [docker-compose.yml:1-148](file://docker-compose.yml#L1-L148)
+- [docker-compose.yml:1-167](file://docker-compose.yml#L1-L167)
 - [scripts/start.sh:1-18](file://scripts/start.sh#L1-L18)
