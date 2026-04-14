@@ -235,7 +235,7 @@ class JwxtScraper:
         """
         try:
             # 成绩提交URL（根据深度爬取crawl_tree.json）
-            url = f"{self.base_url}/kscj/cjcx_query"
+            url = f"{self.base_url}kscj/cjcx_query"
             
             # 构建表单数据
             data = {
@@ -388,7 +388,7 @@ class JwxtScraper:
         """
         try:
             # 课表查询URL（根据深度爬取crawl_tree.json）
-            url = f"{self.base_url}/xskb/xskb_list.do"
+            url = f"{self.base_url}xskb/xskb_list.do"
 
             # 构建表单数据
             data = {}
@@ -638,7 +638,7 @@ class JwxtScraper:
         返回详细的培养方案，包括学期、课程代码、课程名称、学分等
         """
         try:
-            url = f"{self.base_url}/pyfa/pyfa_query"
+            url = f"{self.base_url}pyfa/pyfa_query"
             response = self.session.get(url, timeout=10)
             html_text = self._fix_encoding(response)
 
