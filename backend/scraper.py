@@ -654,10 +654,15 @@ class JwxtScraper:
             if college_match:
                 plan_data["基本信息"]["学院"] = college_match.get_text(strip=True).replace('学院', '').strip()
 
-            # 查找课程表格 - 使用id='mxh'的表格
-            course_table = soup.find('table', id='mxh')
-            if course_table:
-                rows = course_table.find_all('tr')
+            # 查找课程表格 - 使用正则直接提取 mxh 表格（避免 BeautifulSoup 解析整个文档时的截断问题）
+            import re as _re
+            mxh_match = _re.search(r"<table[^>]*id=['\"]mxh['\"][^>]*>(.*?)</table>", html_text, _re.DOTALL | _re.IGNORECASE)
+            
+            if mxh_match:
+                mxh_html = mxh_match.group(0)
+                table_soup = BeautifulSoup(mxh_html, 'html.parser')
+                rows = table_soup.find_all('tr')
+                logger.info(f"【培养方案】正则提取 mxh 表格，共 {len(rows)} 行")
             
                 current_category = ""  # 当前课程类别
                 current_nature = ""    # 当前课程性质
