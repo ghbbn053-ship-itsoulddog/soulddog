@@ -1,0 +1,728 @@
+
+
+  
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+
+<head id="headerid1">
+	<base target='_self'>
+	<title>全校课程课表</title>	
+	<meta http-equiv="pragma" content="no-cache">
+	<meta http-equiv="cache-control" content="no-cache">
+	<meta http-equiv="expires" content="0">
+	<meta http-equiv="keywords" content="湖南强智科技教务系统">
+	<meta http-equiv="description" content="湖南强智科技教务系统">
+	<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE8" />
+<script type="text/javascript" src="/jsxsd/js/jquery-min.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/common.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/validate.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/iepngfix_tilebg.js" language="javascript" ></script>
+<link href="/jsxsd/framework/images/common.css" rel="stylesheet" type="text/css" />
+<link href="/jsxsd/framework/images/blue.css" rel="stylesheet" type="text/css" id="link_theme" />
+<link href="/jsxsd/framework/images/workstation.css" rel="stylesheet" type="text/css" /> 
+</head>
+<iframe id="notSession" name="notSession" style="display: none;" src=""></iframe>
+<script type="text/javascript">
+jQuery(document).ready(function(){
+	window.setInterval(function(){
+		 document.getElementById("notSession").src = "/jsxsd/framework/blankPage.jsp";
+	 }, 1000 * 60 * 10);
+});
+</script>
+<body>
+
+
+
+
+
+
+
+<div class="Nsb_pw">
+  <div class="Nsb_top">
+    <div class="Nsb_top_logo"><table border="0" cellpadding="0" cellspacing="0"><tr><td height="75" valign="middle"><img style="display:;" id="imgLogo" src="/jsxsd/framework/images/index_logo.gif" /></td></tr></table></div>
+    <div class="Nsb_top_menu">        
+        <div id="Top1_divLoginName" class="Nsb_top_menu_nc" style="color: #000000;">张靖(24251102121)</div>
+        <ul>
+            <li><a id="TopUserSetting" info="个人设置" href="#" class="Nsb_top_menu_id"><img src="/jsxsd/framework/images/Nsb_top_p1.jpg" id="Top1_imgTopSmallUserPhoto" /></a></li>
+            <span></span>
+                          
+            
+            <li><a id="TopTheme" info="切换主题" href="#" class="Nsb_top_menu_style" onclick="changeDisplay('divTopTheme')"></a></li>
+            <span id="Top1_LBackManageSpliter"></span>
+            <span id="Top1_LExitSpliter"></span>
+            <li id="Top1_LBackManage">
+            	<a info="个人设置" href="/jsxsd/grsz/grsz_xggrxx.do?Ves632DSdyV=NEW_JSD_WDZM" class="Nsb_top_menu_options"></a>
+            </li>
+            <li id="Top1_LExit"><a info="退出" href="javascript:Logout('/jsxsd');"   class="Nsb_top_menu_exit"></a></li>
+        </ul>            
+     </div>   
+     <div id="divTopTheme" group="topDiv" style="display:none;z-index:10000">      
+        <div class="Nsb_top_c Nsb_top_c3">
+          <ul>
+            <li id="theme_blue" theme="blue" index="1" class="Nsb_top_c3_11" onclick="javascript:changeTheme('/jsxsd','blue',this);"></li>
+            <li id="theme_green" theme="green" index="2" class="Nsb_top_c3_2"  onclick="javascript:changeTheme('/jsxsd','green',this);"></li>
+            <li id="theme_orange" theme="orange" index="3" class="Nsb_top_c3_3" onclick="javascript:changeTheme('/jsxsd','orange',this);"></li>
+            <li id="theme_red" theme="red" index="4" class="Nsb_top_c3_4"  onclick="javascript:changeTheme('/jsxsd','red',this);"></li>
+            <li id="theme_purple" theme="purple" index="5" class="Nsb_top_c3_5" onclick="javascript:changeTheme('/jsxsd','purple',this);"></li>
+            <li id="theme_gray" theme="gray" index="6" class="Nsb_top_c3_6"  onclick="javascript:changeTheme('/jsxsd','gray',this);"></li>
+          </ul>
+        </div>
+     </div>
+   </div>
+</div>
+<div class="Nsb_menu_pw">
+  <div class="Nsb_pw">
+    <div id="divFirstMenuClass" class="Nsb_menu menu_cn">
+      <ul>         
+         <li class="Nsb_menu_li_now" title="首页">
+         	<a class="Nsb_menu_li_h" id="homepage" href="/jsxsd/framework/main.jsp"><span></span></a>
+         </li>
+         
+         	<li title="我的桌面">
+         		<a id="calender_user_schedule" href="/jsxsd/jxzl/jxzl_query?Ves632DSdyV=NEW_XSD_WDZM">我的桌面</a>
+         	</li>
+         
+         	<li title="学籍成绩">
+         		<a id="calender_user_schedule" href="/jsxsd/xsxj/xjxxgl.do?Ves632DSdyV=NEW_XSD_XJCJ">学籍成绩</a>
+         	</li>
+         
+         	<li title="培养管理">
+         		<a id="calender_user_schedule" href="/jsxsd/jsxx/jsxx_query?Ves632DSdyV=NEW_XSD_PYGL">培养管理</a>
+         	</li>
+         
+         	<li title="考试报名">
+         		<a id="calender_user_schedule" href="/jsxsd/xsks/xsksap_query?Ves632DSdyV=NEW_XSD_KSBM">考试报名</a>
+         	</li>
+         
+         	<li title="教学评价">
+         		<a id="calender_user_schedule" href="/jsxsd/xspj/xspj_find.do?Ves632DSdyV=NEW_XSD_JXPJ">教学评价</a>
+         	</li>
+         
+      </ul>
+    </div>
+  </div>
+</div>
+<iframe style="display:none;" name="ifrmPrint" id="ifrmPrint"></iframe>
+<form action="" name="FormPrint" id="FormPrint" method="post" target="ifrmPrint">
+</form>
+<div class="Nsb_pw">    
+ <form action="/jsxsd/kbcx/kbxx_kc_ifr" name="Form1" id="Form1" method="post" target="fcenter">
+        <div class="Nsb_r_title"><a href="/jsxsd/framework/main.jsp">首页</a> »  课表信息 » 课程 </div>
+        <div>
+       
+        
+        
+        	<input type="button" id="btnShenshen" class="button" value="返 回" onclick="javascript:window.location.href='/jsxsd/xskb/xskb_list.do';"/>
+                	
+		学年学期：<select name="xnxqh" id="xnxqh" 　style="width:180px;">
+		
+		<option value="2026-2027-1"  >2026-2027-1</option>
+		
+		<option value="2025-2026-2"   selected="selected">2025-2026-2</option>
+		
+		<option value="2025-2026-1"  >2025-2026-1</option>
+		
+		<option value="2024-2025-2"  >2024-2025-2</option>
+		
+		<option value="2024-2025-1"  >2024-2025-1</option>
+		
+		<option value="2023-2024-2"  >2023-2024-2</option>
+		
+		<option value="2023-2024-1"  >2023-2024-1</option>
+		
+		<option value="2022-2023-2"  >2022-2023-2</option>
+		
+		<option value="2022-2023-1"  >2022-2023-1</option>
+		
+		<option value="2021-2022-2"  >2021-2022-2</option>
+		
+		<option value="2021-2022-1"  >2021-2022-1</option>
+		
+		<option value="2020-2021-2"  >2020-2021-2</option>
+		
+		<option value="2020-2021-1"  >2020-2021-1</option>
+		
+		<option value="2019-2020-2"  >2019-2020-2</option>
+		
+		<option value="2019-2020-1"  >2019-2020-1</option>
+		
+		<option value="2018-2019-2"  >2018-2019-2</option>
+		
+		<option value="2018-2019-1"  >2018-2019-1</option>
+		
+		<option value="2017-2018-2"  >2017-2018-2</option>
+		
+		<option value="2017-2018-1"  >2017-2018-1</option>
+		
+		<option value="2016-2017-2"  >2016-2017-2</option>
+		
+		<option value="2016-2017-1"  >2016-2017-1</option>
+		
+		<option value="2015-2016-2"  >2015-2016-2</option>
+		
+		<option value="2015-2016-1"  >2015-2016-1</option>
+		
+		<option value="2014-2015-2"  >2014-2015-2</option>
+		
+		<option value="2014-2015-1"  >2014-2015-1</option>
+		
+		<option value="2013-2014-2"  >2013-2014-2</option>
+		
+		<option value="2013-2014-1"  >2013-2014-1</option>
+		
+		<option value="2012-2013-2"  >2012-2013-2</option>
+		
+		<option value="2012-2013-1"  >2012-2013-1</option>
+		
+		<option value="2011-2012-2"  >2011-2012-2</option>
+		
+		<option value="2011-2012-1"  >2011-2012-1</option>
+		
+		<option value="2010-2011-2"  >2010-2011-2</option>
+		
+		<option value="2010-2011-1"  >2010-2011-1</option>
+		
+		<option value="2009-2010-2"  >2009-2010-2</option>
+		
+		<option value="2009-2010-1"  >2009-2010-1</option>
+		
+		<option value="2008-2009-2"  >2008-2009-2</option>
+		
+		<option value="2008-2009-1"  >2008-2009-1</option>
+		
+		<option value="2007-2008-2"  >2007-2008-2</option>
+		
+		<option value="2007-2008-1"  >2007-2008-1</option>
+		
+		<option value="2006-2007-2"  >2006-2007-2</option>
+		
+		<option value="2006-2007-1"  >2006-2007-1</option>
+		
+		<option value="2005-2006-2"  >2005-2006-2</option>
+		
+		<option value="2005-2006-1"  >2005-2006-1</option>
+		
+		<option value="2004-2005-2"  >2004-2005-2</option>
+		
+		<option value="2004-2005-1"  >2004-2005-1</option>
+		
+		<option value="2003-2004-2"  >2003-2004-2</option>
+		
+		<option value="2003-2004-1"  >2003-2004-1</option>
+		
+		</select>
+		上课院系:<select id="skyx" name="skyx" >
+		<option value="">-请选择-</option>
+		
+			<option value="10100" >[10100]党委办公室、校长办公室（法制办公室、档案馆、校史馆）</option>
+		
+			<option value="11000" >[11000]国际交流与合作部（港澳台事务办公室）</option>
+		
+			<option value="01" >[20100]工商管理学院（粤商学院、创新创业学院）</option>
+		
+			<option value="07" >[20200]法学院</option>
+		
+			<option value="02" >[20300]会计学院</option>
+		
+			<option value="06" >[20400]经济学院</option>
+		
+			<option value="11" >[20500]大数据与人工智能学院</option>
+		
+			<option value="05" >[20600]金融学院</option>
+		
+			<option value="03" >[20700]财政税务学院（税务师学院）</option>
+		
+			<option value="15" >[20800]公共管理学院</option>
+		
+			<option value="08" >[20900]文化旅游学院</option>
+		
+			<option value="21000" >[21000]地理与环境经济学院</option>
+		
+			<option value="09" >[21100]外国语学院</option>
+		
+			<option value="12" >[21200]人文与传播学院（网络传播学院、出版学院）</option>
+		
+			<option value="17" >[21300]艺术与设计学院</option>
+		
+			<option value="10" >[21400]统计与数据科学学院</option>
+		
+			<option value="14" >[21500]马克思主义学院</option>
+		
+			<option value="13" >[21700]体育学院</option>
+		
+			<option value="36" >[21800]经济与管理实验教学中心</option>
+		
+			<option value="22300" >[22300]国际商学院</option>
+		
+			<option value="22400" >[22400]湾区影视产业学院</option>
+		
+			<option value="22700" >[22700]数字经济学院</option>
+		
+			<option value="22800" >[22800]人力资源学院</option>
+		
+			<option value="lVmobpvXTd" >[23100]广东食品药品职业学院</option>
+		
+			<option value="rzzhe4mTSY" >[23200]东莞职业技术学院</option>
+		
+			<option value="cxFYqCqIjg" >[23300]广东工贸职业技术学院</option>
+		
+			<option value="mLdTtgT8eu" >[23400]广东科学技术职业学院</option>
+		
+			<option value="8bYdL0jiUL" >[23500]广东轻工职业技术学院</option>
+		
+			<option value="fextKrl5hV" >[23600]广东水利电力职业技术学院</option>
+		
+			<option value="30800" >[30800]旅游管理与规划设计研究院、岭南旅游研究院（合署）</option>
+		
+			<option value="31000" >[31000]发展与改革研究院</option>
+		
+			<option value="39" >[40200]校团委</option>
+		
+		</select>
+		开课院系:<select id="kkyx" name="kkyx" >
+		<option value="">-请选择-</option>
+		
+			<option value="10100" >[10100]党委办公室、校长办公室（法制办公室、档案馆、校史馆）</option>
+		
+			<option value="33" >[10400]宣传部、统战部</option>
+		
+			<option value="34" >[10500]学生工作部（武装部、学生就业指导中心）</option>
+		
+			<option value="30" >[10700]教务部</option>
+		
+			<option value="11000" >[11000]国际交流与合作部（港澳台事务办公室）</option>
+		
+			<option value="40" >[12000]招生考试部</option>
+		
+			<option value="01" >[20100]工商管理学院（粤商学院、创新创业学院）</option>
+		
+			<option value="07" >[20200]法学院</option>
+		
+			<option value="02" >[20300]会计学院</option>
+		
+			<option value="06" >[20400]经济学院</option>
+		
+			<option value="11" >[20500]大数据与人工智能学院</option>
+		
+			<option value="05" >[20600]金融学院</option>
+		
+			<option value="03" >[20700]财政税务学院（税务师学院）</option>
+		
+			<option value="15" >[20800]公共管理学院</option>
+		
+			<option value="08" >[20900]文化旅游学院</option>
+		
+			<option value="21000" >[21000]地理与环境经济学院</option>
+		
+			<option value="09" >[21100]外国语学院</option>
+		
+			<option value="12" >[21200]人文与传播学院（网络传播学院、出版学院）</option>
+		
+			<option value="17" >[21300]艺术与设计学院</option>
+		
+			<option value="10" >[21400]统计与数据科学学院</option>
+		
+			<option value="14" >[21500]马克思主义学院</option>
+		
+			<option value="13" >[21700]体育学院</option>
+		
+			<option value="36" >[21800]经济与管理实验教学中心</option>
+		
+			<option value="22300" >[22300]国际商学院</option>
+		
+			<option value="22400" >[22400]湾区影视产业学院</option>
+		
+			<option value="22700" >[22700]数字经济学院</option>
+		
+			<option value="22800" >[22800]人力资源学院</option>
+		
+			<option value="lVmobpvXTd" >[23100]广东食品药品职业学院</option>
+		
+			<option value="rzzhe4mTSY" >[23200]东莞职业技术学院</option>
+		
+			<option value="cxFYqCqIjg" >[23300]广东工贸职业技术学院</option>
+		
+			<option value="mLdTtgT8eu" >[23400]广东科学技术职业学院</option>
+		
+			<option value="8bYdL0jiUL" >[23500]广东轻工职业技术学院</option>
+		
+			<option value="fextKrl5hV" >[23600]广东水利电力职业技术学院</option>
+		
+			<option value="30800" >[30800]旅游管理与规划设计研究院、岭南旅游研究院（合署）</option>
+		
+			<option value="31000" >[31000]发展与改革研究院</option>
+		
+			<option value="39" >[40200]校团委</option>
+		
+			<option value="31" >[50300]图书馆</option>
+		
+			<option value="50500" >[50500]网络信息与教育技术中心</option>
+		
+			<option value="32" >[60100]门诊部</option>
+		
+		</select>
+		<br />
+		课程属性：<select name="zzdKcSX" id="zzdKcSX" >
+		<option value="">-请选择-</option>
+		
+		<option value="1" >必修</option>
+		
+		<option value="2" >限选</option>
+		
+		<option value="4" >选修</option>
+		
+		<option value="9" >其它</option>
+		
+		</select>
+		课程：<input type="text" name="kc" id="kc" />
+					
+					周次:
+					<select name="zc1" id="zc1" size="1">
+						<option value="">
+							-请选择-
+						</option>
+						<option value="1">
+							第1周
+						</option>
+						<option value="2">
+							第2周
+						</option>
+						<option value="3">
+							第3周
+						</option>
+						<option value="4">
+							第4周
+						</option>
+						<option value="5">
+							第5周
+						</option>
+						<option value="6">
+							第6周
+						</option>
+						<option value="7">
+							第7周
+						</option>
+						<option value="8">
+							第8周
+						</option>
+						<option value="9">
+							第9周
+						</option>
+						<option value="10">
+							第10周
+						</option>
+						<option value="11">
+							第11周
+						</option>
+						<option value="12">
+							第12周
+						</option>
+						<option value="13">
+							第13周
+						</option>
+						<option value="14">
+							第14周
+						</option>
+						<option value="15">
+							第15周
+						</option>
+						<option value="16">
+							第16周
+						</option>
+						<option value="17">
+							第17周
+						</option>
+						<option value="18">
+							第18周
+						</option>
+						<option value="19">
+							第19周
+						</option>
+						<option value="20">
+							第20周
+						</option>
+						<option value="21">
+							第21周
+						</option>
+						<option value="22">
+							第22周
+						</option>
+						<option value="23">
+							第23周
+						</option>
+						<option value="24">
+							第24周
+						</option>
+						<option value="25">
+							第25周
+						</option>
+						<option value="26">
+							第26周
+						</option>
+						<option value="27">
+							第27周
+						</option>
+						<option value="28">
+							第28周
+						</option>
+						<option value="29">
+							第29周
+						</option>
+						<option value="30">
+							第30周
+						</option>
+					</select>
+					至
+					<select name="zc2" id="zc2" size="1">
+						<option value="">
+							-请选择-
+						</option>
+						<option value="1">
+							第1周
+						</option>
+						<option value="2">
+							第2周
+						</option>
+						<option value="3">
+							第3周
+						</option>
+						<option value="4">
+							第4周
+						</option>
+						<option value="5">
+							第5周
+						</option>
+						<option value="6">
+							第6周
+						</option>
+						<option value="7">
+							第7周
+						</option>
+						<option value="8">
+							第8周
+						</option>
+						<option value="9">
+							第9周
+						</option>
+						<option value="10">
+							第10周
+						</option>
+						<option value="11">
+							第11周
+						</option>
+						<option value="12">
+							第12周
+						</option>
+						<option value="13">
+							第13周
+						</option>
+						<option value="14">
+							第14周
+						</option>
+						<option value="15">
+							第15周
+						</option>
+						<option value="16">
+							第16周
+						</option>
+						<option value="17">
+							第17周
+						</option>
+						<option value="18">
+							第18周
+						</option>
+						<option value="19">
+							第19周
+						</option>
+						<option value="20">
+							第20周
+						</option>
+						<option value="21">
+							第21周
+						</option>
+						<option value="22">
+							第22周
+						</option>
+						<option value="23">
+							第23周
+						</option>
+						<option value="24">
+							第24周
+						</option>
+						<option value="25">
+							第25周
+						</option>
+						<option value="26">
+							第26周
+						</option>
+						<option value="27">
+							第27周
+						</option>
+						<option value="28">
+							第28周
+						</option>
+						<option value="29">
+							第29周
+						</option>
+						<option value="30">
+							第30周
+						</option>
+					</select>
+				
+					节次:
+				
+					<select name="jc1" size="1" id="jc1">
+						<option value="">
+							-请选择-
+						</option>
+						<option value="1">
+							第一节
+						</option>
+						<option value="2">
+							第二节
+						</option>
+						<option value="3">
+							第三节
+						</option>
+						<option value="4">
+							第四节
+						</option>
+						<option value="5">
+							第五节
+						</option>
+						<option value="6">
+							第六节
+						</option>
+						<option value="7">
+							第七节
+						</option>
+						<option value="8">
+							第八节
+						</option>
+						<option value="9">
+							第九节
+						</option>
+						<option value="10">
+							第十节
+						</option>
+						<option value="11">
+							第十一节
+						</option>
+						<option value="12">
+							第十二节
+						</option>
+						<option value="13">
+							第十三节
+						</option>
+						<option value="14">
+							第十四节
+						</option>
+						<option value="15">
+							第十五节
+						</option>
+					</select>
+					至
+					<select name="jc2" size="1" id="jc2">
+						<option value="">
+							-请选择-
+						</option>
+						<option value="1">
+							第一节
+						</option>
+						<option value="2">
+							第二节
+						</option>
+						<option value="3">
+							第三节
+						</option>
+						<option value="4">
+							第四节
+						</option>
+						<option value="5">
+							第五节
+						</option>
+						<option value="6">
+							第六节
+						</option>
+						<option value="7">
+							第七节
+						</option>
+						<option value="8">
+							第八节
+						</option>
+						<option value="9">
+							第九节
+						</option>
+						<option value="10">
+							第十节
+						</option>
+						<option value="11">
+							第十一节
+						</option>
+						<option value="12">
+							第十二节
+						</option>
+						<option value="13">
+							第十三节
+						</option>
+						<option value="14">
+							第十四节
+						</option>
+						<option value="15">
+							第十五节
+						</option>
+					</select>
+		
+		<input type="button" value="查 询"  class="button" onclick="search(this)"/>&nbsp;
+		
+        </div>
+		</form>
+	<table border="0" width="100%" style="height: 500px;" cellspacing="0" cellpadding="0"  id="Table2">
+			<tr>
+				<td height="100%" id="frmtop" >
+					<iframe  id="fcenter" name="fcenter" 
+						style="height:100%; VISIBILITY: inherit; WIDTH: 100%"></iframe>
+				</td>
+			</tr>
+	</table>
+</div>
+<br />
+
+<div id="Footer1_divCopyright" class="Nsb_pw" style="display:;">
+  <div class="Nsb_rights">Copyright (C) 湖南强智科技发展有限公司 2003-2013 All Rights Reserved 湘ICP 备12010071号</div>
+</div>
+<script language="javascript">
+
+function search(obj){
+	//判断是否选了周次并比较大小
+	var zc1 = $("#zc1").val();
+	var zc2 = $("#zc2").val();
+
+	if(zc1!=""&&zc2!=""){
+		zc1 = parseInt(zc1);
+		zc2 = parseInt(zc2);
+		if(zc1>zc2){
+			alert("开始周次不能大于结束周次");
+			return false;
+		}
+	}
+	
+	var jc1 = $("#jc1").val();
+	var jc2 = $("#jc2").val();
+	if(jc1!=""&&jc2!=""){
+		jc1 = parseInt(jc1);
+		jc2 = parseInt(jc2); 
+		if(jc1>jc2){
+			alert("开始节次不能大于结束节次！");
+			return false;
+		}
+	}
+	document.getElementById('Form1').submit();
+}
+
+
+</script>
+</body>
+</html>

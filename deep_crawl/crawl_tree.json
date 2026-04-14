@@ -1,0 +1,1014 @@
+{
+  "url": "http://172.19.13.62:80/jsxsd",
+  "children": [
+    {
+      "url": "http://172.19.13.62:80/jsxsd/framework/xsMain.jsp",
+      "depth": 0,
+      "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_0\\0__jsxsd_framework_xsMain.jsp.html",
+      "children": [
+        {
+          "url": "http://172.19.13.62:80/jsxsd/xsxk/xklc_list?Ves632DSdyV=NEW_XSD_PYGL",
+          "depth": 1,
+          "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_1\\1__jsxsd_xsxk_xklc_list.html",
+          "children": [
+            {
+              "url": "http://172.19.13.62:80/jsxsd/jspyfa/pyfa_find",
+              "depth": 2,
+              "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_2\\2__jsxsd_jspyfa_pyfa_find.html",
+              "children": [
+                {
+                  "url": "http://172.19.13.62:80/jsxsd/pyfa/pyfazd_query",
+                  "depth": 3,
+                  "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_3\\3__jsxsd_pyfa_pyfazd_query.html",
+                  "children": [
+                    {
+                      "url": "http://172.19.13.62:80/jsxsd/pyfa/xyjdcx",
+                      "depth": 4,
+                      "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_4\\4__jsxsd_pyfa_xyjdcx.html",
+                      "children": [
+                        {
+                          "url": "http://172.19.13.62:80/jsxsd/pyfa/pyfa_query",
+                          "depth": 5,
+                          "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_5\\5__jsxsd_pyfa_pyfa_query.html",
+                          "children": [],
+                          "forms": [],
+                          "data_found": [
+                            "grades"
+                          ]
+                        },
+                        {
+                          "url": "http://172.19.13.62:80/jsxsd/pyfa/txxxjh_query.do",
+                          "depth": 5,
+                          "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_5\\5__jsxsd_pyfa_txxxjh_query.do.html",
+                          "children": [],
+                          "forms": [
+                            {
+                              "url": "http://172.19.13.62:80/jsxsd/pyfa/txxxjh_query.do",
+                              "method": "post",
+                              "inputs": {
+                                "test": {
+                                  "type": "text",
+                                  "value": ""
+                                }
+                              },
+                              "action": ""
+                            }
+                          ],
+                          "data_found": [
+                            "grades"
+                          ]
+                        },
+                        {
+                          "url": "http://172.19.13.62:80/jsxsd/kbcx/kbxx_kc",
+                          "depth": 5,
+                          "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_5\\5__jsxsd_kbcx_kbxx_kc.html",
+                          "children": [],
+                          "forms": [
+                            {
+                              "url": "http://172.19.13.62:80/jsxsd/kbcx/kbxx_kc",
+                              "method": "post",
+                              "inputs": {},
+                              "action": ""
+                            },
+                            {
+                              "url": "http://172.19.13.62:80/jsxsd/kbcx/kbxx_kc_ifr",
+                              "method": "post",
+                              "inputs": {
+                                "xnxqh": {
+                                  "type": "select",
+                                  "value": "",
+                                  "options": [
+                                    "2026-2027-1",
+                                    "2025-2026-2",
+                                    "2025-2026-1",
+                                    "2024-2025-2",
+                                    "2024-2025-1",
+                                    "2023-2024-2",
+                                    "2023-2024-1",
+                                    "2022-2023-2",
+                                    "2022-2023-1",
+                                    "2021-2022-2",
+                                    "2021-2022-1",
+                                    "2020-2021-2",
+                                    "2020-2021-1",
+                                    "2019-2020-2",
+                                    "2019-2020-1",
+                                    "2018-2019-2",
+                                    "2018-2019-1",
+                                    "2017-2018-2",
+                                    "2017-2018-1",
+                                    "2016-2017-2",
+                                    "2016-2017-1",
+                                    "2015-2016-2",
+                                    "2015-2016-1",
+                                    "2014-2015-2",
+                                    "2014-2015-1",
+                                    "2013-2014-2",
+                                    "2013-2014-1",
+                                    "2012-2013-2",
+                                    "2012-2013-1",
+                                    "2011-2012-2",
+                                    "2011-2012-1",
+                                    "2010-2011-2",
+                                    "2010-2011-1",
+                                    "2009-2010-2",
+                                    "2009-2010-1",
+                                    "2008-2009-2",
+                                    "2008-2009-1",
+                                    "2007-2008-2",
+                                    "2007-2008-1",
+                                    "2006-2007-2",
+                                    "2006-2007-1",
+                                    "2005-2006-2",
+                                    "2005-2006-1",
+                                    "2004-2005-2",
+                                    "2004-2005-1",
+                                    "2003-2004-2",
+                                    "2003-2004-1"
+                                  ]
+                                },
+                                "skyx": {
+                                  "type": "select",
+                                  "value": "",
+                                  "options": [
+                                    "10100",
+                                    "11000",
+                                    "01",
+                                    "07",
+                                    "02",
+                                    "06",
+                                    "11",
+                                    "05",
+                                    "03",
+                                    "15",
+                                    "08",
+                                    "21000",
+                                    "09",
+                                    "12",
+                                    "17",
+                                    "10",
+                                    "14",
+                                    "13",
+                                    "36",
+                                    "22300",
+                                    "22400",
+                                    "22700",
+                                    "22800",
+                                    "lVmobpvXTd",
+                                    "rzzhe4mTSY",
+                                    "cxFYqCqIjg",
+                                    "mLdTtgT8eu",
+                                    "8bYdL0jiUL",
+                                    "fextKrl5hV",
+                                    "30800",
+                                    "31000",
+                                    "39"
+                                  ]
+                                },
+                                "kkyx": {
+                                  "type": "select",
+                                  "value": "",
+                                  "options": [
+                                    "10100",
+                                    "33",
+                                    "34",
+                                    "30",
+                                    "11000",
+                                    "40",
+                                    "01",
+                                    "07",
+                                    "02",
+                                    "06",
+                                    "11",
+                                    "05",
+                                    "03",
+                                    "15",
+                                    "08",
+                                    "21000",
+                                    "09",
+                                    "12",
+                                    "17",
+                                    "10",
+                                    "14",
+                                    "13",
+                                    "36",
+                                    "22300",
+                                    "22400",
+                                    "22700",
+                                    "22800",
+                                    "lVmobpvXTd",
+                                    "rzzhe4mTSY",
+                                    "cxFYqCqIjg",
+                                    "mLdTtgT8eu",
+                                    "8bYdL0jiUL",
+                                    "fextKrl5hV",
+                                    "30800",
+                                    "31000",
+                                    "39",
+                                    "31",
+                                    "50500",
+                                    "32"
+                                  ]
+                                },
+                                "zzdKcSX": {
+                                  "type": "select",
+                                  "value": "",
+                                  "options": [
+                                    "1",
+                                    "2",
+                                    "4",
+                                    "9"
+                                  ]
+                                },
+                                "kc": {
+                                  "type": "text",
+                                  "value": ""
+                                },
+                                "zc1": {
+                                  "type": "select",
+                                  "value": "",
+                                  "options": [
+                                    "1",
+                                    "2",
+                                    "3",
+                                    "4",
+                                    "5",
+                                    "6",
+                                    "7",
+                                    "8",
+                                    "9",
+                                    "10",
+                                    "11",
+                                    "12",
+                                    "13",
+                                    "14",
+                                    "15",
+                                    "16",
+                                    "17",
+                                    "18",
+                                    "19",
+                                    "20",
+                                    "21",
+                                    "22",
+                                    "23",
+                                    "24",
+                                    "25",
+                                    "26",
+                                    "27",
+                                    "28",
+                                    "29",
+                                    "30"
+                                  ]
+                                },
+                                "zc2": {
+                                  "type": "select",
+                                  "value": "",
+                                  "options": [
+                                    "1",
+                                    "2",
+                                    "3",
+                                    "4",
+                                    "5",
+                                    "6",
+                                    "7",
+                                    "8",
+                                    "9",
+                                    "10",
+                                    "11",
+                                    "12",
+                                    "13",
+                                    "14",
+                                    "15",
+                                    "16",
+                                    "17",
+                                    "18",
+                                    "19",
+                                    "20",
+                                    "21",
+                                    "22",
+                                    "23",
+                                    "24",
+                                    "25",
+                                    "26",
+                                    "27",
+                                    "28",
+                                    "29",
+                                    "30"
+                                  ]
+                                },
+                                "jc1": {
+                                  "type": "select",
+                                  "value": "",
+                                  "options": [
+                                    "1",
+                                    "2",
+                                    "3",
+                                    "4",
+                                    "5",
+                                    "6",
+                                    "7",
+                                    "8",
+                                    "9",
+                                    "10",
+                                    "11",
+                                    "12",
+                                    "13",
+                                    "14",
+                                    "15"
+                                  ]
+                                },
+                                "jc2": {
+                                  "type": "select",
+                                  "value": "",
+                                  "options": [
+                                    "1",
+                                    "2",
+                                    "3",
+                                    "4",
+                                    "5",
+                                    "6",
+                                    "7",
+                                    "8",
+                                    "9",
+                                    "10",
+                                    "11",
+                                    "12",
+                                    "13",
+                                    "14",
+                                    "15"
+                                  ]
+                                }
+                              },
+                              "action": "/jsxsd/kbcx/kbxx_kc_ifr"
+                            }
+                          ],
+                          "data_found": [
+                            "grades"
+                          ]
+                        },
+                        {
+                          "url": "http://172.19.13.62:80/jsxsd/xsxk/xklc_list",
+                          "depth": 5,
+                          "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_5\\5__jsxsd_xsxk_xklc_list.html",
+                          "children": [],
+                          "forms": [],
+                          "data_found": [
+                            "grades"
+                          ]
+                        },
+                        {
+                          "url": "http://172.19.13.62:80/jsxsd/framework/main.jsp",
+                          "depth": 5,
+                          "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_5\\5__jsxsd_framework_main.jsp.html",
+                          "children": [],
+                          "forms": [],
+                          "data_found": [
+                            "grades"
+                          ]
+                        },
+                        {
+                          "url": "http://172.19.13.62:80/jsxsd/jxzl/jxzl_query?Ves632DSdyV=NEW_XSD_WDZM",
+                          "depth": 5,
+                          "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_5\\5__jsxsd_jxzl_jxzl_query.html",
+                          "children": [],
+                          "forms": [
+                            {
+                              "url": "http://172.19.13.62:80/jsxsd/jxzl/jxzl_query?Ves632DSdyV=NEW_XSD_WDZM",
+                              "method": "post",
+                              "inputs": {},
+                              "action": ""
+                            },
+                            {
+                              "url": "http://172.19.13.62:80/jsxsd/jxzl/jxzl_query?Ves632DSdyV=NEW_XSD_WDZM",
+                              "method": "post",
+                              "inputs": {
+                                "xnxq01id": {
+                                  "type": "select",
+                                  "value": "",
+                                  "options": [
+                                    "2025-2026-2",
+                                    "2025-2026-1",
+                                    "2024-2025-2",
+                                    "2024-2025-1",
+                                    "2023-2024-2",
+                                    "2023-2024-1",
+                                    "2022-2023-2",
+                                    "2022-2023-1",
+                                    "2021-2022-2",
+                                    "2021-2022-1",
+                                    "2020-2021-2",
+                                    "2019-2020-2",
+                                    "2017-2018-2",
+                                    "2016-2017-2",
+                                    "2016-2017-1"
+                                  ]
+                                }
+                              },
+                              "action": ""
+                            }
+                          ],
+                          "data_found": [
+                            "grades"
+                          ]
+                        },
+                        {
+                          "url": "http://172.19.13.62:80/jsxsd/xsxj/xjxxgl.do?Ves632DSdyV=NEW_XSD_XJCJ",
+                          "depth": 5,
+                          "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_5\\5__jsxsd_xsxj_xjxxgl.do.html",
+                          "children": [],
+                          "forms": [
+                            {
+                              "url": "http://172.19.13.62:80/jsxsd/xsxj/xjxxgl.do",
+                              "method": "post",
+                              "inputs": {
+                                "pageIndex": {
+                                  "type": "text",
+                                  "value": "1"
+                                }
+                              },
+                              "action": "/jsxsd/xsxj/xjxxgl.do"
+                            }
+                          ],
+                          "data_found": [
+                            "grades"
+                          ]
+                        },
+                        {
+                          "url": "http://172.19.13.62:80/jsxsd/jsxx/jsxx_query?Ves632DSdyV=NEW_XSD_PYGL",
+                          "depth": 5,
+                          "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_5\\5__jsxsd_jsxx_jsxx_query.html",
+                          "children": [],
+                          "forms": [
+                            {
+                              "url": "http://172.19.13.62:80/jsxsd/jsxx/jsxx_query?Ves632DSdyV=NEW_XSD_PYGL",
+                              "method": "post",
+                              "inputs": {
+                                "jsxm": {
+                                  "type": "text",
+                                  "value": ""
+                                },
+                                "kkyx": {
+                                  "type": "select",
+                                  "value": "",
+                                  "options": [
+                                    "10000",
+                                    "10100",
+                                    "10600",
+                                    "10800",
+                                    "11000",
+                                    "11200",
+                                    "11300",
+                                    "11400",
+                                    "11500",
+                                    "11800",
+                                    "12100",
+                                    "22000",
+                                    "22100",
+                                    "22200",
+                                    "30300",
+                                    "30400",
+                                    "30500",
+                                    "30700",
+                                    "30800",
+                                    "30900",
+                                    "31000",
+                                    "31100",
+                                    "31200",
+                                    "40100",
+                                    "40300",
+                                    "50200",
+                                    "50500",
+                                    "70100",
+                                    "90200",
+                                    "03",
+                                    "05",
+                                    "06",
+                                    "09",
+                                    "12",
+                                    "11",
+                                    "10",
+                                    "30",
+                                    "31",
+                                    "32",
+                                    "33",
+                                    "01",
+                                    "35",
+                                    "14",
+                                    "37",
+                                    "15",
+                                    "17",
+                                    "18",
+                                    "19",
+                                    "39",
+                                    "99",
+                                    "20",
+                                    "40",
+                                    "98",
+                                    "41",
+                                    "ekAYtew1NK",
+                                    "22300",
+                                    "22400",
+                                    "31300",
+                                    "22600",
+                                    "22700",
+                                    "22800",
+                                    "rzzhe4mTSY",
+                                    "cxFYqCqIjg",
+                                    "07",
+                                    "10200",
+                                    "10900",
+                                    "11600",
+                                    "11900",
+                                    "21000",
+                                    "30200",
+                                    "38",
+                                    "22500",
+                                    "oat6Vs3CJa",
+                                    "31500",
+                                    "31600",
+                                    "31700",
+                                    "31800",
+                                    "31900",
+                                    "12200",
+                                    "32000",
+                                    "90300",
+                                    "32100",
+                                    "70200",
+                                    "08",
+                                    "lVmobpvXTd",
+                                    "mLdTtgT8eu",
+                                    "8bYdL0jiUL",
+                                    "fextKrl5hV",
+                                    "02",
+                                    "36",
+                                    "31400",
+                                    "10105",
+                                    "13",
+                                    "34",
+                                    "16",
+                                    "50600"
+                                  ]
+                                }
+                              },
+                              "action": ""
+                            }
+                          ],
+                          "data_found": [
+                            "grades"
+                          ]
+                        }
+                      ],
+                      "forms": [
+                        {
+                          "url": "http://172.19.13.62:80/jsxsd/pyfa/xyjdcx",
+                          "method": "post",
+                          "inputs": {
+                            "xdlx": {
+                              "type": "select",
+                              "value": "",
+                              "options": [
+                                "0",
+                                "1"
+                              ]
+                            }
+                          },
+                          "action": ""
+                        }
+                      ],
+                      "data_found": [
+                        "grades"
+                      ]
+                    }
+                  ],
+                  "forms": [
+                    {
+                      "url": "http://172.19.13.62:80/jsxsd/pyfa/pyfazd_query",
+                      "method": "post",
+                      "inputs": {
+                        "test": {
+                          "type": "text",
+                          "value": ""
+                        },
+                        "tsxxxf": {
+                          "type": "hidden",
+                          "value": ""
+                        }
+                      },
+                      "action": ""
+                    }
+                  ],
+                  "data_found": [
+                    "grades"
+                  ]
+                }
+              ],
+              "forms": [
+                {
+                  "url": "http://172.19.13.62:80/jsxsd/jspyfa/pyfa_find",
+                  "method": "post",
+                  "inputs": {
+                    "xsyx": {
+                      "type": "select",
+                      "value": "",
+                      "options": [
+                        "10100",
+                        "11000",
+                        "01",
+                        "07",
+                        "02",
+                        "06",
+                        "11",
+                        "05",
+                        "03",
+                        "15",
+                        "08",
+                        "21000",
+                        "09",
+                        "12",
+                        "17",
+                        "10",
+                        "14",
+                        "13",
+                        "36",
+                        "22300",
+                        "22400",
+                        "22700",
+                        "22800",
+                        "lVmobpvXTd",
+                        "rzzhe4mTSY",
+                        "cxFYqCqIjg",
+                        "mLdTtgT8eu",
+                        "8bYdL0jiUL",
+                        "fextKrl5hV",
+                        "30800",
+                        "31000",
+                        "39"
+                      ]
+                    },
+                    "xsnj": {
+                      "type": "select",
+                      "value": "",
+                      "options": [
+                        "2025",
+                        "2024",
+                        "2023",
+                        "2022",
+                        "2021",
+                        "2020",
+                        "2019",
+                        "2018",
+                        "2017",
+                        "2016",
+                        "2015",
+                        "2014",
+                        "2013",
+                        "2012",
+                        "2011",
+                        "2010",
+                        "2009",
+                        "2008",
+                        "2007",
+                        "2006",
+                        "2005",
+                        "2004",
+                        "2003",
+                        "2002"
+                      ]
+                    },
+                    "xszy": {
+                      "type": "select",
+                      "value": "",
+                      "options": []
+                    }
+                  },
+                  "action": ""
+                }
+              ],
+              "data_found": [
+                "grades"
+              ]
+            }
+          ],
+          "forms": [],
+          "data_found": [
+            "grades"
+          ]
+        },
+        {
+          "url": "http://172.19.13.62:80/jsxsd/pyfa/pyfa_query?Ves632DSdyV=NEW_XSD_PYGL",
+          "depth": 1,
+          "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_1\\1__jsxsd_pyfa_pyfa_query.html",
+          "children": [],
+          "forms": [],
+          "data_found": [
+            "grades"
+          ]
+        },
+        {
+          "url": "http://172.19.13.62:80/jsxsd/kscj/cjcx_query?Ves632DSdyV=NEW_XSD_XJCJ",
+          "depth": 1,
+          "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_1\\1__jsxsd_kscj_cjcx_query.html",
+          "children": [
+            {
+              "url": "http://172.19.13.62:80/jsxsd/kscj/cjcx_query",
+              "depth": 2,
+              "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_2\\2__jsxsd_kscj_cjcx_query.html",
+              "children": [
+                {
+                  "url": "http://172.19.13.62:80/jsxsd/kscj/djkscj_list",
+                  "depth": 3,
+                  "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_3\\3__jsxsd_kscj_djkscj_list.html",
+                  "children": [
+                    {
+                      "url": "http://172.19.13.62:80/jsxsd/kscj/cjrd_list",
+                      "depth": 4,
+                      "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_4\\4__jsxsd_kscj_cjrd_list.html",
+                      "children": [],
+                      "forms": [
+                        {
+                          "url": "http://172.19.13.62:80/jsxsd/kscj/cjrd_list",
+                          "method": "post",
+                          "inputs": {
+                            "pageIndex": {
+                              "type": "text",
+                              "value": "1"
+                            }
+                          },
+                          "action": ""
+                        }
+                      ],
+                      "data_found": [
+                        "grades"
+                      ]
+                    }
+                  ],
+                  "forms": [],
+                  "data_found": [
+                    "grades"
+                  ]
+                }
+              ],
+              "forms": [
+                {
+                  "url": "http://172.19.13.62:80/jsxsd/kscj/cjcx_query",
+                  "method": "post",
+                  "inputs": {
+                    "kksj": {
+                      "type": "select",
+                      "value": "",
+                      "options": [
+                        "2026-2027-1",
+                        "2025-2026-2",
+                        "2025-2026-1",
+                        "2024-2025-2",
+                        "2024-2025-1",
+                        "2023-2024-2",
+                        "2023-2024-1",
+                        "2022-2023-2",
+                        "2022-2023-1",
+                        "2021-2022-2",
+                        "2021-2022-1",
+                        "2020-2021-2",
+                        "2020-2021-1",
+                        "2019-2020-2",
+                        "2019-2020-1",
+                        "2018-2019-2",
+                        "2018-2019-1",
+                        "2017-2018-2",
+                        "2017-2018-1",
+                        "2016-2017-2",
+                        "2016-2017-1",
+                        "2015-2016-2",
+                        "2015-2016-1",
+                        "2014-2015-2",
+                        "2014-2015-1",
+                        "2013-2014-2",
+                        "2013-2014-1",
+                        "2012-2013-2",
+                        "2012-2013-1",
+                        "2011-2012-2",
+                        "2011-2012-1",
+                        "2010-2011-2",
+                        "2010-2011-1",
+                        "2009-2010-2",
+                        "2009-2010-1",
+                        "2008-2009-2",
+                        "2008-2009-1",
+                        "2007-2008-2",
+                        "2007-2008-1",
+                        "2006-2007-2",
+                        "2006-2007-1",
+                        "2005-2006-2",
+                        "2005-2006-1",
+                        "2004-2005-2",
+                        "2004-2005-1",
+                        "2003-2004-2",
+                        "2003-2004-1"
+                      ]
+                    },
+                    "kcxz": {
+                      "type": "select",
+                      "value": "",
+                      "options": [
+                        "01",
+                        "02",
+                        "03",
+                        "04",
+                        "05",
+                        "06",
+                        "11",
+                        "116",
+                        "146",
+                        "156",
+                        "166",
+                        "176",
+                        "186",
+                        "196",
+                        "197",
+                        "198",
+                        "26",
+                        "36",
+                        "46",
+                        "66",
+                        "86",
+                        "96"
+                      ]
+                    },
+                    "kcmc": {
+                      "type": "text",
+                      "value": ""
+                    },
+                    "fxkc": {
+                      "type": "select",
+                      "value": "",
+                      "options": [
+                        "0",
+                        "1"
+                      ]
+                    },
+                    "xsfs": {
+                      "type": "select",
+                      "value": "",
+                      "options": [
+                        "all",
+                        "max"
+                      ]
+                    }
+                  },
+                  "action": ""
+                }
+              ],
+              "data_found": [
+                "grades"
+              ]
+            }
+          ],
+          "forms": [
+            {
+              "url": "http://172.19.13.62:80/jsxsd/kscj/cjcx_query?Ves632DSdyV=NEW_XSD_XJCJ",
+              "method": "post",
+              "inputs": {
+                "kksj": {
+                  "type": "select",
+                  "value": "",
+                  "options": [
+                    "2026-2027-1",
+                    "2025-2026-2",
+                    "2025-2026-1",
+                    "2024-2025-2",
+                    "2024-2025-1",
+                    "2023-2024-2",
+                    "2023-2024-1",
+                    "2022-2023-2",
+                    "2022-2023-1",
+                    "2021-2022-2",
+                    "2021-2022-1",
+                    "2020-2021-2",
+                    "2020-2021-1",
+                    "2019-2020-2",
+                    "2019-2020-1",
+                    "2018-2019-2",
+                    "2018-2019-1",
+                    "2017-2018-2",
+                    "2017-2018-1",
+                    "2016-2017-2",
+                    "2016-2017-1",
+                    "2015-2016-2",
+                    "2015-2016-1",
+                    "2014-2015-2",
+                    "2014-2015-1",
+                    "2013-2014-2",
+                    "2013-2014-1",
+                    "2012-2013-2",
+                    "2012-2013-1",
+                    "2011-2012-2",
+                    "2011-2012-1",
+                    "2010-2011-2",
+                    "2010-2011-1",
+                    "2009-2010-2",
+                    "2009-2010-1",
+                    "2008-2009-2",
+                    "2008-2009-1",
+                    "2007-2008-2",
+                    "2007-2008-1",
+                    "2006-2007-2",
+                    "2006-2007-1",
+                    "2005-2006-2",
+                    "2005-2006-1",
+                    "2004-2005-2",
+                    "2004-2005-1",
+                    "2003-2004-2",
+                    "2003-2004-1"
+                  ]
+                },
+                "kcxz": {
+                  "type": "select",
+                  "value": "",
+                  "options": [
+                    "01",
+                    "02",
+                    "03",
+                    "04",
+                    "05",
+                    "06",
+                    "11",
+                    "116",
+                    "146",
+                    "156",
+                    "166",
+                    "176",
+                    "186",
+                    "196",
+                    "197",
+                    "198",
+                    "26",
+                    "36",
+                    "46",
+                    "66",
+                    "86",
+                    "96"
+                  ]
+                },
+                "kcmc": {
+                  "type": "text",
+                  "value": ""
+                },
+                "fxkc": {
+                  "type": "select",
+                  "value": "",
+                  "options": [
+                    "0",
+                    "1"
+                  ]
+                },
+                "xsfs": {
+                  "type": "select",
+                  "value": "",
+                  "options": [
+                    "all",
+                    "max"
+                  ]
+                }
+              },
+              "action": ""
+            }
+          ],
+          "data_found": [
+            "grades"
+          ]
+        },
+        {
+          "url": "http://172.19.13.62:80/jsxsd/pyfa/xyjdcx?Ves632DSdyV=NEW_XSD_PYGL",
+          "depth": 1,
+          "filepath": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\deep_crawl\\depth_1\\1__jsxsd_pyfa_xyjdcx.html",
+          "children": [],
+          "forms": [
+            {
+              "url": "http://172.19.13.62:80/jsxsd/pyfa/xyjdcx?Ves632DSdyV=NEW_XSD_PYGL",
+              "method": "post",
+              "inputs": {
+                "xdlx": {
+                  "type": "select",
+                  "value": "",
+                  "options": [
+                    "0",
+                    "1"
+                  ]
+                }
+              },
+              "action": ""
+            }
+          ],
+          "data_found": [
+            "grades"
+          ]
+        }
+      ],
+      "forms": [],
+      "data_found": [
+        "grades"
+      ]
+    }
+  ],
+  "data": {}
+}

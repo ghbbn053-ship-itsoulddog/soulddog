@@ -1,0 +1,4278 @@
+
+
+
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+
+<head id="headerid1">
+	<base target='_self'>
+	<title>教学计划</title>	
+	<meta http-equiv="pragma" content="no-cache">
+	<meta http-equiv="cache-control" content="no-cache">
+	<meta http-equiv="expires" content="0">
+	<meta http-equiv="keywords" content="湖南强智科技教务系统">
+	<meta http-equiv="description" content="湖南强智科技教务系统">
+	<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE8" />
+<script type="text/javascript" src="/jsxsd/js/jquery-min.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/common.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/validate.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/iepngfix_tilebg.js" language="javascript" ></script>
+<link href="/jsxsd/framework/images/common.css" rel="stylesheet" type="text/css" />
+<link href="/jsxsd/framework/images/blue.css" rel="stylesheet" type="text/css" id="link_theme" />
+<link href="/jsxsd/framework/images/workstation.css" rel="stylesheet" type="text/css" /> 
+</head>
+<iframe id="notSession" name="notSession" style="display: none;" src=""></iframe>
+<script type="text/javascript">
+jQuery(document).ready(function(){
+	window.setInterval(function(){
+		 document.getElementById("notSession").src = "/jsxsd/framework/blankPage.jsp";
+	 }, 1000 * 60 * 10);
+});
+</script>
+<style>
+#txk:link {color: #0000FF} /* 未访问的链接 */
+#txk:visited {color: #0000FF} /* 已访问的链接 */
+#txk:hover {color: #FF0000} /* 当有鼠标悬停在链接上 */
+#txk:active {color: #00FF00} /* 被选择的链接 */
+</style>
+<body>
+
+
+
+
+
+
+
+<div class="Nsb_pw">
+  <div class="Nsb_top">
+    <div class="Nsb_top_logo"><table border="0" cellpadding="0" cellspacing="0"><tr><td height="75" valign="middle"><img style="display:;" id="imgLogo" src="/jsxsd/framework/images/index_logo.gif" /></td></tr></table></div>
+    <div class="Nsb_top_menu">        
+        <div id="Top1_divLoginName" class="Nsb_top_menu_nc" style="color: #000000;">张靖(24251102121)</div>
+        <ul>
+            <li><a id="TopUserSetting" info="个人设置" href="#" class="Nsb_top_menu_id"><img src="/jsxsd/framework/images/Nsb_top_p1.jpg" id="Top1_imgTopSmallUserPhoto" /></a></li>
+            <span></span>
+                          
+            
+            <li><a id="TopTheme" info="切换主题" href="#" class="Nsb_top_menu_style" onclick="changeDisplay('divTopTheme')"></a></li>
+            <span id="Top1_LBackManageSpliter"></span>
+            <span id="Top1_LExitSpliter"></span>
+            <li id="Top1_LBackManage">
+            	<a info="个人设置" href="/jsxsd/grsz/grsz_xggrxx.do?Ves632DSdyV=NEW_JSD_WDZM" class="Nsb_top_menu_options"></a>
+            </li>
+            <li id="Top1_LExit"><a info="退出" href="javascript:Logout('/jsxsd');"   class="Nsb_top_menu_exit"></a></li>
+        </ul>            
+     </div>   
+     <div id="divTopTheme" group="topDiv" style="display:none;z-index:10000">      
+        <div class="Nsb_top_c Nsb_top_c3">
+          <ul>
+            <li id="theme_blue" theme="blue" index="1" class="Nsb_top_c3_11" onclick="javascript:changeTheme('/jsxsd','blue',this);"></li>
+            <li id="theme_green" theme="green" index="2" class="Nsb_top_c3_2"  onclick="javascript:changeTheme('/jsxsd','green',this);"></li>
+            <li id="theme_orange" theme="orange" index="3" class="Nsb_top_c3_3" onclick="javascript:changeTheme('/jsxsd','orange',this);"></li>
+            <li id="theme_red" theme="red" index="4" class="Nsb_top_c3_4"  onclick="javascript:changeTheme('/jsxsd','red',this);"></li>
+            <li id="theme_purple" theme="purple" index="5" class="Nsb_top_c3_5" onclick="javascript:changeTheme('/jsxsd','purple',this);"></li>
+            <li id="theme_gray" theme="gray" index="6" class="Nsb_top_c3_6"  onclick="javascript:changeTheme('/jsxsd','gray',this);"></li>
+          </ul>
+        </div>
+     </div>
+   </div>
+</div>
+<div class="Nsb_menu_pw">
+  <div class="Nsb_pw">
+    <div id="divFirstMenuClass" class="Nsb_menu menu_cn">
+      <ul>         
+         <li class="Nsb_menu_li_now" title="首页">
+         	<a class="Nsb_menu_li_h" id="homepage" href="/jsxsd/framework/main.jsp"><span></span></a>
+         </li>
+         
+         	<li title="我的桌面">
+         		<a id="calender_user_schedule" href="/jsxsd/jxzl/jxzl_query?Ves632DSdyV=NEW_XSD_WDZM">我的桌面</a>
+         	</li>
+         
+         	<li title="学籍成绩">
+         		<a id="calender_user_schedule" href="/jsxsd/xsxj/xjxxgl.do?Ves632DSdyV=NEW_XSD_XJCJ">学籍成绩</a>
+         	</li>
+         
+         	<li title="培养管理">
+         		<a id="calender_user_schedule" href="/jsxsd/jsxx/jsxx_query?Ves632DSdyV=NEW_XSD_PYGL">培养管理</a>
+         	</li>
+         
+         	<li title="考试报名">
+         		<a id="calender_user_schedule" href="/jsxsd/xsks/xsksap_query?Ves632DSdyV=NEW_XSD_KSBM">考试报名</a>
+         	</li>
+         
+         	<li title="教学评价">
+         		<a id="calender_user_schedule" href="/jsxsd/xspj/xspj_find.do?Ves632DSdyV=NEW_XSD_JXPJ">教学评价</a>
+         	</li>
+         
+      </ul>
+    </div>
+  </div>
+</div>
+<div class="Nsb_pw">
+
+
+
+
+
+
+
+  
+<div id="LeftMenu1_divChildMenu" class="Nsb_layout_l Nsb_l_list">
+	<div class="Nsb_l_list_top"></div>
+	
+			<h4 class="exam_user_exam">教师查询</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/jsxx/jsxx_query">教师信息查询</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">培养方案</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/jspyfa/pyfa_find">人才培养方案</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/pyfazd_query">我的培养方案</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/xyjdcx">学业进度查询</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/pyfa_query">执行计划</a></li>
+	
+				<li><a class='Nsb_l_list_now' href="/jsxsd/pyfa/txxxjh_query.do">填写教学计划</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">我的课表</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/xskb/xskb_list.do">学期课表</a></li>
+	
+				<li><a  href="/jsxsd/kbcx/kbxx_kc">课程课表</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">选课管理</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/xsxk/xklc_list">学生选课中心</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">辅修管理</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/fxgl/fxbmxx_query">辅修报名</a></li>
+	
+				<li><a  href="/jsxsd/fxgl/fxzcxx">辅修注册</a></li>
+	
+			</ul>
+	
+</div>
+	
+	<div class="Nsb_layout_r">
+	<div class="Nsb_r_title"><a href="/jsxsd/framework/main.jsp">首页</a> » 培养方案 » 填写教学计划</div>
+    <div>
+		<p>&nbsp;</p>
+		 <input class="button" type="button" id="btn_back" value="修改学习计划" onclick="JsMod1('/jsxsd/pyfa/txxxjh_update.do',800,800);"/> 
+		<p>&nbsp;</p>
+	</div>
+	<form target="hideFrame" method=post name=Form1 target=hiddenframe>
+	
+   	<IFRAME id=hiddenframe height=0 src="about:blank" width="100%" name=hiddenframe style="display:none;">
+   	<textarea name="test" id="test" value=''></textarea>
+   	</IFRAME>
+		<table  width="78%" border="0" cellspacing="0" cellpadding="0"  style="margin:auto;">
+			
+		
+			<tr align="center">
+				<td>表二：教学进度计划</td>
+			</tr>
+			<tr>
+	   		<td>
+	   		<TABLE align="center" id='mxh' name='mxh' width="100%" align=center border="1" cellspacing="0" cellpadding="0" class="tableCss" >
+           	<thead bgcolor="#AAAAAA">
+	           	<tr align="center">
+	       			<th rowspan="3">课程<br/>类别</th>
+	       			<th style="word-wrap:break-word; word-break:break-all;width:5px;" rowspan="3" >课<br/>程<br/>模<br/>块</th>
+	       			<th rowspan="3">课程<br/>性质</th> 
+	       			<th rowspan="3">课程<br/>代码</th>
+	       			<th rowspan="3">课程名称</th>
+	       			<th rowspan="3">学分</th>
+	       			<th rowspan="3">授课周数</th>
+	       			<th rowspan="3">总学时</th>
+	       			<th colspan="4">学时分配</th>
+	       			<th colspan="2">开课学期</th>
+	       			<th rowspan="3">建议修读<br>学期</th>
+	       			<th rowspan="3">辅修<br/>课程</th>
+	       			
+	       		</tr>
+	     		<tr align="center">
+	     			<th rowspan="2">理论讲授<br>学时</th>
+	     			<th colspan="3">实践学时</th>
+	     			<th rowspan="2">春季<br/>学期</th>
+	     			<th rowspan="2">秋季<br/>学期</th>
+	     		</tr>
+	     		<tr align="center">
+	     			<th>实验</th>
+	     			<th>实习</th>
+	     			<th>其他</th>
+	     		</tr>
+			</thead>
+			<TBODY>
+				
+				
+					<tr align="center">
+					   
+						  
+								<td style="width:1%;"  rowspan="46">通识课</td>
+						
+					  	
+					
+						
+				  	
+				
+					
+					
+							
+							
+						
+						
+						       
+						  		
+							  	
+							  	
+							  	
+							  	
+							  	
+								<td style="width:1%;" rowspan="13">思政一类</td>						  	
+							  	
+							  									  							  	
+							    
+						
+						
+						
+					     
+							
+						 
+						  
+						      
+						  		
+							  	
+							  	
+							  	
+							  	
+							  	<td rowspan="12">必修</td>
+							  	
+							  
+							
+							
+							
+					  	
+							
+							
+						  	  
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+							  
+								<td>&nbsp;21140043&nbsp;</td>
+							
+								<td>&nbsp;马克思主义基本原理&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;15&nbsp;</td>
+							  	<td>&nbsp;45&nbsp;</td>
+							  	<td>&nbsp;45&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;22140012&nbsp;</td>
+							
+								<td>&nbsp;军事理论&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;15&nbsp;</td>
+							  	<td>&nbsp;30&nbsp;</td>
+							  	<td>&nbsp;30&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;2114005X&nbsp;</td>
+							
+								<td>&nbsp;形势与政策 I&nbsp;</td>
+								<td>&nbsp;.5&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;2114006X&nbsp;</td>
+							
+								<td>&nbsp;形势与政策 II&nbsp;</td>
+								<td>&nbsp;.5&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;2&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21140032&nbsp;</td>
+							
+								<td>&nbsp;思想道德与法治&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;2&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;2114007X&nbsp;</td>
+							
+								<td>&nbsp;形势与政策 III&nbsp;</td>
+								<td>&nbsp;.5&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;3&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;22140013&nbsp;</td>
+							
+								<td>&nbsp;习近平新时代中国特色社会主义思想概论&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;3&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;22140052&nbsp;</td>
+							
+								<td>&nbsp;毛泽东思想和中国特色社会主义理论体系概论&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;3&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;18140023&nbsp;</td>
+							
+								<td>&nbsp;中国近现代史纲要&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;4&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;2114008X&nbsp;</td>
+							
+								<td>&nbsp;形势与政策 IV&nbsp;</td>
+								<td>&nbsp;.5&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;4&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;2114009X&nbsp;</td>
+							
+								<td>&nbsp;形势与政策 V&nbsp;</td>
+								<td>&nbsp;.5&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;5&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;2114010X&nbsp;</td>
+							
+								<td>&nbsp;形势与政策 VI&nbsp;</td>
+								<td>&nbsp;.5&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;6&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 <tr align="center"><td>选修</td>
+							   			 <td colspan="20">见<a href="javascript:JsMod('/jsxsd/pyfa/pyfazd_query_cktxk?type=tsk',900,800);" id="txk">《广东财经大学2024年版通识选修课程设置一览表》</a></td>
+							   		 </tr>
+							   		 
+							   		 
+							 
+						   	
+				
+			   
+							
+							<tr align="center">
+							
+							
+							
+						
+						
+						       
+						  		
+							  	
+							  	
+							  	
+							  	
+							  	
+								<td style="width:1%;" rowspan="10">综合类</td>						  	
+							  	
+							  									  							  	
+							    
+						
+						
+						
+					     
+							
+						 
+						  
+						      
+						  		
+							  	
+							  	
+							  	
+							  	
+							  	<td rowspan="9">必修</td>
+							  	
+							  
+							
+							
+							
+					  	
+							
+							
+						  	  
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+							  
+								<td>&nbsp;23140021&nbsp;</td>
+							
+								<td>&nbsp;国家安全教育&nbsp;</td>
+								<td>&nbsp;1&nbsp;</td>
+							 	<td>&nbsp;15&nbsp;</td>
+							  	<td>&nbsp;15&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16145502&nbsp;</td>
+							
+								<td>&nbsp;大学生心理健康教育&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;15&nbsp;</td>
+							  	<td>&nbsp;30&nbsp;</td>
+							  	<td>&nbsp;30&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;1614150X&nbsp;</td>
+							
+								<td>&nbsp;职业生涯与发展规划&nbsp;</td>
+								<td>&nbsp;.5&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16235102&nbsp;</td>
+							
+								<td>&nbsp;大学语文&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;2&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21300012&nbsp;</td>
+							
+								<td>&nbsp;大学生劳动教育&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;3&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;20000021&nbsp;</td>
+							
+								<td>&nbsp;体质健康教育&nbsp;</td>
+								<td>&nbsp;1&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;3,4&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21060132&nbsp;</td>
+							
+								<td>&nbsp;湾区财经概论&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;4&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;1614480X&nbsp;</td>
+							
+								<td>&nbsp;就业指导&nbsp;</td>
+								<td>&nbsp;.5&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;5&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16141202&nbsp;</td>
+							
+								<td>&nbsp;创业基础&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;6&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 <tr align="center"><td>选修</td>
+							   			 <td colspan="20">见<a href="javascript:JsMod('/jsxsd/pyfa/pyfazd_query_cktxk?type=tsk',900,800);" id="txk">《广东财经大学2024年版通识选修课程设置一览表》</a></td>
+							   		 </tr>
+							   		 
+							   		 
+							 
+						   	
+				
+			   
+							
+							<tr align="center">
+							
+							
+							
+						
+						
+						       
+						  		
+							  	
+							  	
+							  	
+							  	
+							  	
+								<td style="width:1%;" rowspan="5">思政二类</td>						  	
+							  	
+							  									  							  	
+							    
+						
+						
+						
+					     
+							
+						 
+						  
+						      
+						  		
+							  	
+							  	
+							  	
+							  	
+							  	<td rowspan="4">必修</td>
+							  	
+							  
+							
+							
+							
+					  	
+							
+							
+						  	  
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+							  
+								<td>&nbsp;21140122&nbsp;</td>
+							
+								<td>&nbsp;新中国史&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1,2,3,4,5,6,7,8&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21140142&nbsp;</td>
+							
+								<td>&nbsp;社会主义发展史&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1,2,3,4,5,6,7,8&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21140132&nbsp;</td>
+							
+								<td>&nbsp;改革开放史&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1,2,3,4,5,6,7,8&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21140112&nbsp;</td>
+							
+								<td>&nbsp;党史&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1,2,3,4,5,6,7,8&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 <tr align="center"><td>选修</td>
+							   			 <td colspan="20">见<a href="javascript:JsMod('/jsxsd/pyfa/pyfazd_query_cktxk?type=tsk',900,800);" id="txk">《广东财经大学2024年版通识选修课程设置一览表》</a></td>
+							   		 </tr>
+							   		 
+							   		 
+							 
+						   	
+				
+			   
+							
+							<tr align="center">
+							
+							
+							
+						
+						
+						       
+						  		
+							  	
+							  	
+							  	
+							  	
+							  	
+								<td style="width:1%;" rowspan="12">外语类</td>						  	
+							  	
+							  									  							  	
+							    
+						
+						
+						
+					     
+							
+						 
+						  
+						      
+						  		
+							  	
+							  	
+							  	
+							  	
+							  	<td rowspan="11">必修</td>
+							  	
+							  
+							
+							
+							
+					  	
+							
+							
+						  	  
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+							  
+								<td>&nbsp;21090183&nbsp;</td>
+							
+								<td>&nbsp;大学日语 I&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;15&nbsp;</td>
+							  	<td>&nbsp;45&nbsp;</td>
+							  	<td>&nbsp;45&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21090093&nbsp;</td>
+							
+								<td>&nbsp;大学英语 II&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;15&nbsp;</td>
+							  	<td>&nbsp;45&nbsp;</td>
+							  	<td>&nbsp;30&nbsp;</td>
+							  	<td>&nbsp;15&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21090103&nbsp;</td>
+							
+								<td>&nbsp;大学英语 III&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1,2&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21090193&nbsp;</td>
+							
+								<td>&nbsp;大学日语 II&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;2&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21090113&nbsp;</td>
+							
+								<td>&nbsp;大学英语 IV&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;2&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21090123&nbsp;</td>
+							
+								<td>&nbsp;英汉/汉英翻译&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;3&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;22090042&nbsp;</td>
+							
+								<td>&nbsp;大学日语III&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;3&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21090133&nbsp;</td>
+							
+								<td>&nbsp;财经英语&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;3&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;22090021&nbsp;</td>
+							
+								<td>&nbsp;职场英语&nbsp;</td>
+								<td>&nbsp;1&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;4&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;22090052&nbsp;</td>
+							
+								<td>&nbsp;大学日语IV&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;4&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;22090011&nbsp;</td>
+							
+								<td>&nbsp;英语高阶读写&nbsp;</td>
+								<td>&nbsp;1&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;4&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    
+							   		 
+							   		 <tr align="center"><td>选修</td>
+							   			 <td colspan="20">见<a href="javascript:JsMod('/jsxsd/pyfa/pyfazd_query_cktxk?type=tsk',900,800);" id="txk">《广东财经大学2024年版通识选修课程设置一览表》</a></td>
+							   		 </tr>
+							   		 
+							   		 
+							 
+						   	
+				
+			   
+							
+							<tr align="center">
+							
+							
+							
+						
+						
+						       
+						  		
+							  	
+							  	
+								<td style="width:1%;" rowspan="2">运动与健康</td>													  
+							  	
+							  	
+							  	
+							  	
+							  									  							  	
+							    
+						
+						
+						
+					     
+							
+						 
+						  
+						      
+						  		
+							  	
+							  	
+								<td rowspan="1">必修</td>
+							    	
+														
+								<td colspan="20">体育选项8个学分，具体课程设置见<a href="javascript:JsMod('/jsxsd/pyfa/pyfazd_query_cktxk?type=tyk',900,800);"" id="txk">《广东财经大学体育选项课程设置一览表》（同一体育选项课程如考试通过不得再重修）</a></td></tr>
+									
+							  	
+							  	
+							  	
+							  
+							
+							
+							
+					  	
+							
+							
+						  	  
+						  	    
+						  	    
+						  	    
+							    
+							   
+							    
+							   		 
+							   		 <tr align="center"><td>选修</td>
+							   			 <td colspan="20">见<a href="javascript:JsMod('/jsxsd/pyfa/pyfazd_query_cktxk?type=tsk',900,800);" id="txk">《广东财经大学2024年版通识选修课程设置一览表》</a></td>
+							   		 </tr>
+							   		 
+							   		 
+							 
+						   	
+				
+			   
+							
+							<tr align="center">
+							
+							
+							
+						
+						
+						       
+						  		
+							  	
+							  	
+							  	
+							  	
+							  	 <td style="word-wrap:break-word;word-break:break-all;width:5px;" rowspan="1">跨学科、跨专业</td>
+							  	
+							  	
+							  									  							  	
+							    
+						
+						
+						
+					     
+							
+						 
+						  
+						      
+						  		
+							  	
+							  	
+							  	
+							  	
+							  	<td rowspan="1">选修</td>
+							  	
+							  
+							
+							
+							
+					  	
+							
+							
+						  	  
+						  	    
+						  	    <td colspan="20">&nbsp;见其他专业人才培养方案中开设的学科基础课和专业课（不含同一专业不同方向的课程）&nbsp;</td></tr>
+						  	    
+						  	    
+						  	    
+							    
+							   
+							    	 
+							 
+						   	
+				
+			   
+							
+							<tr align="center">
+							
+							
+							
+						
+						
+						       
+						  		
+							  	
+							  	
+							  	
+							  	
+							  	 <td style="word-wrap:break-word;word-break:break-all;width:5px;" rowspan="1">法治与社会</td>
+							  	
+							  	
+							  									  							  	
+							    
+						
+						
+						
+					     
+							
+						 
+						  
+						      
+						  		
+							  	
+							  	
+							  	
+							  	
+							  	<td rowspan="1">选修</td>
+							  	
+							  
+							
+							
+							
+					  	
+							
+							
+						  	  
+						  	    
+						  	    <td colspan="20">&nbsp;见<a href="javascript:JsMod('${pageContext.request.contextPath}/pyfa/pyfazd_query_cktxk?type=tsk">《广东财经大学2024年版通识选修课程设置一览表》</a>&nbsp;</td></tr>
+						  	    
+						  	    
+						  	    
+							    
+							   
+							    	 
+							 
+						   	
+				
+			   
+							
+							<tr align="center">
+							
+							
+							
+						
+						
+						       
+						  		
+							  	
+							  	
+							  	
+							  	
+							  	 <td style="word-wrap:break-word;word-break:break-all;width:5px;" rowspan="1">思维与方法</td>
+							  	
+							  	
+							  									  							  	
+							    
+						
+						
+						
+					     
+							
+						 
+						  
+						      
+						  		
+							  	
+							  	
+							  	
+							  	
+							  	<td rowspan="1">选修</td>
+							  	
+							  
+							
+							
+							
+					  	
+							
+							
+						  	  
+						  	    
+						  	    <td colspan="20">&nbsp;见<a href="javascript:JsMod('${pageContext.request.contextPath}/pyfa/pyfazd_query_cktxk?type=tsk">《广东财经大学2024年版通识选修课程设置一览表》</a>&nbsp;</td></tr>
+						  	    
+						  	    
+						  	    
+							    
+							   
+							    	 
+							 
+						   	
+				
+			   
+			 
+					<tr align="center">
+					   
+						  
+					  	
+					  	 <td style="width:1%;" rowspan="11">学科基础课</td>
+					  	
+					
+						
+				  	
+				
+					
+					
+							
+							
+						
+						
+						
+							  <td style="width:1%;" rowspan="7">基础课</td>
+						
+						
+					     
+							
+						 
+						  
+							
+							  	<td rowspan="7">必修</td>
+							  
+							
+					  	
+							
+							
+						  	  
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+							  
+								<td>&nbsp;18110043&nbsp;</td>
+							
+								<td>&nbsp;程序设计基础&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;15&nbsp;</td>
+							  	<td>&nbsp;45&nbsp;</td>
+							  	<td>&nbsp;31&nbsp;</td>
+							  	<td>&nbsp;14&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;是&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21110073&nbsp;</td>
+							
+								<td>&nbsp;大学物理&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;42&nbsp;</td>
+							  	<td>&nbsp;6&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;2&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16162804&nbsp;</td>
+							
+								<td>&nbsp;数据结构&nbsp;</td>
+								<td>&nbsp;4&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;64&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;3&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;是&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;19110034&nbsp;</td>
+							
+								<td>&nbsp;计算机组成原理&nbsp;</td>
+								<td>&nbsp;4&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;64&nbsp;</td>
+							  	<td>&nbsp;44&nbsp;</td>
+							  	<td>&nbsp;20&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;3&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;是&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;22110063&nbsp;</td>
+							
+								<td>&nbsp;操作系统&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;36&nbsp;</td>
+							  	<td>&nbsp;12&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;4&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;是&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16020003&nbsp;</td>
+							
+								<td>&nbsp;数据库原理&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;24&nbsp;</td>
+							  	<td>&nbsp;24&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;4&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16168003&nbsp;</td>
+							
+								<td>&nbsp;计算机网络&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;40&nbsp;</td>
+							  	<td>&nbsp;8&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;5&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;是&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+				
+			   
+							
+							<tr align="center">
+							
+							
+							
+						
+						
+						
+							  <td style="width:1%;" rowspan="4">数学课</td>
+						
+						
+					     
+							
+						 
+						  
+							
+							  	<td rowspan="4">必修</td>
+							  
+							
+					  	
+							
+							
+						  	  
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+							  
+								<td>&nbsp;16013406&nbsp;</td>
+							
+								<td>&nbsp;高等数学 I&nbsp;</td>
+								<td>&nbsp;6&nbsp;</td>
+							 	<td>&nbsp;15&nbsp;</td>
+							  	<td>&nbsp;90&nbsp;</td>
+							  	<td>&nbsp;90&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;是&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16043004&nbsp;</td>
+							
+								<td>&nbsp;高等数学II&nbsp;</td>
+								<td>&nbsp;4&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;64&nbsp;</td>
+							  	<td>&nbsp;64&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;2&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;是&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16071103&nbsp;</td>
+							
+								<td>&nbsp;线性代数a&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;3&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;是&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16130004&nbsp;</td>
+							
+								<td>&nbsp;概率论与数理统计b&nbsp;</td>
+								<td>&nbsp;4&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;64&nbsp;</td>
+							  	<td>&nbsp;64&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;4&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+				
+			   
+			 
+					<tr align="center">
+					   
+						  
+					  	
+					  	 <td style="width:1%;" rowspan="32">专业课</td>
+					  	
+					
+						
+				  	
+				
+					
+					
+							
+							
+						
+						
+						
+							  <td style="width:1%;" rowspan="10">专业基础</td>
+						
+						
+					     
+							
+						 
+						  
+							
+							  	<td rowspan="10">必修</td>
+							  
+							
+					  	
+							
+							
+						  	  
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+							  
+								<td>&nbsp;22110031&nbsp;</td>
+							
+								<td>&nbsp;计算机科学导论&nbsp;</td>
+								<td>&nbsp;1&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;10&nbsp;</td>
+							  	<td>&nbsp;6&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;1&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;是&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;22110083&nbsp;</td>
+							
+								<td>&nbsp;数字逻辑与系统设计&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;30&nbsp;</td>
+							  	<td>&nbsp;18&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;2&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16106904&nbsp;</td>
+							
+								<td>&nbsp;面向对象程序设计&nbsp;</td>
+								<td>&nbsp;4&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;64&nbsp;</td>
+							  	<td>&nbsp;42&nbsp;</td>
+							  	<td>&nbsp;22&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;2&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16046404&nbsp;</td>
+							
+								<td>&nbsp;离散数学&nbsp;</td>
+								<td>&nbsp;4&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;64&nbsp;</td>
+							  	<td>&nbsp;64&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;3&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16084903&nbsp;</td>
+							
+								<td>&nbsp;编译原理&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;42&nbsp;</td>
+							  	<td>&nbsp;6&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;4&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;是&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16158603&nbsp;</td>
+							
+								<td>&nbsp;算法分析与设计&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;36&nbsp;</td>
+							  	<td>&nbsp;12&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;5&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;是&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16238402&nbsp;</td>
+							
+								<td>&nbsp;linux应用开发&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;5&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16159703&nbsp;</td>
+							
+								<td>&nbsp;软件工程&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;36&nbsp;</td>
+							  	<td>&nbsp;12&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;5&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;是&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21110082&nbsp;</td>
+							
+								<td>&nbsp;AI处理器架构与编程&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;6&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16069703&nbsp;</td>
+							
+								<td>&nbsp;人工智能基础&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;36&nbsp;</td>
+							  	<td>&nbsp;12&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;6&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+				
+			   
+							
+							<tr align="center">
+							
+							
+							
+						
+						
+						
+							  <td style="width:1%;" rowspan="10">综合运用</td>
+						
+						
+					     
+							
+						 
+						  
+							
+							  	<td rowspan="10">必修</td>
+							  
+							
+					  	
+							
+							
+						  	  
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+							  
+								<td>&nbsp;22140042&nbsp;</td>
+							
+								<td>&nbsp;思想政治综合实践（毛概、德法各1学分）&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;3&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;32&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;2&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16056602&nbsp;</td>
+							
+								<td>&nbsp;编程拓展课程设计&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;3&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;22110011&nbsp;</td>
+							
+								<td>&nbsp;湾区经济与社会实践调查Ⅰ&nbsp;</td>
+								<td>&nbsp;1&nbsp;</td>
+							 	<td>&nbsp;2&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;4&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16026502&nbsp;</td>
+							
+								<td>&nbsp;数据结构课程设计&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;4&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16030202&nbsp;</td>
+							
+								<td>&nbsp;综合课程设计Ⅰ&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;5&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16126902&nbsp;</td>
+							
+								<td>&nbsp;综合课程设计Ⅱ&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;6&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;22110021&nbsp;</td>
+							
+								<td>&nbsp;湾区经济与社会实践调查Ⅱ&nbsp;</td>
+								<td>&nbsp;1&nbsp;</td>
+							 	<td>&nbsp;2&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;6&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21110132&nbsp;</td>
+							
+								<td>&nbsp;智能系统课程设计&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;6&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16240404&nbsp;</td>
+							
+								<td>&nbsp;毕业实习&nbsp;</td>
+								<td>&nbsp;4&nbsp;</td>
+							 	<td>&nbsp;10&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;7&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16235305&nbsp;</td>
+							
+								<td>&nbsp;毕业设计&nbsp;</td>
+								<td>&nbsp;5&nbsp;</td>
+							 	<td>&nbsp;5&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;8&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;是&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+				
+			   
+							
+							<tr align="center">
+							
+							
+							
+						
+						
+						
+							  <td style="width:1%;" rowspan="12">专业任选</td>
+						
+						
+					     
+							
+						 
+						  
+							
+							  	<td rowspan="12">选修</td>
+							  
+							
+					  	
+							
+							
+						  	  
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+							  
+								<td>&nbsp;21110102&nbsp;</td>
+							
+								<td>&nbsp;大数据分析与挖掘&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;22&nbsp;</td>
+							  	<td>&nbsp;10&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;5&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16168202&nbsp;</td>
+							
+								<td>&nbsp;网络规划与管理&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;20&nbsp;</td>
+							  	<td>&nbsp;12&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;5&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16158003&nbsp;</td>
+							
+								<td>&nbsp;软件构件与中间件技术&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;20&nbsp;</td>
+							  	<td>&nbsp;28&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;5&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21110062&nbsp;</td>
+							
+								<td>&nbsp;区块链技术&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;20&nbsp;</td>
+							  	<td>&nbsp;12&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;5&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16147703&nbsp;</td>
+							
+								<td>&nbsp;移动应用开发&nbsp;</td>
+								<td>&nbsp;3&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;48&nbsp;</td>
+							  	<td>&nbsp;28&nbsp;</td>
+							  	<td>&nbsp;20&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;6&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16140002&nbsp;</td>
+							
+								<td>&nbsp;软件项目管理&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;6&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16078002&nbsp;</td>
+							
+								<td>&nbsp;云计算体系架构&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;6&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21110122&nbsp;</td>
+							
+								<td>&nbsp;AI+金融&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;6&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;21110092&nbsp;</td>
+							
+								<td>&nbsp;物联网技术&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;22&nbsp;</td>
+							  	<td>&nbsp;10&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;6&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16171701&nbsp;</td>
+							
+								<td>&nbsp;计算机前沿技术专题&nbsp;</td>
+								<td>&nbsp;1&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;16&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;7&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;16047202&nbsp;</td>
+							
+								<td>&nbsp;云规划与管理&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;7&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+						  	    
+						  	    
+						  	    
+						  	  
+						  	   
+						  	  	
+								<tr align="center">
+								
+							  
+								<td>&nbsp;22110082&nbsp;</td>
+							
+								<td>&nbsp;智能交互技术实践&nbsp;</td>
+								<td>&nbsp;2&nbsp;</td>
+							 	<td>&nbsp;8&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+							  	<td>&nbsp;0&nbsp;</td>
+							  	<td>&nbsp;32&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								<td>&nbsp;0&nbsp;</td>
+								
+							  
+								
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							    
+						  	    
+						  	    <td>&nbsp;&nbsp;</td>							  	   
+						  	    	
+							  	<td >
+							  	    &nbsp;7&nbsp;
+
+							  	</td>
+							   	<td>&nbsp;否&nbsp;</td>
+							   
+							   	
+					            </tr>
+					           
+							    
+							   
+							    	 
+							 
+						   	
+				
+			   
+			 
+			 <tr>
+			     <td colspan="100"><br/><p align="" style="margin-top: 0px; margin-bottom: 0px; text-align: justify;">备注：港澳台生</p>
+<p align="" style="margin-top: 0px; margin-bottom: 0px; text-align: justify;">（1）港澳台学生须修读“中国概况”、“中国特色社会主义理论与实践”两门国情类必修课，可以免修通识必修课模块中“思政一类”课程。港澳台学生国情教育必修课程：①中国概况，课程代码为18140124，4学分，第5学期开设。②中国特色社会主义理论与实践，课程代码为18140133，3学分，第6学期开设。</p>
+（2）港澳台学生可在国情教育学习平台学习相应课程作为国情类选修课，获得学时证明后可减免通识选修课程总学分2学分，具体说明见教务处网站通知。<br><br/></td>
+			 </tr>
+         	</TBODY>
+          	</TABLE>
+			</td>	  
+      	</tr>
+		</table>
+		<br/>
+		<table>
+        <tr>
+         <td>&nbsp;&nbsp;&nbsp;&nbsp;<b>导师建议：</b></td>
+         <td>
+         <textarea rows="5" cols="94" readonly="readonly"></textarea>
+         </td>
+        </tr>
+        </table>   	
+		<br>
+</FORM>	
+</div>
+</div>
+<br />
+
+<div id="Footer1_divCopyright" class="Nsb_pw" style="display:;">
+  <div class="Nsb_rights">Copyright (C) 湖南强智科技发展有限公司 2003-2013 All Rights Reserved 湘ICP 备12010071号</div>
+</div>
+<script language="javascript">
+function JsMod1(url,val1,val2){
+   window.open(url,"lalla");
+}
+//合并学年学期列
+//jQuery("#dataList").rowspan(1);
+</script>
+</body>
+</html>

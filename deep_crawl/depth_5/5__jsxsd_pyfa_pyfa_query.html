@@ -1,0 +1,1619 @@
+
+  
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+
+<head id="headerid1">
+	<base target='_self'>
+	<title>执行计划</title>	
+	<meta http-equiv="pragma" content="no-cache">
+	<meta http-equiv="cache-control" content="no-cache">
+	<meta http-equiv="expires" content="0">
+	<meta http-equiv="keywords" content="湖南强智科技教务系统">
+	<meta http-equiv="description" content="湖南强智科技教务系统">
+	<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE8" />
+<script type="text/javascript" src="/jsxsd/js/jquery-min.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/common.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/validate.js" language="javascript" ></script>
+<script type="text/javascript" src="/jsxsd/js/iepngfix_tilebg.js" language="javascript" ></script>
+<link href="/jsxsd/framework/images/common.css" rel="stylesheet" type="text/css" />
+<link href="/jsxsd/framework/images/blue.css" rel="stylesheet" type="text/css" id="link_theme" />
+<link href="/jsxsd/framework/images/workstation.css" rel="stylesheet" type="text/css" /> 
+</head>
+<iframe id="notSession" name="notSession" style="display: none;" src=""></iframe>
+<script type="text/javascript">
+jQuery(document).ready(function(){
+	window.setInterval(function(){
+		 document.getElementById("notSession").src = "/jsxsd/framework/blankPage.jsp";
+	 }, 1000 * 60 * 10);
+});
+</script>
+<body>
+
+
+
+
+
+
+
+<div class="Nsb_pw">
+  <div class="Nsb_top">
+    <div class="Nsb_top_logo"><table border="0" cellpadding="0" cellspacing="0"><tr><td height="75" valign="middle"><img style="display:;" id="imgLogo" src="/jsxsd/framework/images/index_logo.gif" /></td></tr></table></div>
+    <div class="Nsb_top_menu">        
+        <div id="Top1_divLoginName" class="Nsb_top_menu_nc" style="color: #000000;">张靖(24251102121)</div>
+        <ul>
+            <li><a id="TopUserSetting" info="个人设置" href="#" class="Nsb_top_menu_id"><img src="/jsxsd/framework/images/Nsb_top_p1.jpg" id="Top1_imgTopSmallUserPhoto" /></a></li>
+            <span></span>
+                          
+            
+            <li><a id="TopTheme" info="切换主题" href="#" class="Nsb_top_menu_style" onclick="changeDisplay('divTopTheme')"></a></li>
+            <span id="Top1_LBackManageSpliter"></span>
+            <span id="Top1_LExitSpliter"></span>
+            <li id="Top1_LBackManage">
+            	<a info="个人设置" href="/jsxsd/grsz/grsz_xggrxx.do?Ves632DSdyV=NEW_JSD_WDZM" class="Nsb_top_menu_options"></a>
+            </li>
+            <li id="Top1_LExit"><a info="退出" href="javascript:Logout('/jsxsd');"   class="Nsb_top_menu_exit"></a></li>
+        </ul>            
+     </div>   
+     <div id="divTopTheme" group="topDiv" style="display:none;z-index:10000">      
+        <div class="Nsb_top_c Nsb_top_c3">
+          <ul>
+            <li id="theme_blue" theme="blue" index="1" class="Nsb_top_c3_11" onclick="javascript:changeTheme('/jsxsd','blue',this);"></li>
+            <li id="theme_green" theme="green" index="2" class="Nsb_top_c3_2"  onclick="javascript:changeTheme('/jsxsd','green',this);"></li>
+            <li id="theme_orange" theme="orange" index="3" class="Nsb_top_c3_3" onclick="javascript:changeTheme('/jsxsd','orange',this);"></li>
+            <li id="theme_red" theme="red" index="4" class="Nsb_top_c3_4"  onclick="javascript:changeTheme('/jsxsd','red',this);"></li>
+            <li id="theme_purple" theme="purple" index="5" class="Nsb_top_c3_5" onclick="javascript:changeTheme('/jsxsd','purple',this);"></li>
+            <li id="theme_gray" theme="gray" index="6" class="Nsb_top_c3_6"  onclick="javascript:changeTheme('/jsxsd','gray',this);"></li>
+          </ul>
+        </div>
+     </div>
+   </div>
+</div>
+<div class="Nsb_menu_pw">
+  <div class="Nsb_pw">
+    <div id="divFirstMenuClass" class="Nsb_menu menu_cn">
+      <ul>         
+         <li class="Nsb_menu_li_now" title="首页">
+         	<a class="Nsb_menu_li_h" id="homepage" href="/jsxsd/framework/main.jsp"><span></span></a>
+         </li>
+         
+         	<li title="我的桌面">
+         		<a id="calender_user_schedule" href="/jsxsd/jxzl/jxzl_query?Ves632DSdyV=NEW_XSD_WDZM">我的桌面</a>
+         	</li>
+         
+         	<li title="学籍成绩">
+         		<a id="calender_user_schedule" href="/jsxsd/xsxj/xjxxgl.do?Ves632DSdyV=NEW_XSD_XJCJ">学籍成绩</a>
+         	</li>
+         
+         	<li title="培养管理">
+         		<a id="calender_user_schedule" href="/jsxsd/jsxx/jsxx_query?Ves632DSdyV=NEW_XSD_PYGL">培养管理</a>
+         	</li>
+         
+         	<li title="考试报名">
+         		<a id="calender_user_schedule" href="/jsxsd/xsks/xsksap_query?Ves632DSdyV=NEW_XSD_KSBM">考试报名</a>
+         	</li>
+         
+         	<li title="教学评价">
+         		<a id="calender_user_schedule" href="/jsxsd/xspj/xspj_find.do?Ves632DSdyV=NEW_XSD_JXPJ">教学评价</a>
+         	</li>
+         
+      </ul>
+    </div>
+  </div>
+</div>
+<div class="Nsb_pw">
+	
+
+
+
+
+
+
+  
+<div id="LeftMenu1_divChildMenu" class="Nsb_layout_l Nsb_l_list">
+	<div class="Nsb_l_list_top"></div>
+	
+			<h4 class="exam_user_exam">教师查询</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/jsxx/jsxx_query">教师信息查询</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">培养方案</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/jspyfa/pyfa_find">人才培养方案</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/pyfazd_query">我的培养方案</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/xyjdcx">学业进度查询</a></li>
+	
+				<li><a class='Nsb_l_list_now' href="/jsxsd/pyfa/pyfa_query">执行计划</a></li>
+	
+				<li><a  href="/jsxsd/pyfa/txxxjh_query.do">填写教学计划</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">我的课表</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/xskb/xskb_list.do">学期课表</a></li>
+	
+				<li><a  href="/jsxsd/kbcx/kbxx_kc">课程课表</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">选课管理</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/xsxk/xklc_list">学生选课中心</a></li>
+	
+			</ul>
+	
+			<h4 class="exam_user_exam">辅修管理</h4>
+			<ul>			
+	
+				<li><a  href="/jsxsd/fxgl/fxbmxx_query">辅修报名</a></li>
+	
+				<li><a  href="/jsxsd/fxgl/fxzcxx">辅修注册</a></li>
+	
+			</ul>
+	
+</div>
+	<div class="Nsb_layout_r">
+	<div class="Nsb_r_title"><a href="/jsxsd/framework/main.jsp">首页</a> » 培养方案 » 执行计划</div>
+	<table id="dataList" width="100%" border="0" cellspacing="0" cellpadding="0" class="Nsb_r_list Nsb_table">
+		<tr>
+            <th class="Nsb_r_list_thb" scope="col">序号</th>
+			<th class="Nsb_r_list_thb" scope="col">开课学期</th>
+			<th class="Nsb_r_list_thb" scope="col">课程编号</th>
+			<th class="Nsb_r_list_thb" scope="col">课程名称</th>
+			<th class="Nsb_r_list_thb" scope="col">开课单位</th>
+			<th class="Nsb_r_list_thb" scope="col">学分</th>
+			<th class="Nsb_r_list_thb" scope="col">总学时</th>
+			<th class="Nsb_r_list_thb" scope="col">考核方式</th>
+			<th class="Nsb_r_list_thb" scope="col">课程属性</th>
+			<th class="Nsb_r_list_thb" scope="col">是否考试</th>
+		</tr>
+		
+		<tr>
+			<td>1</td>
+			<td>2024-2025-1</td>
+			<td align="left">16013406</td>
+			<td align="left">高等数学 I</td>
+			<td align="left">统计与数据科学学院</td>
+			<td>6</td>
+			<td>90</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>2</td>
+			<td>2024-2025-1</td>
+			<td align="left">1614150X</td>
+			<td align="left">职业生涯与发展规划</td>
+			<td align="left">学生工作部（武装部、学生就业指导中心）</td>
+			<td>0.5</td>
+			<td>8</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>3</td>
+			<td>2024-2025-1</td>
+			<td align="left">16145502</td>
+			<td align="left">大学生心理健康教育</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>30</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>4</td>
+			<td>2024-2025-1</td>
+			<td align="left">18110043</td>
+			<td align="left">程序设计基础</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>3</td>
+			<td>45</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>5</td>
+			<td>2024-2025-1</td>
+			<td align="left">21090093</td>
+			<td align="left">大学英语 II</td>
+			<td align="left">外国语学院</td>
+			<td>3</td>
+			<td>45</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>6</td>
+			<td>2024-2025-1</td>
+			<td align="left">21090103</td>
+			<td align="left">大学英语 III</td>
+			<td align="left">外国语学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>7</td>
+			<td>2024-2025-1</td>
+			<td align="left">21090183</td>
+			<td align="left">大学日语 I</td>
+			<td align="left">外国语学院</td>
+			<td>3</td>
+			<td>45</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>8</td>
+			<td>2024-2025-1</td>
+			<td align="left">21140043</td>
+			<td align="left">马克思主义基本原理</td>
+			<td align="left">马克思主义学院</td>
+			<td>3</td>
+			<td>45</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>9</td>
+			<td>2024-2025-1</td>
+			<td align="left">2114005X</td>
+			<td align="left">形势与政策 I</td>
+			<td align="left">马克思主义学院</td>
+			<td>0.5</td>
+			<td>8</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>10</td>
+			<td>2024-2025-1</td>
+			<td align="left">21140112</td>
+			<td align="left">党史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>11</td>
+			<td>2024-2025-1</td>
+			<td align="left">21140122</td>
+			<td align="left">新中国史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>12</td>
+			<td>2024-2025-1</td>
+			<td align="left">21140132</td>
+			<td align="left">改革开放史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>13</td>
+			<td>2024-2025-1</td>
+			<td align="left">21140142</td>
+			<td align="left">社会主义发展史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>14</td>
+			<td>2024-2025-1</td>
+			<td align="left">22110031</td>
+			<td align="left">计算机科学导论</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>1</td>
+			<td>16</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>15</td>
+			<td>2024-2025-1</td>
+			<td align="left">22140012</td>
+			<td align="left">军事理论</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>30</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>16</td>
+			<td>2024-2025-1</td>
+			<td align="left">23140021</td>
+			<td align="left">国家安全教育</td>
+			<td align="left">马克思主义学院</td>
+			<td>1</td>
+			<td>15</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>17</td>
+			<td>2024-2025-2</td>
+			<td align="left">16043004</td>
+			<td align="left">高等数学II</td>
+			<td align="left">统计与数据科学学院</td>
+			<td>4</td>
+			<td>64</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>18</td>
+			<td>2024-2025-2</td>
+			<td align="left">16106904</td>
+			<td align="left">面向对象程序设计</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>4</td>
+			<td>64</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>19</td>
+			<td>2024-2025-2</td>
+			<td align="left">16235102</td>
+			<td align="left">大学语文</td>
+			<td align="left">人文与传播学院（网络传播学院、出版学院）</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>20</td>
+			<td>2024-2025-2</td>
+			<td align="left">21090103</td>
+			<td align="left">大学英语 III</td>
+			<td align="left">外国语学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>21</td>
+			<td>2024-2025-2</td>
+			<td align="left">21090113</td>
+			<td align="left">大学英语 IV</td>
+			<td align="left">外国语学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>22</td>
+			<td>2024-2025-2</td>
+			<td align="left">21090193</td>
+			<td align="left">大学日语 II</td>
+			<td align="left">外国语学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>23</td>
+			<td>2024-2025-2</td>
+			<td align="left">21110073</td>
+			<td align="left">大学物理</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>24</td>
+			<td>2024-2025-2</td>
+			<td align="left">21140032</td>
+			<td align="left">思想道德与法治</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>25</td>
+			<td>2024-2025-2</td>
+			<td align="left">2114006X</td>
+			<td align="left">形势与政策 II</td>
+			<td align="left">马克思主义学院</td>
+			<td>0.5</td>
+			<td>8</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>26</td>
+			<td>2024-2025-2</td>
+			<td align="left">21140112</td>
+			<td align="left">党史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>27</td>
+			<td>2024-2025-2</td>
+			<td align="left">21140122</td>
+			<td align="left">新中国史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>28</td>
+			<td>2024-2025-2</td>
+			<td align="left">21140132</td>
+			<td align="left">改革开放史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>29</td>
+			<td>2024-2025-2</td>
+			<td align="left">21140142</td>
+			<td align="left">社会主义发展史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>30</td>
+			<td>2024-2025-2</td>
+			<td align="left">22110083</td>
+			<td align="left">数字逻辑与系统设计</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>31</td>
+			<td>2024-2025-2</td>
+			<td align="left">22140042</td>
+			<td align="left">思想政治综合实践（毛概、德法各1学分）</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>32</td>
+			<td>2025-2026-1</td>
+			<td align="left">16046404</td>
+			<td align="left">离散数学</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>4</td>
+			<td>64</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>33</td>
+			<td>2025-2026-1</td>
+			<td align="left">16056602</td>
+			<td align="left">编程拓展课程设计</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>34</td>
+			<td>2025-2026-1</td>
+			<td align="left">16071103</td>
+			<td align="left">线性代数a</td>
+			<td align="left">统计与数据科学学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>35</td>
+			<td>2025-2026-1</td>
+			<td align="left">16162804</td>
+			<td align="left">数据结构</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>4</td>
+			<td>64</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>36</td>
+			<td>2025-2026-1</td>
+			<td align="left">19110034</td>
+			<td align="left">计算机组成原理</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>4</td>
+			<td>64</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>37</td>
+			<td>2025-2026-1</td>
+			<td align="left">20000021</td>
+			<td align="left">体质健康教育</td>
+			<td align="left">体育学院</td>
+			<td>1</td>
+			<td>16</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>38</td>
+			<td>2025-2026-1</td>
+			<td align="left">21090123</td>
+			<td align="left">英汉/汉英翻译</td>
+			<td align="left">外国语学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>39</td>
+			<td>2025-2026-1</td>
+			<td align="left">21090133</td>
+			<td align="left">财经英语</td>
+			<td align="left">外国语学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>40</td>
+			<td>2025-2026-1</td>
+			<td align="left">2114007X</td>
+			<td align="left">形势与政策 III</td>
+			<td align="left">马克思主义学院</td>
+			<td>0.5</td>
+			<td>8</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>41</td>
+			<td>2025-2026-1</td>
+			<td align="left">21140112</td>
+			<td align="left">党史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>42</td>
+			<td>2025-2026-1</td>
+			<td align="left">21140122</td>
+			<td align="left">新中国史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>43</td>
+			<td>2025-2026-1</td>
+			<td align="left">21140132</td>
+			<td align="left">改革开放史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>44</td>
+			<td>2025-2026-1</td>
+			<td align="left">21140142</td>
+			<td align="left">社会主义发展史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>45</td>
+			<td>2025-2026-1</td>
+			<td align="left">21300012</td>
+			<td align="left">大学生劳动教育</td>
+			<td align="left">人力资源学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>46</td>
+			<td>2025-2026-1</td>
+			<td align="left">22090042</td>
+			<td align="left">大学日语III</td>
+			<td align="left">外国语学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>47</td>
+			<td>2025-2026-1</td>
+			<td align="left">22140013</td>
+			<td align="left">习近平新时代中国特色社会主义思想概论</td>
+			<td align="left">马克思主义学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>48</td>
+			<td>2025-2026-1</td>
+			<td align="left">22140052</td>
+			<td align="left">毛泽东思想和中国特色社会主义理论体系概论</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>49</td>
+			<td>2025-2026-2</td>
+			<td align="left">16020003</td>
+			<td align="left">数据库原理</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>50</td>
+			<td>2025-2026-2</td>
+			<td align="left">16026502</td>
+			<td align="left">数据结构课程设计</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>51</td>
+			<td>2025-2026-2</td>
+			<td align="left">16084903</td>
+			<td align="left">编译原理</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>52</td>
+			<td>2025-2026-2</td>
+			<td align="left">16130004</td>
+			<td align="left">概率论与数理统计b</td>
+			<td align="left">统计与数据科学学院</td>
+			<td>4</td>
+			<td>64</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>53</td>
+			<td>2025-2026-2</td>
+			<td align="left">18140023</td>
+			<td align="left">中国近现代史纲要</td>
+			<td align="left">马克思主义学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>54</td>
+			<td>2025-2026-2</td>
+			<td align="left">20000021</td>
+			<td align="left">体质健康教育</td>
+			<td align="left">体育学院</td>
+			<td>1</td>
+			<td>16</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>55</td>
+			<td>2025-2026-2</td>
+			<td align="left">21060132</td>
+			<td align="left">湾区财经概论</td>
+			<td align="left">教务部</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>56</td>
+			<td>2025-2026-2</td>
+			<td align="left">2114008X</td>
+			<td align="left">形势与政策 IV</td>
+			<td align="left">马克思主义学院</td>
+			<td>0.5</td>
+			<td>8</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>57</td>
+			<td>2025-2026-2</td>
+			<td align="left">21140112</td>
+			<td align="left">党史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>58</td>
+			<td>2025-2026-2</td>
+			<td align="left">21140122</td>
+			<td align="left">新中国史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>59</td>
+			<td>2025-2026-2</td>
+			<td align="left">21140132</td>
+			<td align="left">改革开放史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>60</td>
+			<td>2025-2026-2</td>
+			<td align="left">21140142</td>
+			<td align="left">社会主义发展史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>61</td>
+			<td>2025-2026-2</td>
+			<td align="left">22090011</td>
+			<td align="left">英语高阶读写</td>
+			<td align="left">外国语学院</td>
+			<td>1</td>
+			<td>16</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>62</td>
+			<td>2025-2026-2</td>
+			<td align="left">22090021</td>
+			<td align="left">职场英语</td>
+			<td align="left">外国语学院</td>
+			<td>1</td>
+			<td>16</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>63</td>
+			<td>2025-2026-2</td>
+			<td align="left">22090052</td>
+			<td align="left">大学日语IV</td>
+			<td align="left">外国语学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>64</td>
+			<td>2025-2026-2</td>
+			<td align="left">22110011</td>
+			<td align="left">湾区经济与社会实践调查Ⅰ</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>1</td>
+			<td>0</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>65</td>
+			<td>2025-2026-2</td>
+			<td align="left">22110063</td>
+			<td align="left">操作系统</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>66</td>
+			<td>2026-2027-1</td>
+			<td align="left">16030202</td>
+			<td align="left">综合课程设计Ⅰ</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>67</td>
+			<td>2026-2027-1</td>
+			<td align="left">1614480X</td>
+			<td align="left">就业指导</td>
+			<td align="left">学生工作部（武装部、学生就业指导中心）</td>
+			<td>0.5</td>
+			<td>8</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>68</td>
+			<td>2026-2027-1</td>
+			<td align="left">16158003</td>
+			<td align="left">软件构件与中间件技术</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>选修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>69</td>
+			<td>2026-2027-1</td>
+			<td align="left">16158603</td>
+			<td align="left">算法分析与设计</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>70</td>
+			<td>2026-2027-1</td>
+			<td align="left">16159703</td>
+			<td align="left">软件工程</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>71</td>
+			<td>2026-2027-1</td>
+			<td align="left">16168003</td>
+			<td align="left">计算机网络</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>72</td>
+			<td>2026-2027-1</td>
+			<td align="left">16168202</td>
+			<td align="left">网络规划与管理</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>选修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>73</td>
+			<td>2026-2027-1</td>
+			<td align="left">16238402</td>
+			<td align="left">linux应用开发</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>74</td>
+			<td>2026-2027-1</td>
+			<td align="left">21110062</td>
+			<td align="left">区块链技术</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>选修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>75</td>
+			<td>2026-2027-1</td>
+			<td align="left">21110102</td>
+			<td align="left">大数据分析与挖掘</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>选修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>76</td>
+			<td>2026-2027-1</td>
+			<td align="left">2114009X</td>
+			<td align="left">形势与政策 V</td>
+			<td align="left">马克思主义学院</td>
+			<td>0.5</td>
+			<td>8</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>77</td>
+			<td>2026-2027-1</td>
+			<td align="left">21140112</td>
+			<td align="left">党史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>78</td>
+			<td>2026-2027-1</td>
+			<td align="left">21140122</td>
+			<td align="left">新中国史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>79</td>
+			<td>2026-2027-1</td>
+			<td align="left">21140132</td>
+			<td align="left">改革开放史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>80</td>
+			<td>2026-2027-1</td>
+			<td align="left">21140142</td>
+			<td align="left">社会主义发展史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>81</td>
+			<td>2026-2027-2</td>
+			<td align="left">16069703</td>
+			<td align="left">人工智能基础</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>82</td>
+			<td>2026-2027-2</td>
+			<td align="left">16078002</td>
+			<td align="left">云计算体系架构</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>选修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>83</td>
+			<td>2026-2027-2</td>
+			<td align="left">16126902</td>
+			<td align="left">综合课程设计Ⅱ</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>84</td>
+			<td>2026-2027-2</td>
+			<td align="left">16140002</td>
+			<td align="left">软件项目管理</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>选修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>85</td>
+			<td>2026-2027-2</td>
+			<td align="left">16141202</td>
+			<td align="left">创业基础</td>
+			<td align="left">工商管理学院（粤商学院、创新创业学院）</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>86</td>
+			<td>2026-2027-2</td>
+			<td align="left">16147703</td>
+			<td align="left">移动应用开发</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>3</td>
+			<td>48</td>
+			<td>考试</td>
+			<td>选修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>87</td>
+			<td>2026-2027-2</td>
+			<td align="left">21110082</td>
+			<td align="left">AI处理器架构与编程</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>88</td>
+			<td>2026-2027-2</td>
+			<td align="left">21110092</td>
+			<td align="left">物联网技术</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>选修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>89</td>
+			<td>2026-2027-2</td>
+			<td align="left">21110122</td>
+			<td align="left">AI+金融</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>选修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>90</td>
+			<td>2026-2027-2</td>
+			<td align="left">21110132</td>
+			<td align="left">智能系统课程设计</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>91</td>
+			<td>2026-2027-2</td>
+			<td align="left">2114010X</td>
+			<td align="left">形势与政策 VI</td>
+			<td align="left">马克思主义学院</td>
+			<td>0.5</td>
+			<td>8</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>92</td>
+			<td>2026-2027-2</td>
+			<td align="left">21140112</td>
+			<td align="left">党史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>93</td>
+			<td>2026-2027-2</td>
+			<td align="left">21140122</td>
+			<td align="left">新中国史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>94</td>
+			<td>2026-2027-2</td>
+			<td align="left">21140132</td>
+			<td align="left">改革开放史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>95</td>
+			<td>2026-2027-2</td>
+			<td align="left">21140142</td>
+			<td align="left">社会主义发展史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>96</td>
+			<td>2026-2027-2</td>
+			<td align="left">22110021</td>
+			<td align="left">湾区经济与社会实践调查Ⅱ</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>1</td>
+			<td>0</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>97</td>
+			<td>2027-2028-1</td>
+			<td align="left">16047202</td>
+			<td align="left">云规划与管理</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考查</td>
+			<td>选修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>98</td>
+			<td>2027-2028-1</td>
+			<td align="left">16171701</td>
+			<td align="left">计算机前沿技术专题</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>1</td>
+			<td>16</td>
+			<td>考查</td>
+			<td>选修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>99</td>
+			<td>2027-2028-1</td>
+			<td align="left">16240404</td>
+			<td align="left">毕业实习</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>4</td>
+			<td>0</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>100</td>
+			<td>2027-2028-1</td>
+			<td align="left">21140112</td>
+			<td align="left">党史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>101</td>
+			<td>2027-2028-1</td>
+			<td align="left">21140122</td>
+			<td align="left">新中国史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>102</td>
+			<td>2027-2028-1</td>
+			<td align="left">21140132</td>
+			<td align="left">改革开放史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>103</td>
+			<td>2027-2028-1</td>
+			<td align="left">21140142</td>
+			<td align="left">社会主义发展史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>104</td>
+			<td>2027-2028-1</td>
+			<td align="left">22110082</td>
+			<td align="left">智能交互技术实践</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考查</td>
+			<td>选修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>105</td>
+			<td>2027-2028-2</td>
+			<td align="left">16235305</td>
+			<td align="left">毕业设计</td>
+			<td align="left">大数据与人工智能学院</td>
+			<td>5</td>
+			<td>0</td>
+			<td>考查</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>106</td>
+			<td>2027-2028-2</td>
+			<td align="left">21140112</td>
+			<td align="left">党史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>107</td>
+			<td>2027-2028-2</td>
+			<td align="left">21140122</td>
+			<td align="left">新中国史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>108</td>
+			<td>2027-2028-2</td>
+			<td align="left">21140132</td>
+			<td align="left">改革开放史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+		<tr>
+			<td>109</td>
+			<td>2027-2028-2</td>
+			<td align="left">21140142</td>
+			<td align="left">社会主义发展史</td>
+			<td align="left">马克思主义学院</td>
+			<td>2</td>
+			<td>32</td>
+			<td>考试</td>
+			<td>必修</td>
+			<td>是</td>
+		</tr>
+		
+	</table>
+	</div>
+</div>
+<br />
+
+<div id="Footer1_divCopyright" class="Nsb_pw" style="display:;">
+  <div class="Nsb_rights">Copyright (C) 湖南强智科技发展有限公司 2003-2013 All Rights Reserved 湘ICP 备12010071号</div>
+</div>
+<script language="javascript">
+loadjs();
+function loadjs(){
+if( ''!=''){
+alert('');
+}
+
+}
+
+//合并学年学期列
+jQuery("#dataList").rowspan(1);
+</script>
+</body>
+</html>

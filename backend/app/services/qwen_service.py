@@ -82,17 +82,13 @@ class QwenService:
                 "type": "function",
                 "function": {
                     "name": "query_schedule",
-                    "description": "查询学生的课程表，可按学期和周次筛选",
+                    "description": "查询学生的课程表，可按学期筛选",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "semester": {
                                 "type": "string",
                                 "description": "学期，如 2024-2025-2（可选）"
-                            },
-                            "week": {
-                                "type": "string",
-                                "description": "周次，如 1、2（可选）"
                             }
                         },
                         "required": []
@@ -354,8 +350,7 @@ class QwenService:
             
             elif func_name == "query_schedule":
                 result = scraper.get_schedule(
-                    semester=args.get("semester", ""),
-                    week=args.get("week", "")
+                    semester=args.get("semester", "")
                 )
                 if result.get("success"):
                     return {
