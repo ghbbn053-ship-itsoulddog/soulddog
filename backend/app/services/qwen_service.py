@@ -127,6 +127,23 @@ class QwenService:
             {
                 "type": "function",
                 "function": {
+                    "name": "query_training_plan",
+                    "description": "查询学生的培养方案，包括课程体系结构、各学期课程安排、学分要求、必修/选修课列表等",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "semester": {
+                                "type": "string",
+                                "description": "学期，如 2024-2025-1（可选，不指定则返回所有学期）"
+                            }
+                        },
+                        "required": []
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "refresh_all_data",
                     "description": "重新爬取教务系统最新数据，当用户要求刷新或更新数据时使用",
                     "parameters": {
@@ -379,6 +396,24 @@ class QwenService:
                 result = scraper.get_academic_progress()
                 if result.get("success"):
                     return result.get("data", {})
+                return {"error": result.get("message", "查询失败")}
+            
+            elif func_name == "query_training_plan":
+                result = scraper.get_my_training_plan()
+                if result.get("success"):
+                    data = result.get("data", {})
+                    courses = data.get("课程列表", [])
+                    
+                    # 如果指定了学期，过滤
+                    semester_filter = args.get("semester", "")
+                    if semester_filter:
+                        courses = [c for c in courses if c.get("学期") == semester_filter]
+                    
+                    return {
+                        "培养方案": courses,
+                        "总课程数": len(courses),
+                        "学期分布": list(set(c.get("学期", "") for c in courses))
+                    }
                 return {"error": result.get("message", "查询失败")}
             
             elif func_name == "refresh_all_data":
