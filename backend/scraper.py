@@ -679,6 +679,15 @@ class JwxtScraper:
                     if not td_cells:
                         continue
             
+                    # 过滤掉隐藏的 input 标签（有些行会有 <input type="hidden">）
+                    td_cells = [td for td in td_cells if td.find('input', type='hidden') is None]
+                    if not td_cells:
+                        continue
+                    
+                    # 调试日志：打印前 5 行的 td 数量
+                    if len(plan_data["课程列表"]) < 3:
+                        logger.debug(f"【培养方案】行解析: td数量={len(td_cells)}, cat_rem={cat_rem}, nat_rem={nat_rem}, mod_rem={mod_rem}")
+            
                     ci = 0  # 当前 td 下标
             
                     # 处理课程类别列（rowspan 追踪）
