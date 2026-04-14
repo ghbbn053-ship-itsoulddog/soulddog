@@ -3,6 +3,8 @@
 <cite>
 **本文档引用的文件**
 - [frontend/src/app/chat/page.tsx](file://frontend/src/app/chat/page.tsx)
+- [frontend/src/app/login/page.tsx](file://frontend/src/app/login/page.tsx)
+- [frontend/src/middleware.ts](file://frontend/src/middleware.ts)
 - [backend/app/api/chat.py](file://backend/app/api/chat.py)
 - [backend/app/models/conversation.py](file://backend/app/models/conversation.py)
 - [backend/app/services/vector_store.py](file://backend/app/services/vector_store.py)
@@ -15,6 +17,13 @@
 - [package.json](file://package.json)
 - [backend/requirements.txt](file://backend/requirements.txt)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 更新了会话管理增强机制，包括localStorage持久化和自动恢复功能
+- 新增了会话清理和恢复逻辑的详细说明
+- 完善了用户认证和会话状态管理的文档
+- 增强了用户体验优化部分的内容
 
 ## 目录
 1. [简介](#简介)
@@ -31,6 +40,8 @@
 
 智能教务系统AI助手是一个基于Next.js和FastAPI构建的现代化校园AI助手应用。该系统提供了完整的AI聊天界面，支持实时对话、对话历史管理和RAG（检索增强生成）功能。系统采用前后端分离架构，前端使用React和TypeScript，后端使用Python和FastAPI，实现了从用户认证到AI对话的完整业务流程。
 
+**更新** 系统现已增强了会话管理功能，实现了智能的会话持久化和自动恢复机制，显著提升了用户体验。
+
 ## 项目结构
 
 该项目采用清晰的分层架构，主要分为前端和后端两个部分：
@@ -40,38 +51,42 @@ graph TB
 subgraph "前端 (Frontend)"
 A[Next.js 应用]
 B[聊天页面]
-C[UI 组件库]
-D[全局样式]
+C[登录页面]
+D[中间件]
+E[UI 组件库]
+F[全局样式]
 end
 subgraph "后端 (Backend)"
-E[FastAPI 应用]
-F[聊天API]
-G[数据模型]
-H[向量存储服务]
-I[教育数据服务]
+G[FastAPI 应用]
+H[聊天API]
+I[数据模型]
+J[向量存储服务]
+K[教育数据服务]
 end
 subgraph "数据库"
-J[PostgreSQL]
-K[Milvus 向量数据库]
+L[PostgreSQL]
+M[Milvus 向量数据库]
 end
-A --> E
+A --> G
 B --> A
 C --> A
 D --> A
-E --> J
-E --> K
-F --> G
-F --> H
-F --> I
+E --> A
+F --> A
+G --> L
+G --> M
+H --> I
+H --> J
+H --> K
 ```
 
 **图表来源**
-- [frontend/src/app/chat/page.tsx:1-491](file://frontend/src/app/chat/page.tsx#L1-L491)
-- [backend/app/api/chat.py:1-224](file://backend/app/api/chat.py#L1-L224)
+- [frontend/src/app/chat/page.tsx:1-513](file://frontend/src/app/chat/page.tsx#L1-L513)
+- [backend/app/api/chat.py:1-249](file://backend/app/api/chat.py#L1-L249)
 
 **章节来源**
-- [frontend/src/app/chat/page.tsx:1-491](file://frontend/src/app/chat/page.tsx#L1-L491)
-- [backend/app/api/chat.py:1-224](file://backend/app/api/chat.py#L1-L224)
+- [frontend/src/app/chat/page.tsx:1-513](file://frontend/src/app/chat/page.tsx#L1-L513)
+- [backend/app/api/chat.py:1-249](file://backend/app/api/chat.py#L1-L249)
 
 ## 核心组件
 
@@ -85,6 +100,7 @@ F --> I
 - **对话历史**：完整的对话记录和管理功能
 - **用户认证**：基于学号的简单认证机制
 - **快捷问题**：预设的常见问题模板
+- **会话持久化**：自动保存和恢复对话状态
 
 #### UI组件架构：
 
@@ -96,6 +112,7 @@ class ChatPage {
 +useState isLoading
 +useState conversations
 +useState currentConversationId
++useState username
 +useRef messagesEndRef
 +useRef inputRef
 +scrollToBottom()
@@ -106,6 +123,7 @@ class ChatPage {
 +newConversation()
 +selectConversation()
 +deleteConversation()
++handleLogout()
 }
 class Message {
 +number id
@@ -125,10 +143,44 @@ Message --> Conversation : belongs_to
 ```
 
 **图表来源**
-- [frontend/src/app/chat/page.tsx:19-31](file://frontend/src/app/chat/page.tsx#L19-L31)
+- [frontend/src/app/chat/page.tsx:25-38](file://frontend/src/app/chat/page.tsx#L25-L38)
 
 **章节来源**
-- [frontend/src/app/chat/page.tsx:33-491](file://frontend/src/app/chat/page.tsx#L33-L491)
+- [frontend/src/app/chat/page.tsx:40-513](file://frontend/src/app/chat/page.tsx#L40-L513)
+
+### 会话管理增强
+
+**更新** 系统现在实现了完整的会话管理增强功能：
+
+#### 会话持久化机制：
+- **localStorage集成**：自动保存当前对话ID到浏览器本地存储
+- **自动恢复功能**：页面加载时自动恢复之前的对话状态
+- **跨页面保持**：用户离开页面后返回时自动恢复对话
+- **状态同步**：当前会话ID与UI状态保持同步
+
+#### 会话恢复流程：
+
+```mermaid
+sequenceDiagram
+participant U as 用户
+participant LS as localStorage
+participant CP as ChatPage组件
+participant API as 后端API
+U->>LS : 访问聊天页面
+LS-->>CP : 读取current_conversation_id
+CP->>CP : 解析会话ID
+CP->>API : 调用fetchHistory(会话ID)
+API-->>CP : 返回对话历史
+CP->>CP : 更新UI状态
+CP->>U : 显示恢复的对话
+```
+
+**图表来源**
+- [frontend/src/app/chat/page.tsx:189-209](file://frontend/src/app/chat/page.tsx#L189-L209)
+- [frontend/src/app/chat/page.tsx:218-225](file://frontend/src/app/chat/page.tsx#L218-L225)
+
+**章节来源**
+- [frontend/src/app/chat/page.tsx:189-225](file://frontend/src/app/chat/page.tsx#L189-L225)
 
 ### 后端API架构
 
@@ -174,7 +226,7 @@ CONVERSATION ||--o{ MESSAGE : contains
 - [backend/app/models/conversation.py:11-42](file://backend/app/models/conversation.py#L11-L42)
 
 **章节来源**
-- [backend/app/api/chat.py:45-224](file://backend/app/api/chat.py#L45-L224)
+- [backend/app/api/chat.py:46-249](file://backend/app/api/chat.py#L46-L249)
 - [backend/app/models/conversation.py:11-42](file://backend/app/models/conversation.py#L11-L42)
 
 ## 架构概览
@@ -187,39 +239,43 @@ subgraph "客户端层"
 A[浏览器]
 B[Next.js 应用]
 C[聊天界面]
+D[中间件]
+E[localStorage]
 end
 subgraph "API网关层"
-D[Nginx 反向代理]
-E[CORS 中间件]
+F[Nginx 反向代理]
+G[CORS 中间件]
 end
 subgraph "业务逻辑层"
-F[FastAPI 应用]
-G[聊天服务]
-H[认证服务]
-I[RAG 服务]
+H[FastAPI 应用]
+I[聊天服务]
+J[认证服务]
+K[RAG 服务]
 end
 subgraph "数据存储层"
-J[PostgreSQL 数据库]
-K[Milvus 向量数据库]
-L[Redis 缓存]
+L[PostgreSQL 数据库]
+M[Milvus 向量数据库]
+N[Redis 缓存]
 end
 A --> B
 B --> D
 D --> E
 E --> F
 F --> G
-F --> H
-F --> I
-G --> J
-G --> K
-G --> L
+G --> H
+H --> I
 H --> J
-I --> K
+H --> K
+I --> L
+I --> M
+I --> N
+J --> L
+K --> M
 ```
 
 **图表来源**
 - [backend/main.py:39-79](file://backend/main.py#L39-L79)
-- [backend/app/api/chat.py:14-15](file://backend/app/api/chat.py#L14-L15)
+- [frontend/src/middleware.ts:1-48](file://frontend/src/middleware.ts#L1-L48)
 
 ## 详细组件分析
 
@@ -247,12 +303,14 @@ VS-->>API : 返回相关文档
 API->>API : 调用AI模型生成回复
 API->>DB : 保存AI回复
 API-->>C : 返回AI回复
+C->>C : 更新currentConversationId
+C->>C : 保存到localStorage
 C->>C : 更新UI显示
 ```
 
 **图表来源**
-- [frontend/src/app/chat/page.tsx:89-143](file://frontend/src/app/chat/page.tsx#L89-L143)
-- [backend/app/api/chat.py:45-154](file://backend/app/api/chat.py#L45-L154)
+- [frontend/src/app/chat/page.tsx:95-150](file://frontend/src/app/chat/page.tsx#L95-L150)
+- [backend/app/api/chat.py:46-172](file://backend/app/api/chat.py#L46-L172)
 
 #### 对话历史管理流程：
 
@@ -282,12 +340,53 @@ F --> O
 ```
 
 **图表来源**
-- [frontend/src/app/chat/page.tsx:70-87](file://frontend/src/app/chat/page.tsx#L70-L87)
-- [backend/app/api/chat.py:181-204](file://backend/app/api/chat.py#L181-L204)
+- [frontend/src/app/chat/page.tsx:76-93](file://frontend/src/app/chat/page.tsx#L76-L93)
+- [backend/app/api/chat.py:206-229](file://backend/app/api/chat.py#L206-L229)
 
 **章节来源**
-- [frontend/src/app/chat/page.tsx:70-179](file://frontend/src/app/chat/page.tsx#L70-L179)
-- [backend/app/api/chat.py:156-224](file://backend/app/api/chat.py#L156-L224)
+- [frontend/src/app/chat/page.tsx:76-150](file://frontend/src/app/chat/page.tsx#L76-L150)
+- [backend/app/api/chat.py:181-249](file://backend/app/api/chat.py#L181-L249)
+
+### 会话管理增强机制
+
+**更新** 会话管理现在包含以下增强功能：
+
+#### 会话持久化策略：
+- **localStorage存储**：使用`current_conversation_id`键存储当前会话ID
+- **自动保存**：当`currentConversationId`变化时自动保存到localStorage
+- **自动恢复**：页面加载时从localStorage读取并恢复会话状态
+- **状态同步**：确保UI状态与localStorage保持一致
+
+#### 会话恢复流程：
+
+```mermaid
+flowchart TD
+A[页面加载] --> B{检查localStorage}
+B --> |存在用户名| C[读取用户名]
+C --> D{存在会话ID?}
+D --> |是| E[读取会话ID]
+E --> F[解析为数字]
+F --> G{ID有效?}
+G --> |是| H[设置currentConversationId]
+H --> I[延迟加载历史]
+I --> J[fetchHistory会话ID]
+G --> |否| K[继续正常流程]
+D --> |否| K
+B --> |不存在用户名| L[跳转到登录页]
+```
+
+**图表来源**
+- [frontend/src/app/chat/page.tsx:189-209](file://frontend/src/app/chat/page.tsx#L189-L209)
+
+#### 会话清理机制：
+- **新建对话**：清除localStorage中的会话ID
+- **删除对话**：自动清理相关会话数据
+- **退出登录**：清除用户名和会话ID
+- **状态同步**：确保localStorage与UI状态一致
+
+**章节来源**
+- [frontend/src/app/chat/page.tsx:160-187](file://frontend/src/app/chat/page.tsx#L160-L187)
+- [frontend/src/app/chat/page.tsx:218-234](file://frontend/src/app/chat/page.tsx#L218-L234)
 
 ### 实时消息交互机制
 
@@ -315,7 +414,7 @@ end
 ```
 
 **章节来源**
-- [frontend/src/app/chat/page.tsx:89-143](file://frontend/src/app/chat/page.tsx#L89-L143)
+- [frontend/src/app/chat/page.tsx:95-150](file://frontend/src/app/chat/page.tsx#L95-L150)
 
 ### 对话历史管理
 
@@ -330,8 +429,8 @@ end
 - **性能优化**：大量消息时的虚拟滚动考虑
 
 **章节来源**
-- [backend/app/api/chat.py:88-96](file://backend/app/api/chat.py#L88-L96)
-- [frontend/src/app/chat/page.tsx:47-54](file://frontend/src/app/chat/page.tsx#L47-L54)
+- [backend/app/api/chat.py:92-96](file://backend/app/api/chat.py#L92-L96)
+- [frontend/src/app/chat/page.tsx:53-60](file://frontend/src/app/chat/page.tsx#L53-L60)
 
 ### AI回复处理流程
 
@@ -353,7 +452,7 @@ J --> K[返回客户端]
 ```
 
 **图表来源**
-- [backend/app/api/chat.py:97-124](file://backend/app/api/chat.py#L97-L124)
+- [backend/app/api/chat.py:123-146](file://backend/app/api/chat.py#L123-L146)
 
 #### 错误处理机制：
 - **HTTP异常**：统一的HTTP状态码处理
@@ -362,7 +461,7 @@ J --> K[返回客户端]
 - **网络异常**：重试机制和用户提示
 
 **章节来源**
-- [backend/app/api/chat.py:149-153](file://backend/app/api/chat.py#L149-L153)
+- [backend/app/api/chat.py:174-178](file://backend/app/api/chat.py#L174-L178)
 
 ### 用户输入验证和消息格式化
 
@@ -379,7 +478,7 @@ J --> K[返回客户端]
 - **换行处理**：保持原始格式
 
 **章节来源**
-- [frontend/src/app/chat/page.tsx:90-101](file://frontend/src/app/chat/page.tsx#L90-L101)
+- [frontend/src/app/chat/page.tsx:96-106](file://frontend/src/app/chat/page.tsx#L96-L106)
 
 ## 依赖关系分析
 
@@ -466,6 +565,11 @@ F --> I
 - **渐进式加载**：消息的逐步显示
 - **并发请求**：多个API请求的并发处理
 
+#### 会话管理优化：
+- **延迟加载**：会话恢复时的延迟加载避免阻塞
+- **状态同步**：localStorage操作的节流处理
+- **内存管理**：及时清理不需要的会话数据
+
 ### 后端性能优化：
 
 #### 数据库优化：
@@ -486,6 +590,7 @@ F --> I
 - **消息发送失败**：检查网络连接和API可达性
 - **界面卡顿**：监控消息数量和渲染性能
 - **样式异常**：验证Tailwind配置和CSS类名
+- **会话恢复失败**：检查localStorage访问权限
 
 #### 后端问题：
 - **数据库连接失败**：检查连接字符串和权限
@@ -497,9 +602,14 @@ F --> I
 - **内存泄漏**：监控组件生命周期和事件监听器
 - **并发问题**：检查API限流和资源竞争
 
+#### 会话管理问题：
+- **会话丢失**：检查localStorage存储容量和权限
+- **恢复延迟**：监控网络请求和API响应时间
+- **状态不同步**：检查effect依赖和状态更新逻辑
+
 **章节来源**
-- [frontend/src/app/chat/page.tsx:65-67](file://frontend/src/app/chat/page.tsx#L65-L67)
-- [backend/app/api/chat.py:176-178](file://backend/app/api/chat.py#L176-L178)
+- [frontend/src/app/chat/page.tsx:189-209](file://frontend/src/app/chat/page.tsx#L189-L209)
+- [backend/app/api/chat.py:206-229](file://backend/app/api/chat.py#L206-L229)
 
 ## 结论
 
@@ -510,11 +620,19 @@ F --> I
 - **用户体验**：响应式设计和流畅的交互体验
 - **功能完整**：从认证到AI对话的完整业务流程
 - **可扩展性**：模块化的组件设计和清晰的依赖关系
+- **会话管理增强**：智能的会话持久化和自动恢复机制
+
+### 会话管理增强：
+- **智能持久化**：自动保存当前对话状态到localStorage
+- **无缝恢复**：用户返回页面时自动恢复之前的对话
+- **状态同步**：确保UI状态与本地存储保持一致
+- **清理机制**：完善的会话清理和数据管理
 
 ### 改进建议：
 - **实时通信**：考虑引入WebSocket实现真正的实时聊天
 - **性能优化**：实施虚拟滚动和更高效的缓存策略
 - **监控完善**：增加详细的性能指标和错误追踪
 - **安全性增强**：加强输入验证和API安全防护
+- **会话管理优化**：进一步优化会话恢复的性能和可靠性
 
-该系统为校园AI助手应用提供了一个坚实的技术基础，能够支持未来更多的功能扩展和性能优化需求。
+该系统为校园AI助手应用提供了一个坚实的技术基础，能够支持未来更多的功能扩展和性能优化需求。会话管理增强功能显著提升了用户体验，使用户能够在不同页面间无缝切换而不会丢失对话状态。

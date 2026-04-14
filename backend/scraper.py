@@ -474,6 +474,7 @@ class JwxtScraper:
             logger.info(f"【课表调试】请求URL: {url}")
 
             # 构建表单数据（根据真实HTML表单结构）
+            # 注意：当semester为空时，不传递xnxq01id参数，服务器会返回默认学期（当前学期）
             data = {
                 "cj0701id": "",
                 "demo": "",
@@ -482,9 +483,13 @@ class JwxtScraper:
             if semester:
                 data["xnxq01id"] = semester
                 logger.info(f"【课表调试】查询学期: {semester}")
+            else:
+                logger.info(f"【课表调试】未指定学期，将返回默认学期")
             if week:
                 data["zc"] = week
                 logger.info(f"【课表调试】查询周次: {week}")
+            else:
+                logger.info(f"【课表调试】未指定周次，将返回全部周次")
 
             # POST提交查询（课表必须POST）
             response = self.session.post(url, data=data if data else {}, timeout=10)
@@ -495,17 +500,47 @@ class JwxtScraper:
             logger.info(f"【课表调试】HTML长度: {len(html_text)}")
             
             # 保存HTML到文件用于调试
-            with open('/tmp/debug_schedule.html', 'w', encoding='utf-8') as f:
-                f.write(html_text)
-            logger.info(f"【课表调试】HTML已保存到 /tmp/debug_schedule.html")
+            import os
+            debug_path = '/tmp/debug_schedule.html'
+            try:
+                with open(debug_path, 'w', encoding='utf-8') as f:
+                    f.write(html_text)
+                logger.info(f"【课表调试】HTML已保存到 {debug_path}")
+            except Exception as e:
+                logger.warning(f"【课表调试】保存HTML失败: {e}")
+            
+            # 检查HTML中是否包含关键信息
+            if 'kbtable' not in html_text:
+                logger.error("【课表调试】HTML中不包含'kbtable'表格ID")
+                # 检查是否有错误信息
+                if '登录' in html_text or 'login' in html_text.lower():
+                    logger.error("【课表调试】可能需要重新登录")
+                if '学期' in html_text:
+                    # 提取页面中显示的学期信息
+                    import re as _re
+                    semester_match = _re.search(r'20\d{2}-20\d{2}-\d', html_text)
+                    if semester_match:
+                        logger.info(f"【课表调试】页面显示学期: {semester_match.group()}")
             
             soup = BeautifulSoup(html_text, 'html.parser')
 
             # 查找课表表格（真实HTML中表格ID为kbtable）
             schedule_table = soup.find('table', id='kbtable')
             
+            # 提取实际查询的学期（从HTML中的select选项）
+            actual_semester = semester
+            if not actual_semester:
+                # 从HTML中提取默认选中的学期
+                import re as _re
+                selected_match = _re.search(r'<option[^>]+value="(20\d{2}-20\d{2}-\d)"[^>]*selected="selected"', html_text)
+                if selected_match:
+                    actual_semester = selected_match.group(1)
+                    logger.info(f"【课表调试】默认学期: {actual_semester}")
+            
             if not schedule_table:
-                logger.warning("【课表调试】未找到id='kbtable'的表格")
+                logger.error("【课表调试】未找到id='kbtable'的表格")
+                # 输出HTML的前1000个字符用于诊断
+                logger.error(f"【课表调试】HTML开头: {html_text[:1000]}")
                 # 备用策略：查找所有表格
                 all_tables = soup.find_all('table')
                 logger.info(f"【课表调试】找到 {len(all_tables)} 个表格")
@@ -638,11 +673,18 @@ class JwxtScraper:
 
             logger.info(f"成功获取 {len(courses)} 门课程")
 
+            # 如果没有课程，提供更详细的诊断信息
+            if len(courses) == 0:
+                logger.warning(f"【课表调试】{actual_semester}学期无课程数据")
+                # 检查备注信息
+                if remarks:
+                    logger.info(f"【课表调试】备注信息: {remarks}")
+
             return {
                 "success": True,
                 "data": courses,
                 "count": len(courses),
-                "semester": semester,
+                "semester": actual_semester,
                 "week": week,
                 "未安排时间课程": remarks,
                 "raw_html": html_text  # 保存原始HTML供分析
