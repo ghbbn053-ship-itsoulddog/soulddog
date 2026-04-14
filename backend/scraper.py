@@ -22,29 +22,36 @@ class JwxtScraper:
     def _fix_encoding(self, response) -> str:
         """自动修正响应编码，适配教务系统 GBK/UTF-8 混合场景
         返回正确解码的文本
+        
+        策略：先尝试 UTF-8（严格模式），成功就用 UTF-8；
+        UTF-8 解码失败才用 GB18030。
+        不能先试 GB18030，因为 UTF-8 字节用 GB18030 解码不会报错但会产生乱码。
         """
         import re
         raw_bytes = response.content
         
-        # 先用 GB18030 解码检测是否有中文
-        text_gb18030 = raw_bytes.decode('gb18030', errors='ignore')
-        has_chinese = re.search(r'[\u4e00-\u9fff]', text_gb18030)
-        
-        if has_chinese:
-            response.encoding = 'gb18030'
-            logger.debug(f"【编码】使用 GB18030，检测到中文")
-            return text_gb18030  # 直接返回正确解码的文本
-        else:
-            # 尝试 UTF-8
-            try:
-                text_utf8 = raw_bytes.decode('utf-8')
+        # 1. 先尝试 UTF-8（严格模式，不允许错误）
+        try:
+            text_utf8 = raw_bytes.decode('utf-8')
+            # UTF-8 解码成功，检查是否有中文
+            has_chinese = re.search(r'[\u4e00-\u9fff]', text_utf8)
+            if has_chinese:
                 response.encoding = 'utf-8'
-                logger.debug(f"【编码】使用 UTF-8")
+                logger.info("【编码】使用 UTF-8（检测到中文）")
                 return text_utf8
-            except UnicodeDecodeError:
-                response.encoding = 'gb18030'
-                logger.debug(f"【编码】UTF-8 解码失败，回退到 GB18030")
-                return text_gb18030
+            else:
+                # UTF-8 解码成功但没中文（可能是纯英文/数字页面）
+                response.encoding = 'utf-8'
+                logger.info("【编码】使用 UTF-8（无中文）")
+                return text_utf8
+        except (UnicodeDecodeError, ValueError):
+            pass
+        
+        # 2. UTF-8 失败，用 GB18030（兼容 GBK/GB2312）
+        text_gb18030 = raw_bytes.decode('gb18030', errors='ignore')
+        response.encoding = 'gb18030'
+        logger.info("【编码】UTF-8 解码失败，使用 GB18030")
+        return text_gb18030
 
     def get_captcha(self) -> bytes:
         """获取验证码图片"""
