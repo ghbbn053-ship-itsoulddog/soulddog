@@ -256,7 +256,7 @@ export default function ChatPage() {
         fixed lg:static inset-y-0 left-0 z-50
         bg-white/80 backdrop-blur-xl border-r border-gray-200/50
         transition-all duration-300 ease-in-out
-        ${sidebarOpen ? "translate-x-0 w-72" : "-translate-x-full lg:translate-x-0 lg:w-0 lg:overflow-hidden"}
+        ${sidebarOpen ? "translate-x-0 w-72" : "-translate-x-full lg:translate-x-0 lg:w-72"}
         flex flex-col shadow-xl lg:shadow-none
       `}>
         {/* 侧边栏头部 */}
