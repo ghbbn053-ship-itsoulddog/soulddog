@@ -137,23 +137,37 @@ class JwxtScraper:
             
             try:
                 card_url = f"{self.base_url}grxx/xsxx?Ves632DSdyV=NEW_XSD_XJCJ"
+                logger.info(f"【个人信息调试】请求学籍卡片URL: {card_url}")
                 card_resp = self.session.get(card_url, timeout=10)
+                logger.info(f"【个人信息调试】学籍卡片响应状态: {card_resp.status_code}")
+                logger.info(f"【个人信息调试】学籍卡片响应URL: {card_resp.url}")
                 card_html = self._fix_encoding(card_resp)
+                logger.info(f"【个人信息调试】学籍卡片HTML长度: {len(card_html)}")
+                # 保存HTML到文件用于调试
+                with open('/tmp/debug_personal_info.html', 'w', encoding='utf-8') as f:
+                    f.write(card_html)
+                logger.info(f"【个人信息调试】HTML已保存到 /tmp/debug_personal_info.html")
                 card_soup = BeautifulSoup(card_html, 'html.parser')
+                
+                # 打印前500个字符用于调试
+                logger.info(f"【个人信息调试】HTML前500字符: {card_html[:500]}")
                 
                 # 从学籍卡片提取详细信息
                 card_text = card_soup.get_text()
                 import re
                 
                 major_match = re.search(r'专业[：:]\s*(.+?)(?:学|班)', card_text)
+                logger.info(f"【个人信息调试】专业匹配: {major_match.group(1) if major_match else '未找到'}")
                 if major_match:
                     major = major_match.group(1).strip()
                 
                 class_match = re.search(r'班级[：:]\s*(.+?)(?:学号)', card_text)
+                logger.info(f"【个人信息调试】班级匹配: {class_match.group(1) if class_match else '未找到'}")
                 if class_match:
                     class_name = class_match.group(1).strip()
                 
                 dept_match = re.search(r'院系[：:]\s*(.+?)(?:专业)', card_text)
+                logger.info(f"【个人信息调试】院系匹配: {dept_match.group(1) if dept_match else '未找到'}")
                 if dept_match:
                     department = dept_match.group(1).strip()
             except Exception as e:
@@ -236,6 +250,7 @@ class JwxtScraper:
         try:
             # 成绩提交URL（根据深度爬取crawl_tree.json）
             url = f"{self.base_url}kscj/cjcx_query"
+            logger.info(f"【成绩调试】请求URL: {url}")
             
             # 构建表单数据
             data = {
@@ -248,12 +263,16 @@ class JwxtScraper:
 
             # POST提交查询表单
             response = self.session.post(url, data=data, timeout=10)
+            logger.info(f"【成绩调试】响应状态: {response.status_code}")
+            logger.info(f"【成绩调试】响应URL: {response.url}")
             html_text = self._fix_encoding(response)
+            logger.info(f"【成绩调试】HTML长度: {len(html_text)}")
 
             soup = BeautifulSoup(html_text, 'html.parser')
 
             # 解析成绩表格 - 根据真实HTML，表格ID为dataList
             grade_table = soup.find('table', id='dataList')
+            logger.info(f"【成绩调试】找到表格: {grade_table is not None}")
 
             if not grade_table:
                 logger.warning("未找到成绩表格")
