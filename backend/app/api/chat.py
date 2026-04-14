@@ -230,19 +230,39 @@ async def get_chat_history(conversation_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/conversations/{conversation_id}")
-async def delete_conversation(conversation_id: int, db: Session = Depends(get_db)):
-    """删除对话"""
+async def delete_conversation(conversation_id: int, username: str = None, db: Session = Depends(get_db)):
+    """删除对话及其所有消息"""
     try:
-        conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+        # 1. 查找用户
+        if not username:
+            raise HTTPException(status_code=400, detail="缺少用户名参数")
+        
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        
+        # 2. 查找对话（确保是该用户的对话）
+        conversation = db.query(Conversation).filter(
+            Conversation.id == conversation_id,
+            Conversation.user_id == user.id
+        ).first()
+        
         if not conversation:
             raise HTTPException(status_code=404, detail="对话不存在")
         
+        # 3. 显式删除该对话的所有消息（级联删除会自动处理，但这里显式处理更安全）
+        db.query(Message).filter(Message.conversation_id == conversation_id).delete()
+        
+        # 4. 删除对话
         db.delete(conversation)
         db.commit()
         
-        return {"success": True, "message": "对话已删除"}
+        logger.info(f"用户 {username} 删除对话 {conversation_id} 及其 {len(conversation.messages)} 条消息")
+        
+        return {"success": True, "message": "对话及所有消息已删除"}
     except HTTPException:
         raise
     except Exception as e:
+        db.rollback()
         logger.error(f"删除对话失败: {str(e)}")
         raise HTTPException(status_code=500, detail="删除对话失败")

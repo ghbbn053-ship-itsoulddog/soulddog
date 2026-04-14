@@ -176,7 +176,7 @@ export default function ChatPage() {
   const deleteConversation = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await fetch(`${API_BASE}/api/chat/conversations/${id}`, { method: "DELETE" });
+      await fetch(`${API_BASE}/api/chat/conversations/${id}?username=${encodeURIComponent(username || '')}`, { method: "DELETE" });
       if (currentConversationId === id) {
         newConversation();
       }
