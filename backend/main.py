@@ -351,16 +351,25 @@ async def login(request: Request, background_tasks: BackgroundTasks):
 
         # 检查是否成功跳转到主页
         if "/jsxsd/framework/" in content or "framework" in response.url:
+            # 使用response.url作为最终的server_url（教务系统可能重定向到不同端口）
+            # 从response.url提取基础URL（到/jsxsd/）
+            import re
+            match = re.match(r'(https?://[^/]+/jsxsd/)', response.url)
+            if match:
+                final_server_url = match.group(1)
+            else:
+                final_server_url = server_url  # 降级使用原始URL
+            
             # 保存 session 和 server_url
             SESSIONS[username] = {
                 "session": session,
-                "server_url": server_url
+                "server_url": final_server_url
             }
             logger.info(f"【登录】登录成功，session 已保存，当前 session 数量: {len(SESSIONS)}")
-            logger.info(f"【登录】服务器 URL: {server_url}")
+            logger.info(f"【登录】服务器 URL: {final_server_url}")
 
             # 后台任务：自动爬取教务数据并存储
-            background_tasks.add_task(auto_crawl_and_store, username, session, server_url)
+            background_tasks.add_task(auto_crawl_and_store, username, session, final_server_url)
 
             return {
                 "success": True,
