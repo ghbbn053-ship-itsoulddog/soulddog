@@ -12,8 +12,8 @@
 
 ## 更新摘要
 **变更内容**
-- 修复了登录认证端点的URL构造逻辑，消除了重复的'/jsxsd/'前缀
-- 修正了服务器URL与登录URL的拼接方式，确保正确的认证流程
+- 修复了服务器URL不一致问题，通过从response.url中提取最终服务器URL（使用正则表达式匹配https?://[^/]+/jsxsd/模式）
+- 确保后续请求使用正确的端口和服务器地址，解决登录后端口变化导致的数据爬取失败问题
 - 更新了服务器选择算法和负载均衡机制的实现细节
 
 ## 目录
@@ -35,7 +35,7 @@
 - 完整的请求示例、响应格式和错误码定义
 - 前端集成指南，说明如何正确处理验证码刷新、登录状态维护和会话超时处理
 - 服务器选择算法和负载均衡机制
-- **新增**：修正的URL构造逻辑，消除了重复的'/jsxsd/'前缀问题
+- **新增**：修复的服务器URL提取机制，通过正则表达式从response.url中提取最终服务器URL
 
 ## 项目结构
 该项目采用前后端分离架构，后端基于FastAPI提供RESTful API，前端基于Next.js构建用户界面。认证流程涉及以下关键组件：
@@ -43,7 +43,7 @@
 - 前端登录页面：负责用户输入、验证码展示和登录请求发送
 - 教务系统服务器：作为后端代理，处理真实的验证码获取和登录请求
 - 会话管理系统：维护用户登录状态和验证码session
-- **新增**：修正的URL构造机制：确保服务器URL与登录URL拼接时不会产生重复的/jsxsd/前缀
+- **新增**：修复的URL提取机制：从response.url中提取最终服务器URL，确保端口和服务器地址的正确性
 
 ```mermaid
 graph TB
@@ -56,7 +56,7 @@ API[FastAPI应用<br/>main.py]
 Auth[认证模块]
 Proxy[代理模块]
 SessionMgr[会话管理器]
-URLBuilder[URL构造器<br/>修正重复前缀]
+URLExtractor[URL提取器<br/>正则表达式匹配]
 end
 subgraph "外部系统"
 JWXT[教务系统服务器<br/>jwxt.gdufe.edu.cn]
@@ -67,10 +67,10 @@ Login --> API
 API --> Auth
 Auth --> Proxy
 Auth --> SessionMgr
-SessionMgr --> URLBuilder
+SessionMgr --> URLExtractor
 Proxy --> JWXT
 JWXT --> Servers
-URLBuilder --> Proxy
+URLExtractor --> Proxy
 ```
 
 **图表来源**
@@ -92,7 +92,7 @@ URLBuilder --> Proxy
 ### 2. 用户登录组件
 - 接口：POST /api/login
 - 功能：验证用户凭据并建立会话
-- 特性：集成验证码验证、服务器选择、会话管理、**修正的URL构造逻辑**
+- 特性：集成验证码验证、服务器选择、会话管理、**修复的URL提取机制**
 
 ### 3. 服务器选择算法
 - 基于学号的哈希算法
@@ -104,16 +104,17 @@ URLBuilder --> Proxy
 - 用户登录会话存储（内存级别）
 - 自动清理过期session
 
-### 5. **新增**：修正的URL构造机制
-- 登录URL构造：login_url = f"{server_url}xk/LoginToXkLdap"
-- 避免重复的/jsxsd/前缀：服务器URL已包含/jsxsd/，直接拼接xk/
-- 确保验证码和登录使用同一服务器实例
+### 5. **新增**：修复的URL提取机制
+- 从response.url中提取最终服务器URL
+- 使用正则表达式：r'(https?://[^/]+/jsxsd/)'
+- 确保端口和服务器地址的正确性
+- 处理教务系统重定向导致的端口变化问题
 
 **章节来源**
 - [backend/main.py:74-366](file://backend/main.py#L74-L366)
 
 ## 架构概览
-认证系统的整体架构遵循"前端-后端-教务系统"三层模式，**修正了URL构造中间层**：
+认证系统的整体架构遵循"前端-后端-教务系统"三层模式，**修复了URL提取中间层**：
 
 ```mermaid
 sequenceDiagram
@@ -122,7 +123,7 @@ participant Frontend as "前端登录页面"
 participant Backend as "后端FastAPI"
 participant Proxy as "代理服务器"
 participant SessionMgr as "会话管理器"
-participant URLBuilder as "URL构造器<br/>修正重复前缀"
+participant URLExtractor as "URL提取器<br/>正则表达式匹配"
 participant JWXT as "教务系统服务器"
 Client->>Frontend : 访问登录页面
 Frontend->>Backend : GET /api/captcha
@@ -134,9 +135,9 @@ Backend->>SessionMgr : 存储验证码session
 Backend-->>Frontend : {image, captcha_session_id}
 Frontend->>Backend : POST /api/login {username, password, code, captcha_session_id}
 Backend->>SessionMgr : 检索验证码session
-SessionMgr->>URLBuilder : 构造登录URL避免重复前缀
-URLBuilder-->>Backend : 返回正确格式的login_url
-Backend->>Proxy : 使用相同服务器进行登录
+SessionMgr->>URLExtractor : 从response.url提取最终服务器URL
+URLExtractor-->>Backend : 返回正确格式的final_server_url
+Backend->>Proxy : 使用最终服务器进行登录
 Proxy->>JWXT : 提交登录表单
 JWXT-->>Proxy : 返回登录结果
 Proxy-->>Backend : 返回响应
@@ -208,12 +209,13 @@ GetCaptchaSession --> SessionExists{"session存在?"}
 SessionExists --> |否| ReturnExpired["返回验证码过期错误"]
 SessionExists --> |是| ExtractServerIndex["提取服务器索引"]
 ExtractServerIndex --> SelectServer["选择服务器"]
-SelectServer --> BuildLoginURL["构造登录URL<br/>避免重复前缀"]
+SelectServer --> BuildLoginURL["构造登录URL"]
 BuildLoginURL --> BuildFormData["构建登录表单"]
 BuildFormData --> SendLogin["发送登录请求"]
 SendLogin --> CheckResult["检查登录结果"]
 CheckResult --> LoginSuccess{"登录成功?"}
-LoginSuccess --> |是| SaveSession["保存用户会话"]
+LoginSuccess --> |是| ExtractFinalURL["从response.url提取最终服务器URL<br/>正则表达式匹配"]
+ExtractFinalURL --> SaveSession["保存用户会话"]
 LoginSuccess --> |否| ReturnFail["返回登录失败"]
 SaveSession --> ReturnSuccess["返回登录成功"]
 Return400 --> End([结束])
@@ -230,14 +232,15 @@ ReturnSuccess --> End
 2. **优先级2**：使用学号哈希算法选择服务器
 3. **优先级3**：回退到第一个服务器
 
-#### **新增**：修正的URL构造机制
-- **问题**：之前的实现可能导致重复的/jsxsd/前缀
-- **解决方案**：login_url = f"{server_url}xk/LoginToXkLdap"
-- **原理**：服务器URL已包含/jsxsd/前缀，直接拼接xk/即可
-- **效果**：确保URL格式正确，避免重复前缀导致的404错误
+#### **新增**：修复的URL提取机制
+- **问题**：教务系统可能重定向到不同的端口（如8380端口）
+- **解决方案**：从response.url中提取最终服务器URL
+- **正则表达式**：r'(https?://[^/]+/jsxsd/)'
+- **原理**：匹配https?://开头，直到/jsxsd/结尾的完整URL模式
+- **效果**：确保使用正确的端口号和服务器地址
 
 #### 会话管理
-- 用户登录成功后，将requests.Session对象和服务器URL存储在SESSIONS字典中
+- 用户登录成功后，将requests.Session对象和**最终服务器URL**存储在SESSIONS字典中
 - 键为username，值为字典{session: requests.Session, server_url: str}
 - 会话包含JSESSIONID Cookie，用于后续API调用
 - 确保验证码和登录使用同一服务器实例
@@ -351,16 +354,18 @@ Select --> Output["返回服务器URL"]
 - 端口：80或8380
 - 负载均衡：基于学号的哈希分布
 
-#### **新增**：修正的URL构造保证
+#### **新增**：修复的URL提取保证
 - 验证码获取时确定服务器索引并存储在captcha_session_id中
 - 登录时从captcha_session_id提取服务器索引，确保使用同一服务器
-- **修正**：login_url = f"{server_url}xk/LoginToXkLdap" 避免重复/jsxsd/前缀
+- **修复**：从response.url中提取最终服务器URL，确保端口正确性
+- **正则表达式**：r'(https?://[^/]+/jsxsd/)' 确保URL格式正确
 - 确保验证码和登录操作的一致性
 
 #### 负载均衡策略
 - 均匀分布：相同学号始终路由到同一服务器
 - 容错机制：服务器不可用时自动选择下一个
 - 一致性保证：确保验证码和登录使用同一服务器实例
+- **URL一致性**：通过正则表达式提取最终URL，确保端口和服务器地址正确
 
 **章节来源**
 - [backend/main.py:55-94](file://backend/main.py#L55-L94)
@@ -374,7 +379,7 @@ subgraph "认证相关"
 CaptchaAPI["/api/captcha"]
 LoginAPI["/api/login"]
 SessionMgr["会话管理器"]
-URLBuilder["URL构造器<br/>修正重复前缀"]
+URLExtractor["URL提取器<br/>正则表达式匹配"]
 EncodingSystem["编码检测系统"]
 end
 subgraph "前端集成"
@@ -392,10 +397,10 @@ LoginPage --> CaptchaAPI
 LoginPage --> LoginAPI
 CaptchaAPI --> SessionMgr
 LoginAPI --> SessionMgr
-LoginAPI --> URLBuilder
+LoginAPI --> URLExtractor
 LoginAPI --> EncodingSystem
 SessionMgr --> Requests
-URLBuilder --> SessionMgr
+URLExtractor --> SessionMgr
 EncodingSystem --> BeautifulSoup
 CaptchaAPI --> JWXT
 LoginAPI --> JWXT
@@ -413,6 +418,7 @@ LoginPage --> LoginForm
 - **Time模块**：验证码session时间戳
 - **Logging模块**：日志记录
 - **新增** **BeautifulSoup**：HTML解析和编码检测
+- **新增** **正则表达式**：URL提取和模式匹配
 
 **章节来源**
 - [backend/main.py:1-50](file://backend/main.py#L1-L50)
@@ -435,10 +441,10 @@ LoginPage --> LoginForm
 - 超时设置：10秒
 - User-Agent模拟真实浏览器
 
-### 4. **新增**：URL构造性能优化
-- **修正**：避免重复的/jsxsd/前缀检查
-- **效果**：减少字符串处理开销
-- **稳定性**：确保URL格式正确，避免重试和错误处理
+### 4. **新增**：URL提取性能优化
+- **修复**：使用正则表达式从response.url提取最终服务器URL
+- **效果**：确保端口和服务器地址正确，避免重定向导致的性能损失
+- **稳定性**：处理教务系统重定向，确保后续请求使用正确的端口
 
 ### 5. 编码检测性能
 - 多编码尝试：最多4次编码尝试
@@ -453,6 +459,7 @@ LoginPage --> LoginForm
 - 实现限流和防暴力破解
 - **新增**：考虑使用更高效的编码检测库
 - **新增**：实现会话数据的持久化存储
+- **新增**：优化正则表达式性能，考虑编译正则表达式
 
 ## 故障排除指南
 
@@ -476,25 +483,26 @@ LoginPage --> LoginForm
 - 凭证错误
 - 验证码过期
 - 服务器不一致
-- **新增**：URL构造错误（重复/jsxsd/前缀）
+- **新增**：URL提取错误（端口不正确）
 
 **解决方案**：
 - 重新获取验证码
 - 确认学号格式
 - 检查密码正确性
-- **新增**：检查服务器URL格式是否正确
+- **新增**：检查服务器URL提取是否正确
 
-#### 3. **新增**：URL构造问题
-**症状**：登录请求返回404或格式错误
+#### 3. **新增**：URL提取问题
+**症状**：登录后数据爬取失败，端口不匹配
 **原因**：
-- 重复的/jsxsd/前缀
-- 服务器URL格式不正确
-- 登录URL拼接错误
+- 教务系统重定向到不同端口（如8380端口）
+- 正则表达式匹配失败
+- URL格式不正确
 
 **解决方案**：
-- 确认服务器URL已包含/jsxsd/
-- 检查login_url = f"{server_url}xk/LoginToXkLdap"的构造逻辑
-- 验证服务器选择算法的正确性
+- 确认正则表达式 r'(https?://[^/]+/jsxsd/)' 是否正确匹配
+- 检查response.url格式
+- 验证最终服务器URL是否包含正确端口
+- 使用降级机制：如果正则表达式匹配失败，使用原始server_url
 
 #### 4. 编码检测问题
 **症状**：登录响应乱码或解析失败
@@ -513,7 +521,7 @@ LoginPage --> LoginForm
 - 支持外网和内网服务器测试
 - 手动输入验证码进行验证
 - 详细的响应内容输出
-- **新增**：URL构造和服务器选择测试功能
+- **新增**：URL提取和服务器选择测试功能
 
 **章节来源**
 - [backend/test_login.py:1-152](file://backend/test_login.py#L1-L152)
@@ -526,13 +534,14 @@ LoginPage --> LoginForm
 - **简单可靠**：基于现有教务系统接口，无需额外开发
 - **前端友好**：提供完整的前端集成示例
 - **可扩展性**：支持多种服务器配置和负载均衡策略
-- **URL构造修正**：消除了重复的/jsxsd/前缀问题，确保正确的认证流程
+- **URL提取修复**：通过正则表达式从response.url提取最终服务器URL，确保正确的认证流程
+- **端口兼容性**：处理教务系统重定向导致的端口变化问题
 
 ### 局限性
 - **内存存储**：生产环境需要替换为Redis等持久化存储
 - **单机部署**：当前实现为单实例，需要集群化改造
 - **安全考虑**：需要添加JWT令牌、HTTPS等安全措施
-- **URL构造复杂度**：需要确保服务器URL格式的正确性
+- **URL提取复杂度**：需要确保正则表达式的正确性和性能
 
 ### 改进建议
 1. **存储层升级**：使用Redis或数据库存储会话
@@ -540,7 +549,9 @@ LoginPage --> LoginForm
 3. **监控告警**：添加API调用监控和异常告警
 4. **文档完善**：补充完整的API文档和SDK
 5. **性能优化**：考虑使用更高效的编码检测算法
-6. **URL构造验证**：添加URL格式验证机制
+6. **URL提取验证**：添加URL格式验证机制
+7. **正则表达式优化**：考虑编译正则表达式以提高性能
+8. **错误处理增强**：添加更详细的错误日志和用户提示
 
 ## 附录
 
@@ -564,18 +575,22 @@ LoginPage --> LoginForm
 - **401**: 未登录或会话无效
 - **500**: 服务器内部错误
 
-### **新增**：URL构造修正说明
-系统使用修正的URL构造逻辑：
+### **新增**：URL提取修复说明
+系统使用修复的URL提取逻辑：
 ```python
-# 服务器URL已包含/jsxsd/前缀
-server_url = "http://172.19.13.60:80/jsxsd/"
+# 从response.url中提取最终服务器URL
+import re
+match = re.match(r'(https?://[^/]+/jsxsd/)', response.url)
+if match:
+    final_server_url = match.group(1)
+else:
+    final_server_url = server_url  # 降级使用原始URL
 
-# 正确的登录URL构造
-login_url = f"{server_url}xk/LoginToXkLdap"
-# 结果: http://172.19.13.60:80/jsxsd/xk/LoginToXkLdap
-
-# 避免的错误方式
-# login_url = f"{server_url}/jsxsd/xk/LoginToXkLdap"  # 重复前缀
+# 正则表达式说明
+# r'(https?://[^/]+/jsxsd/)'
+# https?:// : 匹配http://或https://
+# [^/]+ : 匹配一个或多个非斜杠字符
+# /jsxsd/ : 匹配/jsxsd/字面量
 ```
 
 ### 部署配置

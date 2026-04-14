@@ -14,12 +14,12 @@
 
 ## 更新摘要
 **所做更改**
-- 重构了核心爬虫功能，修复了URL构造逻辑中的重复jsxsd前缀问题
+- 增强了各学术数据查询API的HTML调试输出功能，提供更好的数据解析和问题诊断能力
+- 新增了详细的日志记录和HTML文件保存功能，便于开发和维护
+- 改进了编码处理逻辑，支持UTF-8和GBK混合编码场景
 - 增强了个人信息提取过程，支持从多个HTML源获取准确信息
-- 改进了成绩查询、课表查询、培养方案查询等API的实现
 - 新增了完整的向量化数据聚合接口，支持RAG系统
-- 增强了编码处理逻辑，支持UTF-8和GBK混合编码场景
-- 完善了选项查询工具，提供AI友好的数据结构
+- 修复了URL构造逻辑中的重复jsxsd前缀问题
 
 ## 目录
 1. [简介](#简介)
@@ -27,10 +27,11 @@
 3. [核心组件](#核心组件)
 4. [架构概览](#架构概览)
 5. [详细组件分析](#详细组件分析)
-6. [依赖关系分析](#依赖关系分析)
-7. [性能考虑](#性能考虑)
-8. [故障排除指南](#故障排除指南)
-9. [结论](#结论)
+6. [调试功能详解](#调试功能详解)
+7. [依赖关系分析](#依赖关系分析)
+8. [性能考虑](#性能考虑)
+9. [故障排除指南](#故障排除指南)
+10. [结论](#结论)
 
 ## 简介
 
@@ -38,7 +39,7 @@
 
 该系统采用现代化的技术栈，包括Python 3.9+、FastAPI、SQLAlchemy、BeautifulSoup等，实现了高可靠性的数据爬取和处理功能。系统支持多种查询条件和筛选参数，提供灵活的数据查询能力，并具备良好的扩展性和维护性。
 
-**更新** 本版本进行了核心爬虫功能的重大重构，修复了URL构造中的重复jsxsd前缀问题，增强了个人信息提取的准确性，并新增了完整的向量化数据聚合接口，为RAG系统提供支持。
+**更新** 本版本显著增强了调试能力，为各API接口添加了HTML调试输出功能，提供详细的日志记录和问题诊断能力，同时修复了核心爬虫功能中的URL构造逻辑问题。
 
 ## 项目结构
 
@@ -68,6 +69,11 @@ subgraph "外部系统"
 JWXT[教务系统]
 AUTH[认证系统]
 end
+subgraph "调试系统"
+DEBUG[HTML调试输出]
+LOG[日志系统]
+TEST[测试工具]
+end
 FE --> API
 API --> ROUTER
 ROUTER --> ENDPOINTS
@@ -79,16 +85,19 @@ MODEL --> DB
 PROCESSOR --> VECTOR
 SCRAPER --> JWXT
 SERVICE --> AUTH
+SCRAPER --> DEBUG
+DEBUG --> LOG
+DEBUG --> TEST
 ```
 
 **图表来源**
 - [main.py:1-951](file://backend/main.py#L1-L951)
-- [scraper.py:1-1258](file://backend/scraper.py#L1-L1258)
+- [scraper.py:1-1303](file://backend/scraper.py#L1-L1303)
 - [data_processor.py:1-356](file://backend/app/services/data_processor.py#L1-L356)
 
 **章节来源**
 - [main.py:1-951](file://backend/main.py#L1-L951)
-- [scraper.py:1-1258](file://backend/scraper.py#L1-L1258)
+- [scraper.py:1-1303](file://backend/scraper.py#L1-L1303)
 - [data_processor.py:1-356](file://backend/app/services/data_processor.py#L1-L356)
 
 ## 核心组件
@@ -104,23 +113,25 @@ SERVICE --> AUTH
 - **认证**: 自定义JWT认证系统
 - **缓存**: 基于内存的会话存储（生产环境建议使用Redis）
 - **向量化**: Milvus + 千问服务 - 支持RAG系统
+- **调试**: HTML文件保存 + 详细日志记录
 
 ### 核心功能模块
 
 系统提供以下核心功能模块：
 
 1. **用户认证模块**: 处理用户登录、会话管理和权限控制
-2. **数据爬取模块**: 从教务系统抓取各类学术数据
+2. **数据爬取模块**: 从教务系统抓取各类学术数据，支持HTML调试输出
 3. **数据处理模块**: 解析、转换和格式化爬取的数据
-4. **API接口模块**: 提供RESTful API接口
+4. **API接口模块**: 提供RESTful API接口，包含调试功能
 5. **数据存储模块**: 管理用户数据的持久化存储
 6. **向量化模块**: 将数据转换为向量格式供RAG系统使用
+7. **调试模块**: 提供HTML文件保存和详细日志记录功能
 
-**更新** 核心爬虫功能经过重大重构，修复了URL构造逻辑，增强了编码处理能力，并新增了完整的向量化数据聚合接口。
+**更新** 核心爬虫功能经过重大重构，修复了URL构造逻辑，增强了编码处理能力，并新增了完整的向量化数据聚合接口和HTML调试输出功能。
 
 **章节来源**
 - [main.py:1-951](file://backend/main.py#L1-L951)
-- [scraper.py:1-1258](file://backend/scraper.py#L1-L1258)
+- [scraper.py:1-1303](file://backend/scraper.py#L1-L1303)
 - [data_processor.py:1-356](file://backend/app/services/data_processor.py#L1-L356)
 
 ## 架构概览
@@ -134,6 +145,7 @@ participant API as API网关
 participant Auth as 认证服务
 participant Service as 业务服务
 participant Scraper as 数据爬虫
+participant Debug as 调试系统
 participant Processor as 数据处理器
 participant JWXT as 教务系统
 Client->>API : HTTP请求
@@ -141,7 +153,8 @@ API->>Auth : 验证用户身份
 Auth-->>API : 认证结果
 API->>Service : 调用业务逻辑
 Service->>Scraper : 执行数据爬取
-Scraper->>JWXT : 请求数据修复后的URL
+Scraper->>Debug : 保存HTML调试文件
+Scraper->>JWXT : 请求数据
 JWXT-->>Scraper : 返回HTML数据
 Scraper-->>Service : 解析后的数据
 Service->>Processor : 处理数据
@@ -165,7 +178,8 @@ CheckAuth --> |未认证| AuthError[返回认证错误]
 CheckAuth --> |已认证| CheckCache{检查缓存}
 CheckCache --> |命中缓存| ReturnCache[返回缓存数据]
 CheckCache --> |缓存未命中| FetchData[从教务系统抓取数据]
-FetchData --> FixEncoding[修复编码问题]
+FetchData --> SaveHTML[保存HTML调试文件]
+SaveHTML --> FixEncoding[修复编码问题]
 FixEncoding --> ParseData[解析HTML数据]
 ParseData --> TransformData[转换数据格式]
 TransformData --> StoreData[存储到数据库]
@@ -243,7 +257,7 @@ AuthError --> End
 curl -X GET "http://localhost:8000/api/grades?username=2024110101&kcxz=01&fxkc=0&xsfs=all"
 ```
 
-**更新** 成绩查询接口现在包含完整的统计信息，包括总学分要求、已完成学分、绩点等关键指标。
+**更新** 成绩查询接口现在包含完整的统计信息，包括总学分要求、已完成学分、绩点等关键指标，并新增了HTML调试输出功能。
 
 **章节来源**
 - [main.py:520-557](file://backend/main.py#L520-L557)
@@ -292,7 +306,7 @@ curl -X GET "http://localhost:8000/api/grades?username=2024110101&kcxz=01&fxkc=0
 curl -X GET "http://localhost:8000/api/schedule?username=2024110101&semester=2024-2025-2&week=1"
 ```
 
-**更新** 课表查询接口现在包含原始HTML内容，便于调试和数据分析。
+**更新** 课表查询接口现在包含原始HTML内容，便于调试和数据分析，并新增了HTML文件保存功能。
 
 **章节来源**
 - [main.py:574-604](file://backend/main.py#L574-L604)
@@ -339,7 +353,7 @@ curl -X GET "http://localhost:8000/api/schedule?username=2024110101&semester=202
 curl -X GET "http://localhost:8000/api/training-plan/my?username=2024110101"
 ```
 
-**更新** 培养方案查询接口现在使用更准确的表格解析逻辑，能够正确识别目标课程表格。
+**更新** 培养方案查询接口现在使用更准确的表格解析逻辑，能够正确识别目标课程表格，并新增了HTML调试输出功能。
 
 **章节来源**
 - [main.py:606-630](file://backend/main.py#L606-L630)
@@ -388,7 +402,7 @@ curl -X GET "http://localhost:8000/api/training-plan/my?username=2024110101"
 curl -X GET "http://localhost:8000/api/academic-progress?username=2024110101&study_type=0"
 ```
 
-**更新** 学业进度查询接口现在包含更详细的统计信息，包括修读类型和学分计算。
+**更新** 学业进度查询接口现在包含更详细的统计信息，包括修读类型和学分计算，并新增了HTML调试输出功能。
 
 **章节来源**
 - [main.py:632-658](file://backend/main.py#L632-L658)
@@ -433,7 +447,7 @@ curl -X GET "http://localhost:8000/api/academic-progress?username=2024110101&stu
 curl -X GET "http://localhost:8000/api/exam-schedule?username=2024110101&semester=2024-2025-1"
 ```
 
-**更新** 考试安排查询接口现在包含更完整的考试信息，包括考试时间、地点、座位号等。
+**更新** 考试安排查询接口现在包含更完整的考试信息，包括考试时间、地点、座位号等，并新增了HTML调试输出功能。
 
 **章节来源**
 - [main.py:660-687](file://backend/main.py#L660-L687)
@@ -745,7 +759,7 @@ curl -X GET "http://localhost:8000/api/all-data?username=2024110101"
 
 **章节来源**
 - [main.py:800-823](file://backend/main.py#L800-L823)
-- [scraper.py:1192-1258](file://backend/scraper.py#L1192-L1258)
+- [scraper.py:1192-1303](file://backend/scraper.py#L1192-L1303)
 
 ### 选项查询接口
 
@@ -790,6 +804,56 @@ curl -X GET "http://localhost:8000/api/all-data?username=2024110101"
 - [main.py:825-909](file://backend/main.py#L825-L909)
 - [education_options.py:1-420](file://backend/education_options.py#L1-L420)
 
+## 调试功能详解
+
+### HTML调试输出功能
+
+系统为所有核心API接口新增了HTML调试输出功能，提供详细的日志记录和问题诊断能力：
+
+#### 调试文件保存
+
+每个接口在处理数据时都会将原始HTML内容保存到临时文件中：
+
+- **成绩查询**: `/tmp/debug_grades.html`
+- **课表查询**: `/tmp/debug_schedule.html`  
+- **培养方案**: `/tmp/debug_training_plan.html`
+- **个人信息**: `/tmp/debug_personal_info.html`
+
+#### 日志记录增强
+
+所有爬虫操作都增加了详细的日志记录：
+
+```python
+logger.info(f"【成绩调试】请求URL: {url}")
+logger.info(f"【成绩调试】响应状态: {response.status_code}")
+logger.info(f"【成绩调试】响应URL: {response.url}")
+logger.info(f"【成绩调试】HTML长度: {len(html_text)}")
+logger.info(f"【成绩调试】找到 {len(all_tables)} 个表格")
+```
+
+#### 调试功能特性
+
+1. **实时HTML保存**: 每次请求都会保存原始HTML到文件系统
+2. **详细日志跟踪**: 包含URL、状态码、响应时间等关键信息
+3. **表格解析调试**: 显示找到的表格数量和解析过程
+4. **编码问题诊断**: 提供编码检测和解码过程的日志
+5. **错误快速定位**: 通过日志快速定位数据解析问题
+
+#### 调试文件内容
+
+保存的HTML文件包含完整的原始页面内容，便于：
+
+- **页面结构分析**: 查看真实的HTML结构和CSS类名
+- **数据提取验证**: 验证表格选择器和解析逻辑
+- **编码问题排查**: 检查页面编码和特殊字符处理
+- **性能优化**: 分析页面加载时间和数据量
+
+**章节来源**
+- [scraper.py:140-175](file://backend/scraper.py#L140-L175)
+- [scraper.py:273-277](file://backend/scraper.py#L273-L277)
+- [scraper.py:448-458](file://backend/scraper.py#L448-L458)
+- [scraper.py:685-689](file://backend/scraper.py#L685-L689)
+
 ## 依赖关系分析
 
 ### 组件依赖图
@@ -812,18 +876,24 @@ subgraph "测试模块"
 TEST_SCRAPER[test_scraper.py]
 TEST_LOGIN[test_login.py]
 end
+subgraph "调试模块"
+DEBUG[HTML调试输出]
+LOG[日志系统]
+end
 MAIN --> SCRAPER
 MAIN --> DATA_PROCESSOR
 DATA_PROCESSOR --> USER_MODEL
 DATA_PROCESSOR --> EDUCATION_MODEL
 SCRAPER --> OPTIONS
+SCRAPER --> DEBUG
+DEBUG --> LOG
 TEST_SCRAPER --> SCRAPER
 TEST_LOGIN --> MAIN
 ```
 
 **图表来源**
 - [main.py:1-951](file://backend/main.py#L1-L951)
-- [scraper.py:1-1258](file://backend/scraper.py#L1-L1258)
+- [scraper.py:1-1303](file://backend/scraper.py#L1-L1303)
 - [data_processor.py:1-356](file://backend/app/services/data_processor.py#L1-L356)
 
 ### 外部依赖
@@ -835,8 +905,9 @@ TEST_LOGIN --> MAIN
 3. **向量数据库**: Milvus支持RAG系统
 4. **认证服务**: JWT令牌认证系统
 5. **网络服务**: 需要稳定的网络连接访问教务系统
+6. **文件系统**: 用于保存HTML调试文件
 
-**更新** 核心爬虫功能重构后，URL构造逻辑更加健壮，编码处理能力显著提升，向量化接口为RAG系统提供完整支持。
+**更新** 核心爬虫功能重构后，URL构造逻辑更加健壮，编码处理能力显著提升，向量化接口为RAG系统提供完整支持，调试功能增强了系统的可维护性。
 
 **章节来源**
 - [main.py:50-81](file://backend/main.py#L50-L81)
@@ -869,6 +940,7 @@ TEST_LOGIN --> MAIN
 3. **网络优化**: 实现超时控制和重试机制
 4. **数据压缩**: 对大响应数据进行压缩传输
 5. **向量化优化**: 批量处理向量数据，避免超时
+6. **调试文件清理**: 定期清理临时HTML调试文件
 
 ### 监控指标
 
@@ -879,8 +951,9 @@ TEST_LOGIN --> MAIN
 - 内存使用情况
 - 错误率统计
 - 向量数据库性能
+- 调试文件存储空间
 
-**更新** 编码处理优化显著提升了数据解析的准确性，向量化接口为RAG系统提供了高效的查询能力。
+**更新** 编码处理优化显著提升了数据解析的准确性，向量化接口为RAG系统提供了高效的查询能力，调试功能为系统维护提供了强大支持。
 
 ## 故障排除指南
 
@@ -912,6 +985,7 @@ TEST_LOGIN --> MAIN
 3. 服务器负载过高
 4. **编码处理失败**（已优化）
 5. **URL路径错误**（已修复）
+6. **HTML调试文件缺失**
 
 **解决步骤**:
 1. 检查教务系统页面结构
@@ -920,6 +994,7 @@ TEST_LOGIN --> MAIN
 4. 降级处理策略
 5. **验证编码处理逻辑**
 6. **验证URL拼接逻辑，确保正确路径**
+7. **检查调试文件是否正确保存**
 
 #### 性能问题
 
@@ -929,6 +1004,7 @@ TEST_LOGIN --> MAIN
 2. 网络延迟
 3. 并发请求过多
 4. **重复URL请求**（已优化）
+5. **调试文件过多占用磁盘空间**
 
 **解决步骤**:
 1. 优化数据库查询语句
@@ -936,6 +1012,7 @@ TEST_LOGIN --> MAIN
 3. 负载均衡
 4. 异步处理
 5. **减少无效的URL重定向**
+6. **定期清理调试文件**
 
 #### 编码问题
 
@@ -951,7 +1028,23 @@ TEST_LOGIN --> MAIN
 3. 使用正则表达式检测中文字符
 4. 回退到兼容编码方案
 
-**更新** 编码处理逻辑经过优化，现在能够智能检测和处理UTF-8和GBK混合编码场景。URL构造逻辑修复解决了重复前缀导致的额外请求和重定向问题。
+#### 调试问题
+
+**问题症状**: HTML调试文件无法保存或访问
+**可能原因**:
+1. 文件权限不足
+2. 磁盘空间不足
+3. 路径不存在
+4. 调试功能被禁用
+
+**解决步骤**:
+1. 检查/tmp目录权限
+2. 清理磁盘空间
+3. 确认路径存在
+4. 启用调试功能
+5. 检查日志输出
+
+**更新** 编码处理逻辑经过优化，现在能够智能检测和处理UTF-8和GBK混合编码场景。URL构造逻辑修复解决了重复前缀导致的额外请求和重定向问题。调试功能提供了完整的HTML文件保存和详细日志记录能力。
 
 **章节来源**
 - [main.py:187-328](file://backend/main.py#L187-L328)
@@ -966,8 +1059,10 @@ TEST_LOGIN --> MAIN
 3. **日志系统**: 完整的日志记录和错误追踪
 4. **健康检查**: `/api/health` - 系统健康状态检查
 5. **向量化测试**: 完整的数据聚合和向量化流程测试
+6. **HTML调试文件**: 自动保存的原始页面内容
+7. **编码检测**: 智能编码处理和错误诊断
 
-**更新** 调试工具现在可以正确测试重构后的URL构造逻辑和编码处理能力。新增了向量化数据聚合接口的测试功能。
+**更新** 调试工具现在可以正确测试重构后的URL构造逻辑和编码处理能力。新增了向量化数据聚合接口的测试功能。调试功能提供了完整的HTML文件保存和详细日志记录能力。
 
 **章节来源**
 - [test_login.py:1-152](file://backend/test_login.py#L1-L152)
@@ -983,6 +1078,7 @@ TEST_LOGIN --> MAIN
 4. **易于扩展**: 模块化设计便于功能扩展和维护
 5. **安全可靠**: 完善的认证机制和错误处理
 6. **智能化**: 新增向量化接口支持RAG系统
+7. **可调试性强**: 完善的HTML调试输出和日志记录功能
 
 **更新亮点**:
 - **URL构造修复**: 成功消除了重复的'/jsxsd/'前缀问题
@@ -992,6 +1088,7 @@ TEST_LOGIN --> MAIN
 - **稳定性提升**: 统一了所有接口的URL拼接逻辑
 - **兼容性改善**: 确保与不同服务器配置的兼容性
 - **调试能力增强**: 提供了详细的日志输出和错误诊断
+- **HTML调试输出**: 新增完整的HTML文件保存和分析功能
 
 系统在实际部署中建议：
 - 生产环境使用Redis作为缓存存储
@@ -1000,5 +1097,7 @@ TEST_LOGIN --> MAIN
 - 定期更新爬虫逻辑以适应教务系统变化
 - 建立数据备份和恢复机制
 - 部署Milvus向量数据库支持RAG功能
+- 定期清理调试文件，避免磁盘空间不足
+- 监控调试文件的存储和访问权限
 
-通过持续的优化和维护，该系统能够为用户提供稳定、高效、可靠的学术数据查询服务，为教育智能化发展提供坚实的技术支撑。
+通过持续的优化和维护，该系统能够为用户提供稳定、高效、可靠的学术数据查询服务，为教育智能化发展提供坚实的技术支撑。新增的调试功能大大提升了系统的可维护性和问题诊断能力，为后续的功能扩展和优化提供了强有力的支持。

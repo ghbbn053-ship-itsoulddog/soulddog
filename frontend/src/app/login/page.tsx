@@ -27,14 +27,26 @@ export default function LoginPage() {
         ? `${API_BASE}/api/captcha?username=${encodeURIComponent(uname)}`
         : `${API_BASE}/api/captcha`;
       const res = await fetch(url);
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("验证码请求失败:", errorData);
+        setError(`验证码加载失败: ${errorData.detail || '请稍后重试'}`);
+        return;
+      }
+      
       const data = await res.json();
       if (data.success) {
         setCaptchaImage(data.image);
         setCaptchaSessionId(data.captcha_session_id);
         setCaptcha(""); // 刷新验证码时清空输入
+      } else {
+        console.error("验证码响应异常:", data);
+        setError("验证码加载失败，请刷新页面重试");
       }
     } catch (error) {
       console.error("获取验证码失败:", error);
+      setError("验证码网络错误，请检查网络连接");
     }
   };
 

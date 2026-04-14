@@ -193,11 +193,24 @@ async def get_captcha(username: str = None):
             captcha_url,
             timeout=10
         )
+        
+        logger.info(f"【验证码】响应状态: {response.status_code}")
+        logger.info(f"【验证码】响应内容长度: {len(response.content)} 字节")
+        logger.info(f"【验证码】响应Content-Type: {response.headers.get('Content-Type', 'unknown')}")
 
         if response.status_code != 200:
             raise HTTPException(
                 status_code=500,
                 detail=f"获取验证码失败: {response.status_code}"
+            )
+        
+        # 验证响应是否为有效的图片
+        if len(response.content) < 100:
+            logger.error(f"【验证码】响应内容过短，可能不是有效图片: {len(response.content)} 字节")
+            logger.error(f"【验证码】响应内容预览: {response.content[:200]}")
+            raise HTTPException(
+                status_code=500,
+                detail="获取验证码失败：返回内容不是有效的图片"
             )
 
         # 将图片转换为 base64
