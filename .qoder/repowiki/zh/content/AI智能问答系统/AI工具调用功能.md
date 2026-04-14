@@ -22,6 +22,7 @@
 - 增强了Qwen服务的工具调用兼容性，支持字典和对象两种消息格式
 - 增加了详细的工具调用结构日志记录功能
 - 改进了工具调用的错误处理和调试能力
+- **新增query_training_plan工具**：扩展AI在学术查询方面的能力，支持查询培养方案和课程规划
 
 ## 目录
 1. [简介](#简介)
@@ -44,6 +45,7 @@
 - **完整的数据管道**：从教务系统爬取数据到向量化存储的全流程
 - **智能对话管理**：支持多轮对话、对话历史管理和工具调用追踪
 - **增强的工具调用兼容性**：支持字典和对象两种消息格式，提供详细的结构日志记录
+- **扩展的学术查询能力**：新增培养方案查询工具，支持课程规划和学分管理
 
 ## 项目结构
 
@@ -123,6 +125,7 @@ class JwxtScraper {
 +get_schedule(params) Dict
 +get_exam_schedule(params) Dict
 +get_academic_progress(params) Dict
++get_my_training_plan() Dict
 +get_all_data_for_vectorization() Dict
 }
 class DataProcessor {
@@ -241,9 +244,10 @@ ConvModel --> PostgresDB
 | query_schedule | 查询课表 | semester, week | 课表信息 |
 | query_exam_schedule | 查询考试安排 | semester | 考试信息 |
 | query_academic_progress | 查询学业进度 | 无 | 学业进度信息 |
+| **query_training_plan** | **查询培养方案** | **semester** | **培养方案课程列表** |
 | refresh_all_data | 刷新所有数据 | 无 | 数据刷新状态 |
 
-**更新** 增强了工具调用的兼容性和日志记录能力
+**更新** 新增query_training_plan工具，扩展AI在学术查询方面的能力
 
 ```mermaid
 flowchart TD
@@ -312,6 +316,29 @@ F --> G[工具调用完成]
 
 **章节来源**
 - [backend/app/services/qwen_service.py:224-309](file://backend/app/services/qwen_service.py#L224-L309)
+
+### 培养方案查询工具实现
+
+**新增功能** 系统新增了query_training_plan工具，专门用于查询学生的培养方案和课程规划：
+
+```mermaid
+flowchart TD
+A[AI请求查询培养方案] --> B[解析参数semester]
+B --> C[调用JwxtScraper.get_my_training_plan()]
+C --> D[解析HTML表格数据]
+D --> E[提取课程列表信息]
+E --> F[按学期过滤可选]
+F --> G[返回培养方案数据]
+G --> H[AI生成自然语言回复]
+```
+
+**图表来源**
+- [backend/app/services/qwen_service.py:401-417](file://backend/app/services/qwen_service.py#L401-L417)
+- [backend/scraper.py:710-818](file://backend/scraper.py#L710-L818)
+
+**章节来源**
+- [backend/app/services/qwen_service.py:401-417](file://backend/app/services/qwen_service.py#L401-L417)
+- [backend/scraper.py:710-818](file://backend/scraper.py#L710-L818)
 
 ### 数据处理和向量化流程
 
@@ -457,8 +484,9 @@ Selenium --> Requests
 | 爬虫失败 | 教务数据获取失败 | 教务系统维护 | 检查教务系统状态 |
 | 前端无法连接 | API请求失败 | CORS配置问题 | 检查CORS设置 |
 | 工具调用格式错误 | 工具调用失败 | 消息格式不兼容 | 检查工具调用格式 |
+| **培养方案查询失败** | **培养方案为空** | **HTML结构变化** | **检查深度爬取HTML** |
 
-**更新** 新增了工具调用格式错误的故障排除指南
+**更新** 新增了培养方案查询失败的故障排除指南
 
 ### 调试方法
 
@@ -467,6 +495,7 @@ Selenium --> Requests
 3. **数据库检查**：连接PostgreSQL检查数据状态
 4. **向量库检查**：使用Milvus命令行工具检查向量状态
 5. **工具调用调试**：查看详细的工具调用结构日志
+6. **培养方案调试**：检查/tmp/debug_training_plan.html文件
 
 **章节来源**
 - [backend/main.py:45-47](file://backend/main.py#L45-L47)
@@ -483,6 +512,7 @@ Selenium --> Requests
 - **现代化架构**：微服务架构支持水平扩展和高可用
 - **增强的兼容性**：支持字典和对象两种消息格式，提高系统稳定性
 - **完善的日志记录**：详细的工具调用结构日志便于调试和监控
+- **扩展的学术查询能力**：新增培养方案查询工具，支持课程规划和学分管理
 
 ### 应用价值
 - **提升用户体验**：自然语言交互替代复杂的系统操作流程
@@ -490,8 +520,9 @@ Selenium --> Requests
 - **降低学习成本**：无需熟悉复杂的教务系统操作流程
 - **增强数据利用**：将静态的教务数据转化为动态的知识服务
 - **改善开发体验**：详细的日志记录和兼容性支持简化开发和维护
+- **支持学术规划**：培养方案查询工具帮助学生进行课程规划和学分管理
 
 ### 发展前景
 系统具备良好的扩展性，可以轻松集成更多工具和服务，为校园智能化建设提供坚实的技术基础。通过持续优化AI模型和数据处理算法，系统将能够提供更加精准和智能的服务体验。
 
-**更新** 新增了兼容性和日志记录方面的技术优势说明
+**更新** 新增了学术查询能力和培养方案工具的技术优势说明

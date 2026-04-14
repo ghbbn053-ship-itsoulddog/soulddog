@@ -109,6 +109,9 @@ export default function LoginPage() {
         // 保存用户名到 localStorage
         localStorage.setItem("username", username);
         
+        // 设置cookie（供中间件验证）
+        document.cookie = `session_username=${username}; path=/; max-age=86400; SameSite=Lax`; // 24小时过期
+        
         // 检查同步状态
         const syncStatus = data.sync_status;
         const syncMessage = data.sync_message || "";

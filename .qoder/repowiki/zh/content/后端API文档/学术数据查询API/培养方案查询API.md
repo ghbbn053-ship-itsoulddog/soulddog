@@ -6,19 +6,21 @@
 - [scraper.py](file://backend/scraper.py)
 - [education_data.py](file://backend/app/models/education_data.py)
 - [education_options.py](file://backend/education_options.py)
+- [qwen_service.py](file://backend/app/services/qwen_service.py)
 - [requirements.txt](file://backend/requirements.txt)
 - [test_scraper.py](file://backend/test_scraper.py)
 - [check-deployment.sh](file://check-deployment.sh)
 - [爬虫验证报告.md](file://爬虫验证报告.md)
+- [training_plan_real.html](file://training_plan_real.html)
 </cite>
 
 ## 更新摘要
 **所做更改**
-- 修复了训练计划爬取功能中的课程代码验证bug（从10位数字改为8位数字）
-- 增强了调试日志功能，包括URL跟踪、响应状态监控、HTML长度验证和表格分析
-- 更新了培养方案数据结构，增加学时相关信息字段
-- 完善了URL构造修复的相关内容
-- 增强了数据解析算法的技术细节说明
+- 新增训练计划查询工具，支持学期过滤功能
+- 增强了结构化数据返回机制
+- 完善了培养方案数据的学期维度支持
+- 更新了AI助手的培养方案查询接口描述
+- 增强了调试日志功能，包括HTML长度验证和表格分析
 
 ## 目录
 1. [简介](#简介)
@@ -38,12 +40,13 @@
 本API主要功能包括：
 - 获取个人培养方案的完整信息
 - 解析培养方案中的课程要求和学分要求
-- 支持按学期和课程性质进行筛选
-- 提供培养方案与实际课程安排的关联分析
+- **新增**：支持按学期进行精确筛选
+- **新增**：提供结构化的数据返回格式
+- 支持培养方案与实际课程安排的关联分析
 - **新增**：智能处理HTML表格rowspan属性，确保课程类别、性质、模块信息的准确解析
 - **新增**：增强的调试日志功能，包括URL跟踪、响应状态监控、HTML长度验证和表格分析
 
-**更新** 本次更新重点关注课程代码验证bug修复和调试功能增强，解决了8位数字课程代码识别问题
+**更新** 本次更新重点关注新增的训练计划查询工具和学期过滤功能，显著提升了培养方案查询的灵活性和实用性
 
 ## 项目结构
 
@@ -58,39 +61,52 @@ C[app/api/education.py<br/>教育相关API路由]
 D[app/models/education_data.py<br/>数据模型定义]
 E[education_options.py<br/>选项数据工具]
 F[requirements.txt<br/>依赖包管理]
+G[app/services/qwen_service.py<br/>AI助手服务]
 end
 subgraph "前端应用 (frontend)"
-G[next.config.ts<br/>Next.js配置]
-H[src/app/*<br/>页面组件]
-I[src/components/ui/*<br/>UI组件]
+H[next.config.ts<br/>Next.js配置]
+I[src/app/*<br/>页面组件]
+J[src/components/ui/*<br/>UI组件]
 end
 subgraph "工具脚本"
-J[test_login.py<br/>登录测试]
-K[test_scraper.py<br/>爬虫测试]
-L[check-deployment.sh<br/>部署检查脚本]
-M[爬虫验证报告.md<br/>验证报告]
+K[test_login.py<br/>登录测试]
+L[test_scraper.py<br/>爬虫测试]
+M[check-deployment.sh<br/>部署检查脚本]
+N[爬虫验证报告.md<br/>验证报告]
+O[training_plan_real.html<br/>真实培养方案示例]
 end
 A --> B
 A --> C
 A --> E
+A --> G
 C --> B
 D --> A
 B --> A
+G --> B
 ```
 
 **图表来源**
 - [main.py:1-120](file://backend/main.py#L1-L120)
 - [scraper.py:1-50](file://backend/scraper.py#L1-L50)
+- [qwen_service.py:1-50](file://backend/app/services/qwen_service.py#L1-L50)
 
 **章节来源**
 - [main.py:1-853](file://backend/main.py#L1-L853)
-- [requirements.txt:1-44](file://backend/requirements.txt#L1-L44)
+- [requirements.txt:1-48](file://backend/requirements.txt#L1-L48)
 
 ## 核心组件
 
 ### API路由层
 
 系统提供了完整的RESTful API接口，其中培养方案查询接口位于`/api/training-plan/my`路径。该接口采用GET方法，接收用户名参数，返回标准化的JSON响应。
+
+### AI助手查询工具
+
+**新增** 系统现在集成了强大的AI助手查询工具，支持通过自然语言查询培养方案信息：
+
+- **query_training_plan函数**：支持学期过滤的培养方案查询
+- **参数支持**：semester（可选，如"2024-2025-1"）
+- **返回格式**：结构化的培养方案数据，包含课程列表和学期分布信息
 
 ### 数据爬取层
 
@@ -103,9 +119,10 @@ JwxtScraper类负责与教务系统的交互，实现了多种数据抓取功能
 EducationData模型定义了存储培养方案数据的数据库结构，采用JSON格式存储，支持灵活的数据扩展和查询。
 
 **章节来源**
-- [main.py:606-629](file://backend/main.py#L606-L629)
-- [scraper.py:623-782](file://backend/scraper.py#L623-L782)
+- [main.py:694-718](file://backend/main.py#L694-L718)
+- [scraper.py:687-795](file://backend/scraper.py#L687-L795)
 - [education_data.py:11-47](file://backend/app/models/education_data.py#L11-L47)
+- [qwen_service.py:130-141](file://backend/app/services/qwen_service.py#L130-L141)
 
 ## 架构概览
 
@@ -115,6 +132,7 @@ EducationData模型定义了存储培养方案数据的数据库结构，采用J
 sequenceDiagram
 participant Client as 客户端应用
 participant API as FastAPI接口
+participant Qwen as AI助手服务
 participant Scraper as JwxtScraper
 participant EduSystem as 教务系统
 Client->>API : GET /api/training-plan/my?username=学号
@@ -127,11 +145,17 @@ Scraper->>Scraper : 验证课程代码格式8位数字
 Scraper-->>API : 返回培养方案数据
 API-->>Client : 返回JSON响应
 Note over Client,EduSystem : 异步数据处理流程
+Client->>Qwen : query_training_plan(semester="2024-2025-1")
+Qwen->>Scraper : get_my_training_plan()
+Scraper-->>Qwen : 返回完整培养方案
+Qwen->>Qwen : 过滤指定学期数据
+Qwen-->>Client : 返回结构化培养方案
 ```
 
 **图表来源**
-- [main.py:606-629](file://backend/main.py#L606-L629)
-- [scraper.py:623-782](file://backend/scraper.py#L623-L782)
+- [main.py:694-718](file://backend/main.py#L694-L718)
+- [scraper.py:687-795](file://backend/scraper.py#L687-L795)
+- [qwen_service.py:401-417](file://backend/app/services/qwen_service.py#L401-L417)
 
 ## 详细组件分析
 
@@ -148,6 +172,27 @@ Note over Client,EduSystem : 异步数据处理流程
 - **调试日志**：增强的调试信息输出，包括URL跟踪、响应状态监控、HTML长度验证和表格分析
 
 **更新** 接口现在使用正确的URL构造逻辑，确保能够稳定访问培养方案数据
+
+#### AI助手查询工具
+
+**新增** query_training_plan函数提供了更灵活的查询方式：
+
+```python
+{
+    "name": "query_training_plan",
+    "description": "查询学生的培养方案，包括课程体系结构、各学期课程安排、学分要求、必修/选修课列表等",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "semester": {
+                "type": "string",
+                "description": "学期，如 2024-2025-1（可选，不指定则返回所有学期）"
+            }
+        },
+        "required": []
+    }
+}
+```
 
 #### 数据结构定义
 
@@ -224,8 +269,8 @@ TrainingPlanData --> CreditStats : 包含
 - 还需学分：总学分要求与已修学分的差额
 
 **章节来源**
-- [scraper.py:623-782](file://backend/scraper.py#L623-L782)
-- [test_scraper.py:240-250](file://backend/test_scraper.py#L240-L250)
+- [scraper.py:687-795](file://backend/scraper.py#L687-L795)
+- [test_scraper.py:240-280](file://backend/test_scraper.py#L240-L280)
 
 ### 数据模型设计
 
@@ -373,8 +418,54 @@ async def get_my_training_plan_api(username: str):
 - 与教务系统预期的URL结构匹配
 
 **章节来源**
-- [scraper.py:629-631](file://backend/scraper.py#L629-L631)
-- [main.py:612-615](file://backend/main.py#L612-L615)
+- [scraper.py:695-696](file://backend/scraper.py#L695-L696)
+- [main.py:700-701](file://backend/main.py#L700-L701)
+
+### 学期过滤功能详解
+
+**新增** 系统现在支持按学期精确过滤培养方案数据
+
+#### AI助手中的学期过滤实现
+
+在query_training_plan函数中，实现了灵活的学期过滤机制：
+
+```python
+elif func_name == "query_training_plan":
+    result = scraper.get_my_training_plan()
+    if result.get("success"):
+        data = result.get("data", {})
+        courses = data.get("课程列表", [])
+        
+        # 如果指定了学期，过滤
+        semester_filter = args.get("semester", "")
+        if semester_filter:
+            courses = [c for c in courses if c.get("学期") == semester_filter]
+        
+        return {
+            "培养方案": courses,
+            "总课程数": len(courses),
+            "学期分布": list(set(c.get("学期", "") for c in courses))
+        }
+    return {"error": result.get("message", "查询失败")}
+```
+
+#### 支持的学期格式
+
+系统支持的标准学期格式包括：
+- `"2024-2025-1"`：表示2024-2025学年第一学期
+- `"2024-2025-2"`：表示2024-2025学年第二学期
+- `"2023-2024-1"`：表示2023-2024学年第一学期
+
+#### 学期过滤的优势
+
+- **精确查询**：可以根据具体学期获取对应的课程安排
+- **灵活筛选**：支持查询特定学期的必修课、选修课
+- **课程规划**：帮助学生制定个性化的学习计划
+- **进度跟踪**：便于跟踪不同学期的学习进展
+
+**章节来源**
+- [qwen_service.py:407-417](file://backend/app/services/qwen_service.py#L407-L417)
+- [qwen_service.py:135-138](file://backend/app/services/qwen_service.py#L135-L138)
 
 ### rowspan处理机制详解
 
@@ -535,16 +626,18 @@ subgraph "AI相关"
 G[OpenAI 1.59.6]
 H[LangChain 0.3.14]
 I[Milvus 2.6.11]
+J[DashScope 1.20.11]
 end
 A --> C
 A --> E
 A --> G
 G --> H
 H --> I
+J --> G
 ```
 
 **图表来源**
-- [requirements.txt:1-44](file://backend/requirements.txt#L1-L44)
+- [requirements.txt:1-48](file://backend/requirements.txt#L1-L48)
 
 ### 内部模块依赖
 
@@ -556,6 +649,7 @@ A --> D[education.py]
 D --> B
 B --> E[education_data.py]
 C --> F[选项数据]
+G[qwen_service.py] --> B
 ```
 
 **图表来源**
@@ -563,7 +657,7 @@ C --> F[选项数据]
 - [scraper.py:1-50](file://backend/scraper.py#L1-L50)
 
 **章节来源**
-- [requirements.txt:1-44](file://backend/requirements.txt#L1-L44)
+- [requirements.txt:1-48](file://backend/requirements.txt#L1-L48)
 - [main.py:1-853](file://backend/main.py#L1-L853)
 
 ## 性能考虑
@@ -626,6 +720,7 @@ C --> H
 | **新增** | **rowspan解析失败** | **检查倒计时变量逻辑** |
 | **新增** | **课程代码识别错误** | **验证课程代码长度** |
 | **新增** | **8位数字课程代码不匹配** | **确认课程代码格式** |
+| **新增** | **学期过滤无效** | **检查学期格式匹配** |
 
 #### 性能问题
 
@@ -644,18 +739,22 @@ C --> H
 3. **性能监控**：跟踪API响应时间和错误率
 4. **日志分析**：记录详细的错误信息和调试信息
 5. **部署检查脚本**：验证服务器代码更新状态
+6. **真实HTML验证**：使用training_plan_real.html进行本地测试
 
-**更新** 针对rowspan处理机制和课程代码验证，新增了以下调试要点：
+**更新** 针对rowspan处理机制、课程代码验证和学期过滤功能，新增了以下调试要点：
 - 验证倒计时变量cat_rem、nat_rem、mod_rem的正确更新
 - 检查rowspan属性的解析和计算逻辑
 - 确认课程代码识别和验证机制正常工作
 - 测试复杂表格结构下的数据完整性
 - 验证8位数字课程代码格式匹配
+- 测试学期过滤功能的正确性
+- 验证AI助手查询工具的参数传递
 
 **章节来源**
 - [test_login.py:1-152](file://backend/test_login.py#L1-L152)
 - [test_scraper.py:240-280](file://backend/test_scraper.py#L240-L280)
 - [check-deployment.sh:51-68](file://check-deployment.sh#L51-L68)
+- [training_plan_real.html:1-44](file://training_plan_real.html#L1-L44)
 
 ## 结论
 
@@ -669,14 +768,18 @@ C --> H
 4. **性能优化**：异步处理和缓存策略提升响应速度
 5. **rowspan处理**：智能解析复杂表格结构，确保数据准确性
 6. **增强调试**：完善的日志系统，便于问题诊断和性能监控
+7. **学期过滤**：新增的学期过滤功能，支持精确的课程查询
+8. **AI集成**：与AI助手无缝集成，提供自然语言查询体验
 
-**更新** 最重要的改进是rowspan处理机制的实现和调试功能的增强，确保了：
+**更新** 最重要的改进是新增的训练计划查询工具和学期过滤功能，显著提升了培养方案查询的实用性和灵活性：
 - 稳定的培养方案数据访问
 - 正确的基础URL拼接
 - 与教务系统预期的URL结构完全匹配
 - 智能处理HTML表格rowspan属性，解决复杂表格结构下的数据解析问题
 - 8位数字课程代码格式的准确定位和验证
 - 增强的调试日志功能，包括URL跟踪、响应状态监控、HTML长度验证和表格分析
+- 灵活的学期过滤机制，支持精确的课程查询
+- 结构化的数据返回格式，便于AI助手处理
 
 ### 未来改进方向
 
@@ -686,5 +789,7 @@ C --> H
 4. **错误处理**：提供更友好的错误提示信息
 5. **rowspan处理优化**：进一步优化rowspan解析算法，提升处理效率
 6. **部署自动化**：完善部署检查脚本，确保代码更新的一致性
+7. **AI助手增强**：扩展AI助手的自然语言理解能力
+8. **移动端适配**：优化移动端的用户体验
 
 该API为学生提供了清晰的课程规划指导，帮助他们更好地理解和执行培养方案要求，是教务系统智能化转型的重要组成部分。

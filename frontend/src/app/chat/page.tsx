@@ -161,6 +161,7 @@ export default function ChatPage() {
   const newConversation = () => {
     setCurrentConversationId(null);
     setMessages([]);
+    localStorage.removeItem("current_conversation_id");
     setSidebarOpen(false);
   };
 
@@ -185,12 +186,22 @@ export default function ChatPage() {
     }
   };
 
-  // 页面加载时从 localStorage 读取用户名，未登录则跳转
+  // 页面加载时从 localStorage 读取用户名和当前会话
   useEffect(() => {
     const savedUsername = localStorage.getItem("username");
     if (savedUsername) {
       setUsername(savedUsername);
-      // fetchConversations 在 username 变化后触发
+      
+      // 恢复当前会话ID
+      const savedConversationId = localStorage.getItem("current_conversation_id");
+      if (savedConversationId) {
+        const convId = parseInt(savedConversationId);
+        if (!isNaN(convId)) {
+          setCurrentConversationId(convId);
+          // 延迟加载历史，等待username设置完成
+          setTimeout(() => fetchHistory(convId), 100);
+        }
+      }
     } else {
       // 未登录，跳转到登录页
       window.location.href = "/login";
@@ -203,10 +214,22 @@ export default function ChatPage() {
       fetchConversations();
     }
   }, [username]);
+  
+  // 当 currentConversationId 变化时，保存到 localStorage
+  useEffect(() => {
+    if (currentConversationId !== null) {
+      localStorage.setItem("current_conversation_id", currentConversationId.toString());
+    } else {
+      localStorage.removeItem("current_conversation_id");
+    }
+  }, [currentConversationId]);
 
   // 退出登录
   const handleLogout = () => {
     localStorage.removeItem("username");
+    localStorage.removeItem("current_conversation_id");
+    // 清除cookie
+    document.cookie = 'session_username=; path=/; max-age=0';
     window.location.href = "/login";
   };
 

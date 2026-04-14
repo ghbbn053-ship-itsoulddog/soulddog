@@ -29,7 +29,7 @@
 10. [附录](#附录)
 
 ## 简介
-本项目是一个基于FastAPI的智能教务系统AI助手后端API，提供验证码获取、用户登录、健康检查、AI对话、教务数据查询等RESTful接口。系统采用前后端分离架构，后端使用Python 3.8+和FastAPI框架，前端使用Next.js 16，支持验证码登录、数据爬取、AI问答等功能。
+本项目是一个基于FastAPI的智能教务系统AI助手后端API，提供验证码获取、用户登录、健康检查、AI对话、教务数据查询、数据同步等RESTful接口。系统采用前后端分离架构，后端使用Python 3.8+和FastAPI框架，前端使用Next.js 16，支持验证码登录、数据爬取、AI问答、数据同步等功能。
 
 ## 项目结构
 后端项目采用模块化设计，主要包含以下核心模块：
@@ -63,11 +63,11 @@ Services --> Qwen
 ```
 
 **图表来源**
-- [backend/main.py:1-853](file://backend/main.py#L1-L853)
-- [backend/app/api/chat.py:1-224](file://backend/app/api/chat.py#L1-L224)
+- [backend/main.py:1-1039](file://backend/main.py#L1-L1039)
+- [backend/app/api/chat.py:1-249](file://backend/app/api/chat.py#L1-L249)
 
 **章节来源**
-- [backend/main.py:1-853](file://backend/main.py#L1-L853)
+- [backend/main.py:1-1039](file://backend/main.py#L1-L1039)
 - [README.md:25-41](file://README.md#L25-L41)
 
 ## 核心组件
@@ -89,6 +89,11 @@ Services --> Qwen
 - 向量数据库Milvus集成
 - 支持对话历史管理
 
+### 4. 数据同步系统
+- 支持自动和手动数据同步
+- 后台任务异步处理
+- 数据同步状态跟踪
+
 **章节来源**
 - [backend/main.py:39-48](file://backend/main.py#L39-L48)
 - [backend/main.py:82-92](file://backend/main.py#L82-L92)
@@ -107,11 +112,13 @@ Health[健康检查]
 Auth[认证相关]
 Data[数据查询]
 Chat[AI对话]
+Sync[数据同步]
 end
 subgraph "业务逻辑层"
 Login[登录验证]
 Crawler[数据爬取]
 RAG[RAG处理]
+SyncTask[同步任务]
 end
 subgraph "数据层"
 Session[会话存储]
@@ -127,10 +134,12 @@ Frontend --> Health
 Frontend --> Auth
 Frontend --> Data
 Frontend --> Chat
+Frontend --> Sync
 Health --> Session
 Auth --> Login
 Data --> Crawler
 Chat --> RAG
+Sync --> SyncTask
 Login --> EduSys
 Crawler --> EduSys
 RAG --> VectorDB
@@ -172,7 +181,7 @@ PostgreSQL --> Session
 系统根据学号自动选择服务器，确保验证码和登录使用同一服务器实例。
 
 **章节来源**
-- [backend/main.py:135-190](file://backend/main.py#L135-L190)
+- [backend/main.py:166-235](file://backend/main.py#L166-L235)
 - [backend/main.py:82-92](file://backend/main.py#L82-L92)
 
 ### 用户登录接口
@@ -200,7 +209,9 @@ PostgreSQL --> Session
   "success": true,
   "message": "登录成功",
   "username": "24251102121",
-  "session_id": "JSESSIONID_value"
+  "session_id": "JSESSIONID_value",
+  "sync_status": "completed",
+  "sync_message": "已加载历史数据"
 }
 ```
 
@@ -229,10 +240,10 @@ API-->>Client : 返回登录状态
 ```
 
 **图表来源**
-- [backend/main.py:192-327](file://backend/main.py#L192-L327)
+- [backend/main.py:237-444](file://backend/main.py#L237-L444)
 
 **章节来源**
-- [backend/main.py:192-327](file://backend/main.py#L192-L327)
+- [backend/main.py:237-444](file://backend/main.py#L237-L444)
 
 ### 健康检查接口
 提供系统健康状态检查功能。
@@ -250,7 +261,47 @@ API-->>Client : 返回登录状态
 ```
 
 **章节来源**
-- [backend/main.py:126-129](file://backend/main.py#L126-L129)
+- [backend/main.py:157-161](file://backend/main.py#L157-L161)
+
+### 数据同步接口组
+
+#### 手动触发数据同步
+- **HTTP方法**: POST
+- **URL路径**: `/api/sync-data`
+- **参数**: `username`
+- **功能**: 手动触发数据同步更新
+
+#### 同步状态查询
+- **HTTP方法**: GET
+- **URL路径**: `/api/sync-status`
+- **参数**: `username`
+- **功能**: 查询数据同步状态
+
+#### 同步流程
+```mermaid
+sequenceDiagram
+participant Client as 客户端
+participant SyncAPI as 同步接口
+participant Background as 后台任务
+participant Crawler as 数据爬取
+participant DB as 数据库
+participant VectorDB as 向量数据库
+Client->>SyncAPI : POST /api/sync-data
+SyncAPI->>SyncAPI : 检查用户会话
+SyncAPI->>Background : 启动后台任务
+Background->>Crawler : 爬取教务数据
+Crawler->>DB : 存储数据
+Crawler->>VectorDB : 向量化存储
+SyncAPI-->>Client : 返回同步开始状态
+```
+
+**图表来源**
+- [backend/main.py:507-531](file://backend/main.py#L507-L531)
+- [backend/main.py:448-497](file://backend/main.py#L448-L497)
+
+**章节来源**
+- [backend/main.py:507-531](file://backend/main.py#L507-L531)
+- [backend/main.py:499-504](file://backend/main.py#L499-L504)
 
 ### 教务数据查询接口组
 
@@ -284,7 +335,7 @@ API-->>Client : 返回登录状态
 - **参数**: `username`, `semester`
 
 **章节来源**
-- [backend/main.py:332-580](file://backend/main.py#L332-L580)
+- [backend/main.py:550-775](file://backend/main.py#L550-L775)
 
 ### AI对话接口组
 
@@ -306,7 +357,7 @@ API-->>Client : 返回登录状态
 - **URL路径**: `/api/chat/conversations/{conversation_id}`
 
 **章节来源**
-- [backend/app/api/chat.py:45-224](file://backend/app/api/chat.py#L45-L224)
+- [backend/app/api/chat.py:46-249](file://backend/app/api/chat.py#L46-L249)
 
 ### 教育系统选项查询接口
 
@@ -322,7 +373,7 @@ API-->>Client : 返回登录状态
 
 #### 当前学期
 - **HTTP方法**: GET
-- **URL路径**: `/api/options/current-semester`
+- **URLPath**: `/api/options/current-semester`
 
 #### 课程选项
 - **HTTP方法**: GET
@@ -337,7 +388,7 @@ API-->>Client : 返回登录状态
 - **URL路径**: `/api/options/grade`
 
 **章节来源**
-- [backend/main.py:729-800](file://backend/main.py#L729-L800)
+- [backend/main.py:915-987](file://backend/main.py#L915-L987)
 
 ## 依赖分析
 
@@ -366,6 +417,7 @@ end
 subgraph "缓存与数据库"
 Redis[Redis 5.2.1]
 PostgreSQL[PostgreSQL驱动]
+SQLAlchemy[SQLAlchemy ORM]
 end
 ```
 
@@ -426,6 +478,11 @@ EduAPI --> Options
 - 连接池管理
 - 超时控制
 
+### 5. 数据同步优化
+- 后台任务异步处理
+- 数据同步状态跟踪
+- 避免重复同步
+
 ## 故障排除指南
 
 ### 常见问题及解决方案
@@ -454,17 +511,17 @@ EduAPI --> Options
 2. 检查学号格式
 3. 验证密码正确性
 
-#### 3. 数据查询超时
-**症状**: 教务数据查询接口响应缓慢
+#### 3. 数据同步失败
+**症状**: 数据同步接口返回失败
 **可能原因**:
-- 教务系统响应慢
-- 网络延迟
-- 服务器负载高
+- 用户未登录
+- 正在进行同步操作
+- 教务系统访问失败
 
 **解决步骤**:
-1. 检查服务器状态
-2. 优化网络连接
-3. 实施重试机制
+1. 确认用户已登录
+2. 检查同步状态
+3. 重试同步操作
 
 #### 4. AI对话异常
 **症状**: AI对话接口返回错误
@@ -482,7 +539,7 @@ EduAPI --> Options
 - [README.md:200-216](file://README.md#L200-L216)
 
 ## 结论
-本后端API文档详细介绍了智能教务系统AI助手的RESTful接口设计，包括验证码获取、用户登录、健康检查、AI对话、教务数据查询等核心功能。系统采用模块化架构设计，支持扩展和维护。建议在生产环境中实施以下改进：
+本后端API文档详细介绍了智能教务系统AI助手的RESTful接口设计，包括验证码获取、用户登录、健康检查、AI对话、教务数据查询、数据同步等核心功能。系统采用模块化架构设计，支持扩展和维护。新增的手动数据同步功能提供了用户主动更新数据的能力，增强了系统的灵活性和用户体验。建议在生产环境中实施以下改进：
 - 部署Redis作为会话存储
 - 实现完整的错误处理和重试机制
 - 添加API限流和安全防护
@@ -501,6 +558,7 @@ EduAPI --> Options
 - 登录尝试: 5次/小时
 - 数据查询: 100次/小时
 - AI对话: 50次/小时
+- 数据同步: 10次/小时
 
 ### 安全考虑
 - CORS配置仅允许特定源
@@ -515,3 +573,13 @@ EduAPI --> Options
 - MILVUS_HOST: Milvus服务器地址
 - DASHSCOPE_API_KEY: 阿里云API密钥
 - BACKEND_PORT: 服务端口
+
+### 数据同步状态说明
+- `none`: 未开始同步
+- `syncing`: 同步中
+- `completed`: 同步完成
+- `failed`: 同步失败
+
+**章节来源**
+- [backend/main.py:87-88](file://backend/main.py#L87-L88)
+- [backend/main.py:500-504](file://backend/main.py#L500-L504)

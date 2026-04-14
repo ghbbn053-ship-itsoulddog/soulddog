@@ -470,20 +470,44 @@ class JwxtScraper:
         try:
             # 课表查询URL（根据深度爬取crawl_tree.json）
             url = f"{self.base_url}xskb/xskb_list.do"
+            logger.info(f"【课表调试】请求URL: {url}")
 
             # 构建表单数据
             data = {}
             if semester:
                 data["xnxq01id"] = semester
+                logger.info(f"【课表调试】查询学期: {semester}")
 
             # POST提交查询（课表必须POST）
             response = self.session.post(url, data=data if data else {}, timeout=10)
+            logger.info(f"【课表调试】响应状态: {response.status_code}")
+            logger.info(f"【课表调试】响应URL: {response.url}")
 
             html_text = self._fix_encoding(response)
+            logger.info(f"【课表调试】HTML长度: {len(html_text)}")
+            
+            # 保存HTML到文件用于调试
+            with open('/tmp/debug_schedule.html', 'w', encoding='utf-8') as f:
+                f.write(html_text)
+            logger.info(f"【课表调试】HTML已保存到 /tmp/debug_schedule.html")
+            
             soup = BeautifulSoup(html_text, 'html.parser')
 
             # 查找课表表格（真实HTML中表格ID为kbtable）
             schedule_table = soup.find('table', id='kbtable')
+            
+            if not schedule_table:
+                logger.warning("【课表调试】未找到id='kbtable'的表格")
+                # 备用策略：查找所有表格
+                all_tables = soup.find_all('table')
+                logger.info(f"【课表调试】找到 {len(all_tables)} 个表格")
+                for table_idx, table in enumerate(all_tables):
+                    rows = table.find_all('tr')
+                    logger.info(f"【课表调试】表格{table_idx}有 {len(rows)} 行")
+                    if len(rows) > 5:  # 假设有数据的表格至少有5行
+                        schedule_table = table
+                        logger.info(f"【课表调试】选择表格{table_idx}作为课表")
+                        break
 
             if not schedule_table:
                 logger.warning("未找到课表表格")
@@ -493,6 +517,8 @@ class JwxtScraper:
                     "count": 0,
                     "semester": semester
                 }
+            
+            logger.info(f"【课表调试】找到课表表格，开始解析")
 
             # 解析课表
             courses = []
