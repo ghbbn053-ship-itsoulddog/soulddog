@@ -910,16 +910,25 @@ class JwxtScraper:
             progress_table = soup.find('table', class_=lambda x: x and 'Nsb_r_list' in x if x else False)
             
             if not progress_table:
-                # 备用策略：查找所有表格
+                # 备用策略1：查找包含"需修读总学分"的表格
+                for table in soup.find_all('table'):
+                    if '需修读总学分' in table.get_text():
+                        progress_table = table
+                        logger.info(f"【学业进度调试】通过'需修读总学分'找到表格")
+                        break
+            
+            if not progress_table:
+                # 备用策略2：查找行数最多的表格
                 all_tables = soup.find_all('table')
                 logger.info(f"【学业进度调试】找到 {len(all_tables)} 个表格")
+                max_rows = 0
                 for table_idx, table in enumerate(all_tables):
                     rows = table.find_all('tr')
                     logger.info(f"【学业进度调试】表格{table_idx}有 {len(rows)} 行")
-                    if len(rows) > 5:  # 假设有数据的表格至少有5行
+                    if len(rows) > max_rows:
+                        max_rows = len(rows)
                         progress_table = table
-                        logger.info(f"【学业进度调试】选择表格{table_idx}作为学业进度表格")
-                        break
+                        logger.info(f"【学业进度调试】选择表格{table_idx}作为学业进度表格（{max_rows}行）")
             
             if progress_table:
                 rows = progress_table.find_all('tr')
@@ -944,13 +953,27 @@ class JwxtScraper:
                     logger.info(f"【学业进度调试】第{row_idx}行有 {len(cells)} 个单元格")
 
                     # 检查是否是合计行
-                    if len(cells) == 3 and '合计' in cells[0].get_text():
-                        logger.info(f"【学业进度调试】找到合计行")
+                    row_text = row.get_text(strip=True)
+                    if '合计' in row_text:
+                        logger.info(f"【学业进度调试】找到合计行，{len(cells)}个单元格")
                         try:
-                            progress_data["已获学分"] = float(cells[2].get_text(strip=True) or 0)
-                            logger.info(f"【学业进度调试】从合计行提取已获学分: {progress_data['已获学分']}")
-                        except:
-                            pass
+                            # 合计行结构：<td colspan="5">合计</td><td></td><td>25.0</td>
+                            # 或：['合计', '', '25.0']（3个单元格）
+                            # 尝试从最后一个单元格提取已获学分
+                            if len(cells) >= 2:
+                                earned_text = cells[-1].get_text(strip=True)
+                                if earned_text:
+                                    progress_data["已获学分"] = float(earned_text)
+                                    logger.info(f"【学业进度调试】从合计行提取已获学分: {progress_data['已获学分']}")
+                                else:
+                                    # 如果最后一个单元格为空，尝试倒数第二个
+                                    if len(cells) >= 3:
+                                        earned_text = cells[-2].get_text(strip=True)
+                                        if earned_text:
+                                            progress_data["已获学分"] = float(earned_text)
+                                            logger.info(f"【学业进度调试】从合计行提取已获学分: {progress_data['已获学分']}")
+                        except Exception as e:
+                            logger.warning(f"【学业进度调试】合计行解析失败: {str(e)}")
                         continue
 
                     # 解析课程行
