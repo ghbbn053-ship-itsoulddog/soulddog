@@ -8,15 +8,17 @@
 - [education_options.py](file://backend/education_options.py)
 - [requirements.txt](file://backend/requirements.txt)
 - [test_scraper.py](file://backend/test_scraper.py)
+- [check-deployment.sh](file://check-deployment.sh)
+- [爬虫验证报告.md](file://爬虫验证报告.md)
 </cite>
 
 ## 更新摘要
 **所做更改**
-- 新增rowspan处理机制的详细说明，包括cat_rem、nat_rem、mod_rem倒计时变量
-- 补充课程代码识别和验证机制的说明
-- 更新培养方案数据结构，增加学时相关信息字段
-- 完善URL构造修复的相关内容
-- 增强数据解析算法的技术细节说明
+- 修复了训练计划爬取功能中的课程代码验证bug（从10位数字改为8位数字）
+- 增强了调试日志功能，包括URL跟踪、响应状态监控、HTML长度验证和表格分析
+- 更新了培养方案数据结构，增加学时相关信息字段
+- 完善了URL构造修复的相关内容
+- 增强了数据解析算法的技术细节说明
 
 ## 目录
 1. [简介](#简介)
@@ -39,8 +41,9 @@
 - 支持按学期和课程性质进行筛选
 - 提供培养方案与实际课程安排的关联分析
 - **新增**：智能处理HTML表格rowspan属性，确保课程类别、性质、模块信息的准确解析
+- **新增**：增强的调试日志功能，包括URL跟踪、响应状态监控、HTML长度验证和表格分析
 
-**更新** 本次更新重点关注rowspan处理机制的实现，解决了复杂表格结构下的数据解析问题
+**更新** 本次更新重点关注课程代码验证bug修复和调试功能增强，解决了8位数字课程代码识别问题
 
 ## 项目结构
 
@@ -64,6 +67,8 @@ end
 subgraph "工具脚本"
 J[test_login.py<br/>登录测试]
 K[test_scraper.py<br/>爬虫测试]
+L[check-deployment.sh<br/>部署检查脚本]
+M[爬虫验证报告.md<br/>验证报告]
 end
 A --> B
 A --> C
@@ -118,6 +123,7 @@ API->>Scraper : 创建爬虫实例
 Scraper->>EduSystem : 访问培养方案页面
 EduSystem-->>Scraper : 返回HTML内容
 Scraper->>Scraper : 解析HTML数据含rowspan处理
+Scraper->>Scraper : 验证课程代码格式8位数字
 Scraper-->>API : 返回培养方案数据
 API-->>Client : 返回JSON响应
 Note over Client,EduSystem : 异步数据处理流程
@@ -139,6 +145,7 @@ Note over Client,EduSystem : 异步数据处理流程
 - **异步处理**：使用异步编程模式提高并发性能
 - **错误处理**：完善的异常捕获和错误响应机制
 - **数据验证**：对返回数据进行结构化验证
+- **调试日志**：增强的调试信息输出，包括URL跟踪、响应状态监控、HTML长度验证和表格分析
 
 **更新** 接口现在使用正确的URL构造逻辑，确保能够稳定访问培养方案数据
 
@@ -316,11 +323,11 @@ F --> G
 def get_my_training_plan(self) -> Dict:
     """
     获取"我的培养方案"（当前登录学生）
-     URL: /jsxsd/pyfa/pyfazd_query
-    返回详细的培养方案，包括课程类别、模块、学分要求等
+     URL: /jsxsd/pyfa/pyfa_query
+    返回详细的培养方案，包括学期、课程代码、课程名称、学分等
     """
     try:
-        url = f"{self.base_url}/pyfa/pyfazd_query"
+        url = f"{self.base_url}pyfa/pyfa_query"
         response = self.session.get(url, timeout=10)
         # ... 解析逻辑
     except Exception as e:
@@ -456,6 +463,54 @@ try:
 - [scraper.py:684-709](file://backend/scraper.py#L684-L709)
 - [scraper.py:716-719](file://backend/scraper.py#L716-L719)
 
+### 增强的调试日志功能
+
+**新增** 本次更新重点介绍了增强的调试日志功能
+
+#### URL跟踪和响应状态监控
+
+系统在培养方案查询过程中增加了详细的调试信息：
+
+```python
+logger.info(f"【培养方案调试】请求URL: {url}")
+logger.info(f"【培养方案调试】响应状态: {response.status_code}")
+logger.info(f"【培养方案调试】响应URL: {response.url}")
+html_text = self._fix_encoding(response)
+logger.info(f"【培养方案调试】HTML长度: {len(html_text)}")
+```
+
+#### HTML长度验证和表格分析
+
+系统提供了HTML内容长度验证和表格分析功能：
+
+```python
+# 保存HTML到文件用于调试
+with open('/tmp/debug_training_plan.html', 'w', encoding='utf-8') as f:
+    f.write(html_text)
+logger.info(f"【培养方案调试】HTML已保存到 /tmp/debug_training_plan.html")
+
+# 输出HTML前500字符用于调试
+logger.info(f"【培养方案调试】HTML前500字符: {html_text[:500]}")
+
+# 分析表格结构
+all_tables = soup.find_all('table')
+logger.info(f"【培养方案调试】找到 {len(all_tables)} 个表格")
+```
+
+#### 课程代码格式验证
+
+系统现在使用8位数字格式验证课程代码：
+
+```python
+# 验证课程代码格式（应该是8位数字）
+if not re.match(r'^\d{8}$', course_code):
+    continue
+```
+
+**章节来源**
+- [scraper.py:696-709](file://backend/scraper.py#L696-L709)
+- [scraper.py:734-735](file://backend/scraper.py#L734-L735)
+
 ## 依赖关系分析
 
 ### 外部依赖
@@ -570,6 +625,7 @@ C --> H
 | 课程列表不完整 | 网页分页问题 | 实现分页处理 |
 | **新增** | **rowspan解析失败** | **检查倒计时变量逻辑** |
 | **新增** | **课程代码识别错误** | **验证课程代码长度** |
+| **新增** | **8位数字课程代码不匹配** | **确认课程代码格式** |
 
 #### 性能问题
 
@@ -587,16 +643,19 @@ C --> H
 2. **爬虫测试模块**：检查数据解析正确性
 3. **性能监控**：跟踪API响应时间和错误率
 4. **日志分析**：记录详细的错误信息和调试信息
+5. **部署检查脚本**：验证服务器代码更新状态
 
-**更新** 针对rowspan处理机制，新增了以下调试要点：
+**更新** 针对rowspan处理机制和课程代码验证，新增了以下调试要点：
 - 验证倒计时变量cat_rem、nat_rem、mod_rem的正确更新
 - 检查rowspan属性的解析和计算逻辑
 - 确认课程代码识别和验证机制正常工作
 - 测试复杂表格结构下的数据完整性
+- 验证8位数字课程代码格式匹配
 
 **章节来源**
 - [test_login.py:1-152](file://backend/test_login.py#L1-L152)
 - [test_scraper.py:240-280](file://backend/test_scraper.py#L240-L280)
+- [check-deployment.sh:51-68](file://check-deployment.sh#L51-L68)
 
 ## 结论
 
@@ -608,13 +667,16 @@ C --> H
 2. **实时更新**：直接从教务系统抓取最新数据
 3. **灵活扩展**：支持多种课程性质和学期组合
 4. **性能优化**：异步处理和缓存策略提升响应速度
-5. ****rowspan处理**：智能解析复杂表格结构，确保数据准确性
+5. **rowspan处理**：智能解析复杂表格结构，确保数据准确性
+6. **增强调试**：完善的日志系统，便于问题诊断和性能监控
 
-**更新** 最重要的改进是rowspan处理机制的实现，确保了：
+**更新** 最重要的改进是rowspan处理机制的实现和调试功能的增强，确保了：
 - 稳定的培养方案数据访问
 - 正确的基础URL拼接
 - 与教务系统预期的URL结构完全匹配
-- **新增**：智能处理HTML表格rowspan属性，解决复杂表格结构下的数据解析问题
+- 智能处理HTML表格rowspan属性，解决复杂表格结构下的数据解析问题
+- 8位数字课程代码格式的准确定位和验证
+- 增强的调试日志功能，包括URL跟踪、响应状态监控、HTML长度验证和表格分析
 
 ### 未来改进方向
 
@@ -622,6 +684,7 @@ C --> H
 2. **缓存优化**：实现更智能的缓存策略
 3. **监控完善**：增加更详细的性能指标监控
 4. **错误处理**：提供更友好的错误提示信息
-5. ****rowspan处理优化**：进一步优化rowspan解析算法，提升处理效率
+5. **rowspan处理优化**：进一步优化rowspan解析算法，提升处理效率
+6. **部署自动化**：完善部署检查脚本，确保代码更新的一致性
 
 该API为学生提供了清晰的课程规划指导，帮助他们更好地理解和执行培养方案要求，是教务系统智能化转型的重要组成部分。

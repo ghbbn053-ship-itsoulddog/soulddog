@@ -17,6 +17,12 @@
 - [backend/requirements.txt](file://backend/requirements.txt)
 </cite>
 
+## 更新摘要
+**变更内容**
+- 增强了Qwen服务的工具调用兼容性，支持字典和对象两种消息格式
+- 增加了详细的工具调用结构日志记录功能
+- 改进了工具调用的错误处理和调试能力
+
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
@@ -37,6 +43,7 @@
 - **多模态AI服务**：支持直接对话、工具调用和RAG增强对话三种模式
 - **完整的数据管道**：从教务系统爬取数据到向量化存储的全流程
 - **智能对话管理**：支持多轮对话、对话历史管理和工具调用追踪
+- **增强的工具调用兼容性**：支持字典和对象两种消息格式，提供详细的结构日志记录
 
 ## 项目结构
 
@@ -105,6 +112,8 @@ class QwenService {
 +chat_with_rag(question, context) Dict
 +generate_embedding(text) List[float]
 -_execute_tool(func_name, args, context) Dict
++支持字典和对象两种消息格式
++详细工具调用结构日志记录
 }
 class JwxtScraper {
 +session : requests.Session
@@ -234,6 +243,8 @@ ConvModel --> PostgresDB
 | query_academic_progress | 查询学业进度 | 无 | 学业进度信息 |
 | refresh_all_data | 刷新所有数据 | 无 | 数据刷新状态 |
 
+**更新** 增强了工具调用的兼容性和日志记录能力
+
 ```mermaid
 flowchart TD
 Start([AI请求到达]) --> CheckContext{检查工具上下文}
@@ -260,6 +271,47 @@ SaveHistory --> End([返回客户端])
 **章节来源**
 - [backend/app/services/qwen_service.py:46-143](file://backend/app/services/qwen_service.py#L46-L143)
 - [backend/app/services/qwen_service.py:190-321](file://backend/app/services/qwen_service.py#L190-L321)
+
+### 工具调用兼容性增强
+
+**新增功能** 系统现在支持字典和对象两种消息格式，提高了工具调用的兼容性和稳定性：
+
+```mermaid
+flowchart TD
+A[接收AI响应] --> B{检查响应类型}
+B --> |字典格式| C[使用字典访问工具调用]
+B --> |对象格式| D[使用属性访问工具调用]
+C --> E[兼容性处理]
+D --> E
+E --> F[统一工具调用执行]
+F --> G[生成统一结果格式]
+```
+
+**图表来源**
+- [backend/app/services/qwen_service.py:218-224](file://backend/app/services/qwen_service.py#L218-L224)
+
+**章节来源**
+- [backend/app/services/qwen_service.py:218-224](file://backend/app/services/qwen_service.py#L218-L224)
+
+### 详细工具调用结构日志记录
+
+**新增功能** 系统增加了详细的工具调用结构日志记录，便于调试和监控：
+
+```mermaid
+flowchart TD
+A[工具调用开始] --> B[记录assistant_msg类型]
+B --> C[记录tool_calls结构]
+C --> D[记录工具执行详情]
+D --> E[记录工具结果]
+E --> F[记录总token消耗]
+F --> G[工具调用完成]
+```
+
+**图表来源**
+- [backend/app/services/qwen_service.py:224-309](file://backend/app/services/qwen_service.py#L224-L309)
+
+**章节来源**
+- [backend/app/services/qwen_service.py:224-309](file://backend/app/services/qwen_service.py#L224-L309)
 
 ### 数据处理和向量化流程
 
@@ -404,6 +456,9 @@ Selenium --> Requests
 | 向量库连接失败 | 向量检索异常 | Milvus未启动 | 检查Milvus服务状态 |
 | 爬虫失败 | 教务数据获取失败 | 教务系统维护 | 检查教务系统状态 |
 | 前端无法连接 | API请求失败 | CORS配置问题 | 检查CORS设置 |
+| 工具调用格式错误 | 工具调用失败 | 消息格式不兼容 | 检查工具调用格式 |
+
+**更新** 新增了工具调用格式错误的故障排除指南
 
 ### 调试方法
 
@@ -411,6 +466,7 @@ Selenium --> Requests
 2. **API测试**：使用Postman测试API接口
 3. **数据库检查**：连接PostgreSQL检查数据状态
 4. **向量库检查**：使用Milvus命令行工具检查向量状态
+5. **工具调用调试**：查看详细的工具调用结构日志
 
 **章节来源**
 - [backend/main.py:45-47](file://backend/main.py#L45-L47)
@@ -425,12 +481,17 @@ Selenium --> Requests
 - **多模态AI服务**：支持直接对话、工具调用和RAG增强三种模式
 - **完整的数据管道**：从爬取到向量化的全流程自动化
 - **现代化架构**：微服务架构支持水平扩展和高可用
+- **增强的兼容性**：支持字典和对象两种消息格式，提高系统稳定性
+- **完善的日志记录**：详细的工具调用结构日志便于调试和监控
 
 ### 应用价值
-- **提升用户体验**：自然语言交互替代复杂的系统操作
+- **提升用户体验**：自然语言交互替代复杂的系统操作流程
 - **提高查询效率**：AI智能分析用户意图，快速定位所需信息
 - **降低学习成本**：无需熟悉复杂的教务系统操作流程
 - **增强数据利用**：将静态的教务数据转化为动态的知识服务
+- **改善开发体验**：详细的日志记录和兼容性支持简化开发和维护
 
 ### 发展前景
 系统具备良好的扩展性，可以轻松集成更多工具和服务，为校园智能化建设提供坚实的技术基础。通过持续优化AI模型和数据处理算法，系统将能够提供更加精准和智能的服务体验。
+
+**更新** 新增了兼容性和日志记录方面的技术优势说明
