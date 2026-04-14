@@ -826,15 +826,32 @@ class JwxtScraper:
         """
         try:
             url = f"{self.base_url}pyfa/xyjdcx"
+            logger.info(f"【学业进度调试】请求URL: {url}")
 
-            # 如果有study_type参数，提交表单查询
+            # 如果有study_type参数，提交表单查询（根据深度爬取HTML第405行）
             if study_type:
                 data = {"xdlx": study_type}
-                response = self.session.post(f"{url}?type=cx", data=data, timeout=10)
+                result_url = f"{url}?type=cx"
+                logger.info(f"【学业进度调试】POST提交到: {result_url}")
+                logger.info(f"【学业进度调试】表单数据: {data}")
+                response = self.session.post(result_url, data=data, timeout=10)
             else:
                 response = self.session.get(url, timeout=10)
+            
+            logger.info(f"【学业进度调试】响应状态: {response.status_code}")
+            logger.info(f"【学业进度调试】响应URL: {response.url}")
 
             html_text = self._fix_encoding(response)
+            logger.info(f"【学业进度调试】HTML长度: {len(html_text)}")
+            
+            # 保存HTML到文件用于调试
+            with open('/tmp/debug_academic_progress.html', 'w', encoding='utf-8') as f:
+                f.write(html_text)
+            logger.info(f"【学业进度调试】HTML已保存到 /tmp/debug_academic_progress.html")
+            
+            # 输出HTML前500字符用于调试
+            logger.info(f"【学业进度调试】HTML前500字符: {html_text[:500]}")
+            
             soup = BeautifulSoup(html_text, 'html.parser')
 
             progress_data = {
@@ -853,20 +870,49 @@ class JwxtScraper:
                 if credit_match:
                     progress_data["总学分要求"] = int(credit_match.group(1))
 
-            # 查找课程表格 - 使用class='Nsb_r_list Nsb_table'
+            # 查找课程表格 - 使用多种策略
             progress_table = soup.find('table', class_=lambda x: x and 'Nsb_r_list' in x if x else False)
+            
+            if not progress_table:
+                # 备用策略：查找所有表格
+                all_tables = soup.find_all('table')
+                logger.info(f"【学业进度调试】找到 {len(all_tables)} 个表格")
+                for table_idx, table in enumerate(all_tables):
+                    rows = table.find_all('tr')
+                    logger.info(f"【学业进度调试】表格{table_idx}有 {len(rows)} 行")
+                    if len(rows) > 5:  # 假设有数据的表格至少有5行
+                        progress_table = table
+                        logger.info(f"【学业进度调试】选择表格{table_idx}作为学业进度表格")
+                        break
+            
             if progress_table:
-                rows = progress_table.find_all('tr')[2:]  # 跳过表头（2行表头）
+                rows = progress_table.find_all('tr')
+                logger.info(f"【学业进度调试】学业进度表格共有 {len(rows)} 行")
+                
+                # 跳过表头（可能有1-2行表头）
+                data_rows = []
+                for row_idx, row in enumerate(rows):
+                    if row.find('th'):
+                        logger.info(f"【学业进度调试】第{row_idx}行是表头，跳过")
+                        continue
+                    cells = row.find_all('td')
+                    if cells:
+                        data_rows.append(row)
+                
+                logger.info(f"【学业进度调试】数据行共有 {len(data_rows)} 行")
 
                 total_earned = 0
 
-                for row in rows:
+                for row_idx, row in enumerate(data_rows):
                     cells = row.find_all('td')
+                    logger.info(f"【学业进度调试】第{row_idx}行有 {len(cells)} 个单元格")
 
                     # 检查是否是合计行
                     if len(cells) == 3 and '合计' in cells[0].get_text():
+                        logger.info(f"【学业进度调试】找到合计行")
                         try:
                             progress_data["已获学分"] = float(cells[2].get_text(strip=True) or 0)
+                            logger.info(f"【学业进度调试】从合计行提取已获学分: {progress_data['已获学分']}")
                         except:
                             pass
                         continue
@@ -893,9 +939,12 @@ class JwxtScraper:
                                     pass
 
                             progress_data["课程列表"].append(course_data)
+                            logger.info(f"【学业进度调试】成功解析第{row_idx}行: {course_data.get('课程名称', '未知')}")
                         except Exception as e:
-                            logger.warning(f"解析课程行失败: {str(e)}")
+                            logger.warning(f"【学业进度调试】第{row_idx}行解析失败: {str(e)}")
                             continue
+                    else:
+                        logger.info(f"【学业进度调试】第{row_idx}行单元格不足7个({len(cells)}个)，跳过")
 
                 # 计算还需学分
                 if progress_data["总学分要求"] > 0:
