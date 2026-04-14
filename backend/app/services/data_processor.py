@@ -232,7 +232,27 @@ class DataProcessor:
         # 成绩统计
         stats = grades_info.get("统计信息", {})
         if stats:
-            text = f"成绩统计：{json.dumps(stats, ensure_ascii=False)}"
+            # 构建清晰的成绩统计文本
+            lines = ["成绩统计信息："]
+            
+            if stats.get("course_count"):
+                lines.append(f"  已修课程数量：{stats['course_count']}门")
+            if stats.get("credits_completed"):
+                lines.append(f"  已修读学分：{stats['credits_completed']}学分")
+            if stats.get("total_credits_required"):
+                lines.append(f"  总学分要求：{stats['total_credits_required']}学分")
+            if stats.get("credits_remaining"):
+                lines.append(f"  还需修读：{stats['credits_remaining']}学分")
+            if stats.get("credits_exempted"):
+                lines.append(f"  免修学分：{stats['credits_exempted']}学分")
+            if stats.get("gpa_major"):
+                lines.append(f"  主修课程平均学分绩点：{stats['gpa_major']}")
+            if stats.get("rank"):
+                lines.append(f"  专业排名：{stats['rank']}")
+            if stats.get("gpa_minor"):
+                lines.append(f"  辅修课程平均学分绩点：{stats['gpa_minor']}")
+            
+            text = "\n".join(lines)
             chunks.append({
                 "text": text,
                 "source": "成绩统计",
@@ -318,7 +338,40 @@ class DataProcessor:
         # === 5. 学业进度 ===
         progress = raw_data.get("学业进度", {})
         if isinstance(progress, dict) and progress:
-            text = f"学业进度：{json.dumps(progress, ensure_ascii=False)}"
+            # 构建更清晰的学业进度文本
+            lines = ["学业进度信息："]
+            
+            # 基本信息
+            if progress.get("修读类型"):
+                lines.append(f"  修读类型：{progress['修读类型']}")
+            
+            # 学分统计（如果有）
+            if progress.get("总学分要求"):
+                lines.append(f"  总学分要求：{progress['总学分要求']}学分")
+            if progress.get("已获学分"):
+                lines.append(f"  已获学分：{progress['已获学分']}学分")
+            if progress.get("还需学分"):
+                lines.append(f"  还需学分：{progress['还需学分']}学分")
+            
+            # 课程列表（只显示前20门）
+            course_list = progress.get("课程列表", [])
+            if course_list:
+                lines.append(f"  课程列表（共{len(course_list)}门）：")
+                for course in course_list[:20]:
+                    course_name = course.get("课程名称", "")
+                    credit = course.get("学分", "")
+                    semester = course.get("建议修读学期", "")
+                    earned = course.get("已获学分", "")
+                    if course_name:
+                        line = f"    - {course_name}（{credit}学分，第{semester}学期" 
+                        if earned:
+                            line += f"，已获{earned}学分"
+                        line += "）"
+                        lines.append(line)
+                if len(course_list) > 20:
+                    lines.append(f"    ...还有{len(course_list) - 20}门课程")
+            
+            text = "\n".join(lines)
             # 截断过长的文本
             if len(text) > 3000:
                 text = text[:3000] + "..."

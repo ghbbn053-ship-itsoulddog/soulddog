@@ -354,8 +354,8 @@ class JwxtScraper:
                 else:
                     logger.info(f"【成绩调试】第{row_idx}行单元格不足10个({len(cells)}个)，跳过")
 
-            # 提取统计信息
-            stats = self._extract_grade_stats(soup)
+            # 提取统计信息（传入grades用于计算）
+            stats = self._extract_grade_stats(soup, grades)
 
             logger.info(f"成功获取 {len(grades)} 条成绩记录")
 
@@ -373,9 +373,10 @@ class JwxtScraper:
                 "message": f"获取成绩失败: {str(e)}"
             }
 
-    def _extract_grade_stats(self, soup: BeautifulSoup) -> Dict:
+    def _extract_grade_stats(self, soup: BeautifulSoup, grades: list = None) -> Dict:
         """
         从成绩页面提取统计信息
+        如果HTML中提取失败，则从成绩列表计算
         """
         import re
         stats = {
@@ -385,7 +386,8 @@ class JwxtScraper:
             "credits_remaining": 0,
             "gpa_major": 0.0,
             "rank": "",
-            "gpa_minor": 0.0
+            "gpa_minor": 0.0,
+            "course_count": 0  # 添加课程数量统计
         }
 
         try:
@@ -421,6 +423,27 @@ class JwxtScraper:
 
         except Exception as e:
             logger.warning(f"提取成绩统计信息失败: {str(e)}")
+
+        # 如果HTML中提取失败，从成绩列表计算
+        if grades and stats["credits_completed"] == 0:
+            logger.info("【成绩统计】从HTML提取失败，从成绩列表计算学分")
+            try:
+                total_credits = 0.0
+                course_count = 0
+                for grade in grades:
+                    credit_str = grade.get("学分", "0")
+                    try:
+                        credit = float(credit_str)
+                        total_credits += credit
+                        course_count += 1
+                    except:
+                        pass
+                
+                stats["credits_completed"] = int(total_credits)
+                stats["course_count"] = course_count
+                logger.info(f"【成绩统计】计算结果：{course_count}门课程，{total_credits}学分")
+            except Exception as e:
+                logger.warning(f"【成绩统计】从成绩列表计算失败: {str(e)}")
 
         return stats
 
