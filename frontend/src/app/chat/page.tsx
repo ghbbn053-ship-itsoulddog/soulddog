@@ -287,39 +287,41 @@ export default function ChatPage() {
         </div>
 
         {/* 对话列表 */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-1">
+        <div className="flex-1 overflow-y-auto px-2 py-2">
           {conversations.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
-              <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <div className="text-center py-12 text-gray-400">
+              <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-40" />
               <p className="text-sm">暂无对话记录</p>
             </div>
           ) : (
-            conversations.map(conv => (
-              <div
-                key={conv.id}
-                onClick={() => selectConversation(conv.id)}
-                className={`
-                  group flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all
-                  ${currentConversationId === conv.id 
-                    ? "bg-blue-50 border border-blue-200 shadow-sm" 
-                    : "hover:bg-gray-50 border border-transparent"
-                  }
-                `}
-              >
-                <MessageSquare className={`w-4 h-4 flex-shrink-0 ${
-                  currentConversationId === conv.id ? "text-blue-600" : "text-gray-400"
-                }`} />
-                <span className="truncate flex-1 text-sm font-medium text-gray-700">
-                  {conv.title}
-                </span>
-                <button
-                  onClick={(e) => deleteConversation(conv.id, e)}
-                  className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-100 rounded-lg transition"
+            <div className="space-y-1">
+              {conversations.map(conv => (
+                <div
+                  key={conv.id}
+                  onClick={() => selectConversation(conv.id)}
+                  className={`
+                    group flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all
+                    ${currentConversationId === conv.id 
+                      ? "bg-gray-100" 
+                      : "hover:bg-gray-50"
+                    }
+                  `}
                 >
-                  <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                </button>
-              </div>
-            ))
+                  <MessageSquare className={`w-4 h-4 flex-shrink-0 ${
+                    currentConversationId === conv.id ? "text-gray-700" : "text-gray-400"
+                  }`} />
+                  <span className="truncate flex-1 text-sm text-gray-700">
+                    {conv.title}
+                  </span>
+                  <button
+                    onClick={(e) => deleteConversation(conv.id, e)}
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-gray-500" />
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
