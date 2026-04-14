@@ -459,12 +459,13 @@ class JwxtScraper:
             xsfs="all"
         )
 
-    def get_schedule(self, semester: str = "") -> Dict:
+    def get_schedule(self, semester: str = "", week: str = "") -> Dict:
         """
         获取学期课表
         基于深度爬取真实HTML修复
         参数:
         - semester: 学期，如 "2024-2025-2"，为空则获取当前学期
+        - week: 周次，如 "1", "5"，为空则获取全部周次
         返回: 课程列表，包含课程名称、时间、地点、教师等信息
         """
         try:
@@ -472,11 +473,18 @@ class JwxtScraper:
             url = f"{self.base_url}xskb/xskb_list.do"
             logger.info(f"【课表调试】请求URL: {url}")
 
-            # 构建表单数据
-            data = {}
+            # 构建表单数据（根据真实HTML表单结构）
+            data = {
+                "cj0701id": "",
+                "demo": "",
+                "sfFD": "1"
+            }
             if semester:
                 data["xnxq01id"] = semester
                 logger.info(f"【课表调试】查询学期: {semester}")
+            if week:
+                data["zc"] = week
+                logger.info(f"【课表调试】查询周次: {week}")
 
             # POST提交查询（课表必须POST）
             response = self.session.post(url, data=data if data else {}, timeout=10)
@@ -534,9 +542,10 @@ class JwxtScraper:
                 "第十一十二节": "11-12"
             }
 
-            # 跳过表头行
+            # 跳过表头行（第一行是星期标题）
             for row_idx, row in enumerate(rows):
-                if row.find('th'):
+                # 只跳过第一行（表头：星期一、星期二...）
+                if row_idx == 0:
                     continue
                     
                 cells = row.find_all(['th', 'td'])
@@ -634,6 +643,7 @@ class JwxtScraper:
                 "data": courses,
                 "count": len(courses),
                 "semester": semester,
+                "week": week,
                 "未安排时间课程": remarks,
                 "raw_html": html_text  # 保存原始HTML供分析
             }
