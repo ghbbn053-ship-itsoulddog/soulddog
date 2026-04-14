@@ -15,9 +15,10 @@ class JwxtScraper:
 
     def __init__(self, session: requests.Session = None, base_url: str = "http://jwxt.gdufe.edu.cn"):
         self.session = session or requests.Session()
-        self.base_url = base_url
-        self.captcha_url = f"{base_url}/verifycode.servlet"
-        self.login_url = f"{base_url}/xk/LoginToXkLdap"
+        # 确保 base_url 不以斜杠结尾，避免URL拼接时出现双斜杠
+        self.base_url = base_url.rstrip('/')
+        self.captcha_url = f"{self.base_url}/verifycode.servlet"
+        self.login_url = f"{self.base_url}/xk/LoginToXkLdap"
 
     def _fix_encoding(self, response) -> str:
         """自动修正响应编码，适配教务系统 GBK/UTF-8 混合场景
@@ -95,80 +96,78 @@ class JwxtScraper:
     def get_personal_info(self) -> Dict:
         """
         获取个人信息
-        从主页面解析姓名、学号等基本信息
-        HTML 结构参考：.qoder/教务系统源代码/登陆界面.txt
+        从学籍卡片页面解析详细信息
+        基于深度爬取真实HTML修复
         """
         try:
-            url = f"{self.base_url}framework/xsMain.jsp"
-            response = self.session.get(url, timeout=10)
+            # 先访问主页获取基本信息
+            main_url = f"{self.base_url}framework/xsMain.jsp"
+            response = self.session.get(main_url, timeout=10)
             html_text = self._fix_encoding(response)
-            
-            logger.info(f"【个人信息】URL: {url}")
-            logger.info(f"【个人信息】响应编码: {response.encoding}")
-            logger.info(f"【个人信息】响应长度: {len(html_text)}")
-
             soup = BeautifulSoup(html_text, 'html.parser')
-
-            # 调试：查看页面中是否有 block1text
-            block1text = soup.find('div', class_='block1text')
-            logger.info(f"【个人信息】找到 block1text: {block1text is not None}")
-            if block1text:
-                logger.info(f"【个人信息】block1text 内容: {block1text.text.strip()}")
-            else:
-                # 如果没有找到，打印所有 div 的 class 用于调试
-                all_divs = soup.find_all('div')
-                div_classes = [div.get('class', []) for div in all_divs if div.get('class')]
-                logger.info(f"【个人信息】页面中所有 div class: {div_classes[:20]}")
             
             name = ""
             student_id = ""
             
-            if block1text:
-                # 获取所有文本
-                text = block1text.get_text()
-                logger.info(f"【个人信息】block1text 完整文本: {repr(text)}")
+            # 方法1: 从 Top1_divLoginName 提取
+            login_name_div = soup.find(id="Top1_divLoginName")
+            if login_name_div:
+                login_name = login_name_div.get_text(strip=True)
+                if '(' in login_name and ')' in login_name:
+                    name = login_name.split('(')[0]
+                    student_id = login_name.split('(')[1].split(')')[0]
+            
+            # 方法2: 从 block1text 提取
+            if not name:
+                block1text = soup.find('div', class_='block1text')
+                if block1text:
+                    text = block1text.get_text()
+                    import re
+                    name_match = re.search(r'姓名[：:](.+)', text)
+                    if name_match:
+                        name = name_match.group(1).strip()
+                    sid_match = re.search(r'学号[：:](\d+)', text)
+                    if sid_match:
+                        student_id = sid_match.group(1).strip()
+            
+            # 尝试获取学籍卡片详细信息
+            major = ""
+            class_name = ""
+            department = ""
+            
+            try:
+                card_url = f"{self.base_url}grxx/xsxx?Ves632DSdyV=NEW_XSD_XJCJ"
+                card_resp = self.session.get(card_url, timeout=10)
+                card_html = self._fix_encoding(card_resp)
+                card_soup = BeautifulSoup(card_html, 'html.parser')
                 
-                lines = [line.strip() for line in text.split('\n') if line.strip()]
+                # 从学籍卡片提取详细信息
+                card_text = card_soup.get_text()
+                import re
                 
-                for line in lines:
-                    if '姓名' in line:
-                        # 匹配 "姓名：张靖" 或 "姓名:张靖"
-                        import re
-                        match = re.search(r'姓名[：:](.+)', line)
-                        if match:
-                            name = match.group(1).strip()
-                    elif '学号' in line:
-                        import re
-                        match = re.search(r'学号[：:](.+)', line)
-                        if match:
-                            student_id = match.group(1).strip()
+                major_match = re.search(r'专业[：:]\s*(.+?)(?:学|班)', card_text)
+                if major_match:
+                    major = major_match.group(1).strip()
                 
-                logger.info(f"【个人信息】从 block1text 解析: name={name}, student_id={student_id}")
-            else:
-                # 降级方案：从 Top1_divLoginName 提取
-                # HTML: <div id="Top1_divLoginName">张靖(24251102121)</div>
-                login_name_div = soup.find(id="Top1_divLoginName")
-                if login_name_div:
-                    login_name = login_name_div.get_text(strip=True)
-                    if '(' in login_name and ')' in login_name:
-                        name = login_name.split('(')[0]
-                        student_id = login_name.split('(')[1].split(')')[0]
-                    logger.info(f"【个人信息】从 Top1_divLoginName 降级解析: name={name}, student_id={student_id}")
-                else:
-                    logger.warning(f"【个人信息】未找到任何个人信息元素")
+                class_match = re.search(r'班级[：:]\s*(.+?)(?:学号)', card_text)
+                if class_match:
+                    class_name = class_match.group(1).strip()
+                
+                dept_match = re.search(r'院系[：:]\s*(.+?)(?:专业)', card_text)
+                if dept_match:
+                    department = dept_match.group(1).strip()
+            except Exception as e:
+                logger.warning(f"获取学籍卡片失败: {e}")
 
-            # 提取主页面的个人信息块
             personal_info = {
                 "name": name,
                 "student_id": student_id,
-                "major": "",
-                "class": "",
-                "department": ""
+                "major": major,
+                "class": class_name,
+                "department": department
             }
 
-            # 从个人信息块提取更多信息
-            info_text = soup.get_text()
-            logger.info(f"【个人信息】最终结果: {personal_info}")
+            logger.info(f"【个人信息】解析成功: {personal_info}")
 
             return {
                 "success": True,
@@ -522,7 +521,8 @@ class JwxtScraper:
                 "count": len(courses),
                 "semester": semester,
                 "week": week,
-                "未安排时间课程": remarks
+                "未安排时间课程": remarks,
+                "raw_html": html_text  # 保存原始HTML供分析
             }
 
         except Exception as e:
@@ -785,7 +785,8 @@ class JwxtScraper:
             return {
                 "success": True,
                 "data": plan_data,
-                "count": len(plan_data["课程列表"])
+                "count": len(plan_data["课程列表"]),
+                "raw_html": html_text  # 保存原始HTML供分析
             }
 
         except Exception as e:
