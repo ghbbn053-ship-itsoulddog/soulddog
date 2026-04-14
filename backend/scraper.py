@@ -19,33 +19,32 @@ class JwxtScraper:
         self.captcha_url = f"{base_url}/verifycode.servlet"
         self.login_url = f"{base_url}/xk/LoginToXkLdap"
 
-    def _fix_encoding(self, response) -> None:
-        """自动修正响应编码，适配教务系统 GBK/UTF-8 混合场景"""
+    def _fix_encoding(self, response) -> str:
+        """自动修正响应编码，适配教务系统 GBK/UTF-8 混合场景
+        返回正确解码的文本
+        """
         import re
-        # 先检查原始字节内容是否包含中文（用 GB18030 解码）
         raw_bytes = response.content
-        text_gb18030 = raw_bytes.decode('gb18030', errors='ignore')
         
+        # 先用 GB18030 解码检测是否有中文
+        text_gb18030 = raw_bytes.decode('gb18030', errors='ignore')
         has_chinese = re.search(r'[\u4e00-\u9fff]', text_gb18030)
+        
         if has_chinese:
-            # 清除缓存的 text，强制重新解码
-            if hasattr(response, '_text'):
-                del response._text
             response.encoding = 'gb18030'
             logger.debug(f"【编码】使用 GB18030，检测到中文")
+            return text_gb18030  # 直接返回正确解码的文本
         else:
             # 尝试 UTF-8
             try:
-                raw_bytes.decode('utf-8')
-                if hasattr(response, '_text'):
-                    del response._text
+                text_utf8 = raw_bytes.decode('utf-8')
                 response.encoding = 'utf-8'
                 logger.debug(f"【编码】使用 UTF-8")
+                return text_utf8
             except UnicodeDecodeError:
-                if hasattr(response, '_text'):
-                    del response._text
                 response.encoding = 'gb18030'
                 logger.debug(f"【编码】UTF-8 解码失败，回退到 GB18030")
+                return text_gb18030
 
     def get_captcha(self) -> bytes:
         """获取验证码图片"""
@@ -68,16 +67,16 @@ class JwxtScraper:
             }
             
             response = self.session.post(self.login_url, data=data, timeout=10)
-            self._fix_encoding(response)
+            html_text = self._fix_encoding(response)
             
-            if "密码错误" in response.text or "验证码错误" in response.text:
+            if "密码错误" in html_text or "验证码错误" in html_text:
                 return {"success": False, "message": "用户名、密码或验证码错误"}
             
-            if "xsMain.jsp" in response.text or "framework" in response.url:
+            if "xsMain.jsp" in html_text or "framework" in response.url:
                 logger.info(f"用户 {username} 登录成功")
                 return {"success": True, "message": "登录成功"}
             
-            if "LoginToXkLdap" in response.text:
+            if "LoginToXkLdap" in html_text:
                 return {"success": False, "message": "登录失败，请检查账号密码"}
             
             return {"success": True, "message": "登录成功"}
@@ -95,13 +94,13 @@ class JwxtScraper:
         try:
             url = f"{self.base_url}framework/xsMain.jsp"
             response = self.session.get(url, timeout=10)
-            self._fix_encoding(response)
+            html_text = self._fix_encoding(response)
             
             logger.info(f"【个人信息】URL: {url}")
             logger.info(f"【个人信息】响应编码: {response.encoding}")
-            logger.info(f"【个人信息】响应长度: {len(response.text)}")
+            logger.info(f"【个人信息】响应长度: {len(html_text)}")
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(html_text, 'html.parser')
 
             # 调试：查看页面中是否有 block1text
             block1text = soup.find('div', class_='block1text')
@@ -184,9 +183,9 @@ class JwxtScraper:
         try:
             url = f"{self.base_url}grxx/xsxx"
             response = self.session.get(url, timeout=10)
-            self._fix_encoding(response)
+            html_text = self._fix_encoding(response)
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(html_text, 'html.parser')
 
             # 解析学籍卡片信息
             # 查找包含学籍信息的表格
@@ -240,9 +239,9 @@ class JwxtScraper:
             # 提交成绩查询
             url = f"{self.base_url}kscj/cjcx_list"
             response = self.session.post(url, data=params, timeout=10)
-            self._fix_encoding(response)
+            html_text = self._fix_encoding(response)
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(html_text, 'html.parser')
 
             # 解析成绩表格 - 根据实际HTML结构，表格ID为dataList
             grade_table = soup.find('table', id='dataList')
@@ -389,8 +388,8 @@ class JwxtScraper:
             else:
                 response = self.session.get(url, timeout=10)
 
-            self._fix_encoding(response)
-            soup = BeautifulSoup(response.text, 'html.parser')
+            html_text = self._fix_encoding(response)
+            soup = BeautifulSoup(html_text, 'html.parser')
 
             # 查找课表表格
             schedule_table = soup.find('table', id='kbtable')
@@ -558,8 +557,8 @@ class JwxtScraper:
                 url = f"{self.base_url}jspyfa/pyfa_find"
                 response = self.session.get(url, timeout=10)
 
-            self._fix_encoding(response)
-            soup = BeautifulSoup(response.text, 'html.parser')
+            html_text = self._fix_encoding(response)
+            soup = BeautifulSoup(html_text, 'html.parser')
 
             # 解析培养方案信息
             plan_info = {
@@ -631,9 +630,9 @@ class JwxtScraper:
         try:
             url = f"{self.base_url}pyfa/pyfazd_query"
             response = self.session.get(url, timeout=10)
-            self._fix_encoding(response)
+            html_text = self._fix_encoding(response)
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(html_text, 'html.parser')
 
             # 解析个人培养方案
             plan_data = {
@@ -766,8 +765,8 @@ class JwxtScraper:
             else:
                 response = self.session.get(url, timeout=10)
 
-            self._fix_encoding(response)
-            soup = BeautifulSoup(response.text, 'html.parser')
+            html_text = self._fix_encoding(response)
+            soup = BeautifulSoup(html_text, 'html.parser')
 
             progress_data = {
                 "修读类型": "主修" if study_type == "0" else "辅修" if study_type == "1" else "未知",
@@ -862,9 +861,9 @@ class JwxtScraper:
                 params["xnxqid"] = semester
 
             response = self.session.get(url, params=params, timeout=10)
-            self._fix_encoding(response)
+            html_text = self._fix_encoding(response)
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(html_text, 'html.parser')
 
             # 查找考试安排表格
             exam_table = soup.find('table', id='dataList')
@@ -931,9 +930,9 @@ class JwxtScraper:
             # 提交查询
             url = f"{self.base_url}jsxx/jsxx_list"
             response = self.session.post(url, data=data, timeout=10)
-            self._fix_encoding(response)
+            html_text = self._fix_encoding(response)
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(html_text, 'html.parser')
 
             # 查找教师列表表格
             teacher_table = soup.find('table', class_='Nsb_r_list')
@@ -1000,9 +999,9 @@ class JwxtScraper:
             params = {"jg0101id": teacher_id}
 
             response = self.session.get(url, params=params, timeout=10)
-            self._fix_encoding(response)
+            html_text = self._fix_encoding(response)
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(html_text, 'html.parser')
 
             # 解析教师详细信息
             teacher_detail = {}
@@ -1054,9 +1053,9 @@ class JwxtScraper:
                 data["kkyx"] = department
 
             response = self.session.post(url, data=data, timeout=10)
-            self._fix_encoding(response)
+            html_text = self._fix_encoding(response)
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(html_text, 'html.parser')
 
             # 查找课程列表表格
             course_table = soup.find('table', class_='Nsb_r_list')
@@ -1117,9 +1116,9 @@ class JwxtScraper:
         try:
             url = f"{self.base_url}xsxk/xklc_list"
             response = self.session.get(url, timeout=10)
-            self._fix_encoding(response)
+            html_text = self._fix_encoding(response)
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(html_text, 'html.parser')
 
             selection_data = {
                 "当前选课轮次": [],
@@ -1163,9 +1162,9 @@ class JwxtScraper:
         try:
             url = f"{self.base_url}/jsxsd/pyfa/pyfa_query"
             response = self.session.get(url, timeout=10)
-            self._fix_encoding(response)
+            html_text = self._fix_encoding(response)
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(html_text, 'html.parser')
 
             plan_data = {
                 "计划信息": {},
