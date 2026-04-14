@@ -248,7 +248,7 @@ class JwxtScraper:
         - xsfs: 显示方式 (all=显示全部成绩, max=显示最好成绩)
         """
         try:
-            # 成绩提交URL（根据深度爬取crawl_tree.json）
+            # 成绩查询页面URL（根据深度爬取HTML第723行：/jsxsd/kscj/cjcx_list）
             url = f"{self.base_url}kscj/cjcx_query"
             logger.info(f"【成绩调试】请求URL: {url}")
             
@@ -269,10 +269,35 @@ class JwxtScraper:
             logger.info(f"【成绩调试】HTML长度: {len(html_text)}")
 
             soup = BeautifulSoup(html_text, 'html.parser')
+            
+            # 保存HTML到文件用于调试
+            with open('/tmp/debug_grades.html', 'w', encoding='utf-8') as f:
+                f.write(html_text)
+            logger.info(f"【成绩调试】HTML已保存到 /tmp/debug_grades.html")
 
-            # 解析成绩表格 - 根据真实HTML，表格ID为dataList
-            grade_table = soup.find('table', id='dataList')
-            logger.info(f"【成绩调试】找到表格: {grade_table is not None}")
+            # 查找所有表格
+            all_tables = soup.find_all('table')
+            logger.info(f"【成绩调试】找到 {len(all_tables)} 个表格")
+            
+            # 解析成绩表格 - 尝试多种选择器
+            grade_table = None
+            for table in all_tables:
+                # 方法1：查找id='dataList'
+                if table.get('id') == 'dataList':
+                    grade_table = table
+                    logger.info(f"【成绩调试】通过id='dataList'找到表格")
+                    break
+                # 方法2：查找包含成绩表头的表格
+                headers = table.find_all('th')
+                for th in headers:
+                    if '课程名称' in th.get_text() or '成绩' in th.get_text():
+                        grade_table = table
+                        logger.info(f"【成绩调试】通过表头找到表格")
+                        break
+                if grade_table:
+                    break
+            
+            logger.info(f"【成绩调试】最终找到表格: {grade_table is not None}")
 
             if not grade_table:
                 logger.warning("未找到成绩表格")
@@ -414,11 +439,8 @@ class JwxtScraper:
             if semester:
                 data["xnxq01id"] = semester
 
-            # POST提交查询
-            if data:
-                response = self.session.post(url, data=data, timeout=10)
-            else:
-                response = self.session.get(url, timeout=10)
+            # POST提交查询（课表必须POST）
+            response = self.session.post(url, data=data if data else {}, timeout=10)
 
             html_text = self._fix_encoding(response)
             soup = BeautifulSoup(html_text, 'html.parser')
@@ -549,7 +571,6 @@ class JwxtScraper:
                 "data": courses,
                 "count": len(courses),
                 "semester": semester,
-                "week": week,
                 "未安排时间课程": remarks,
                 "raw_html": html_text  # 保存原始HTML供分析
             }
@@ -660,6 +681,11 @@ class JwxtScraper:
             url = f"{self.base_url}pyfa/pyfa_query"
             response = self.session.get(url, timeout=10)
             html_text = self._fix_encoding(response)
+            
+            # 保存HTML到文件用于调试
+            with open('/tmp/debug_training_plan.html', 'w', encoding='utf-8') as f:
+                f.write(html_text)
+            logger.info(f"【培养方案调试】HTML已保存到 /tmp/debug_training_plan.html")
 
             soup = BeautifulSoup(html_text, 'html.parser')
 
