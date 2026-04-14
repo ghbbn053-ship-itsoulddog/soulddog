@@ -15,10 +15,10 @@ class JwxtScraper:
 
     def __init__(self, session: requests.Session = None, base_url: str = "http://jwxt.gdufe.edu.cn"):
         self.session = session or requests.Session()
-        # 确保 base_url 不以斜杠结尾，避免URL拼接时出现双斜杠
-        self.base_url = base_url.rstrip('/')
-        self.captcha_url = f"{self.base_url}/verifycode.servlet"
-        self.login_url = f"{self.base_url}/xk/LoginToXkLdap"
+        # 确保 base_url 以斜杠结尾，用于URL拼接
+        self.base_url = base_url.rstrip('/') + '/'
+        self.captcha_url = f"{self.base_url}verifycode.servlet"
+        self.login_url = f"{self.base_url}xk/LoginToXkLdap"
 
     def _fix_encoding(self, response) -> str:
         """自动修正响应编码，适配教务系统 GBK/UTF-8 混合场景
