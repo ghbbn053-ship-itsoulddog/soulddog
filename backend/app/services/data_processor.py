@@ -257,7 +257,7 @@ class DataProcessor:
                         f"  {c.get('节次', c.get('period', ''))} "
                         f"{c.get('课程名称', c.get('course_name', ''))} "
                         f"教师{c.get('教师', c.get('teacher', ''))} "
-                        f"地点{c.get('教室', c.get('classroom', ''))} "
+                        f"地点{c.get('地点', '')} "
                         f"周次{c.get('周次', c.get('weeks', ''))}"
                     )
                     lines.append(line)
