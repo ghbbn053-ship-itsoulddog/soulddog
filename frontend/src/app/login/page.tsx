@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [syncStatus, setSyncStatus] = useState<string | null>(null); // null | syncing | completed | failed
 
   const API_BASE = "";  // 使用相对路径，通过 Nginx 反向代理
 
@@ -95,8 +96,9 @@ export default function LoginPage() {
       if (data.success) {
         // 保存用户名到 localStorage
         localStorage.setItem("username", username);
-        // 跳转到聊天页面
-        router.push("/chat");
+        // 显示同步状态并轮询
+        setSyncStatus("syncing");
+        pollSyncStatus(username);
       } else {
         setError(data.message || data.detail || "登录失败");
         fetchCaptcha(); // 刷新验证码
@@ -108,6 +110,39 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // 轮询数据同步状态
+  const pollSyncStatus = async (uname: string) => {
+    const maxAttempts = 60; // 最多轮询60次（约2分钟）
+    let attempts = 0;
+    const poll = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/sync-status?username=${encodeURIComponent(uname)}`);
+        const data = await res.json();
+        setSyncStatus(data.status);
+        if (data.status === "completed") {
+          // 同步完成，跳转到聊天页面
+          setTimeout(() => router.push("/chat"), 800);
+          return;
+        }
+        if (data.status === "failed") {
+          // 同步失败，仍然跳转（可以使用缓存数据或纯对话）
+          setTimeout(() => router.push("/chat"), 1500);
+          return;
+        }
+      } catch (e) {
+        console.error("轮询同步状态失败:", e);
+      }
+      attempts++;
+      if (attempts < maxAttempts) {
+        setTimeout(poll, 2000);
+      } else {
+        // 超时也跳转
+        router.push("/chat");
+      }
+    };
+    poll();
   };
 
   return (
@@ -127,6 +162,40 @@ export default function LoginPage() {
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
               {error}
+            </div>
+          )}
+
+          {/* 数据同步状态 */}
+          {syncStatus && (
+            <div className={`mb-4 p-4 rounded-xl text-sm flex items-center gap-3 ${
+              syncStatus === "syncing" ? "bg-blue-50 border border-blue-200 text-blue-700" :
+              syncStatus === "completed" ? "bg-green-50 border border-green-200 text-green-700" :
+              "bg-yellow-50 border border-yellow-200 text-yellow-700"
+            }`}>
+              {syncStatus === "syncing" && (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">登录成功，正在同步教务数据...</p>
+                    <p className="text-xs mt-0.5 opacity-75">首次登录需要较长时间，请耐心等待</p>
+                  </div>
+                </>
+              )}
+              {syncStatus === "completed" && (
+                <>
+                  <span className="text-lg">✓</span>
+                  <p className="font-medium">数据同步完成，正在跳转...</p>
+                </>
+              )}
+              {syncStatus === "failed" && (
+                <>
+                  <span className="text-lg">⚠</span>
+                  <div>
+                    <p className="font-medium">数据同步失败，将使用基础对话模式</p>
+                    <p className="text-xs mt-0.5 opacity-75">正在跳转...</p>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -202,7 +271,7 @@ export default function LoginPage() {
             {/* 登录按钮 */}
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !!syncStatus}
               className="w-full py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2"
             >
               {isLoading ? (

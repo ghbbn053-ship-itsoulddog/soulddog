@@ -1,15 +1,15 @@
 """
-对话 API - AI 聊天接口
+对话 API - AI 聊天接口（支持 Function Calling）
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
 import logging
 
 from app.models import get_db, User, Conversation, Message, EducationData
-from app.services import qwen_service, vector_store
+from app.services import get_qwen_service, get_vector_store
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["对话"])
@@ -30,6 +30,7 @@ class ChatResponse(BaseModel):
     message: str
     conversation_id: int
     sources: List[str] = []
+    tool_calls: List[dict] = []
     usage: dict = {}
 
 
@@ -43,15 +44,19 @@ class ConversationResponse(BaseModel):
 # ============ API 接口 ============
 
 @router.post("/send", response_model=ChatResponse)
-async def send_message(request: ChatRequest, db: Session = Depends(get_db)):
+async def send_message(request: ChatRequest, http_request: Request, db: Session = Depends(get_db)):
     """
     发送消息给 AI
     
-    - 如果没有 conversation_id，自动创建新对话
-    - 使用 RAG 检索相关教务数据
-    - 调用千问生成回答
+    优先级：
+    1. 工具调用（Function Calling）— 用户已登录时，AI 自主决定是否调用爬虫工具
+    2. RAG 兜底 — 无工具调用时，使用向量库检索已缓存数据
+    3. 直接对话 — 无数据时纯 AI 对话
     """
     try:
+        qwen_svc = get_qwen_service()
+        vec_store = get_vector_store()
+
         # 1. 查找或创建用户
         user = db.query(User).filter(User.username == request.username).first()
         if not user:
@@ -69,7 +74,6 @@ async def send_message(request: ChatRequest, db: Session = Depends(get_db)):
             if not conversation:
                 raise HTTPException(status_code=404, detail="对话不存在")
         else:
-            # 创建新对话，标题取用户消息的前20字
             title = request.message[:20] + "..." if len(request.message) > 20 else request.message
             conversation = Conversation(user_id=user.id, title=title)
             db.add(conversation)
@@ -85,7 +89,7 @@ async def send_message(request: ChatRequest, db: Session = Depends(get_db)):
         db.add(user_msg)
         db.commit()
         
-        # 4. 获取历史对话（最近5轮）
+        # 4. 获取历史对话（最近5轮 = 10条消息）
         history_messages = db.query(Message).filter(
             Message.conversation_id == conversation.id
         ).order_by(Message.created_at.desc()).limit(10).all()
@@ -94,45 +98,65 @@ async def send_message(request: ChatRequest, db: Session = Depends(get_db)):
         for msg in reversed(history_messages):
             history.append({"role": msg.role, "content": msg.content})
         
-        # 5. RAG 检索 - 获取相关教务数据
-        # 先检查用户是否有教务数据
-        edu_data = db.query(EducationData).filter(EducationData.user_id == user.id).first()
+        # 5. 构建工具上下文（从 app.state.sessions 获取用户 session）
+        sessions = getattr(http_request.app.state, 'sessions', {})
+        user_session_data = sessions.get(request.username)
         
-        context = []
-        if edu_data:
-            # 使用向量检索
-            try:
-                # 生成问题向量
-                query_embedding = qwen_service.generate_embedding(request.message)
-                if query_embedding:
-                    context = vector_store.search(user.id, query_embedding, top_k=5)
-            except Exception as e:
-                logger.warning(f"向量检索失败: {e}")
+        tools_context = None
+        if user_session_data:
+            tools_context = {
+                "session": user_session_data["session"],
+                "server_url": user_session_data["server_url"],
+                "username": request.username
+            }
         
-        # 6. 调用 AI 生成回答
-        if context:
-            # 使用 RAG
-            ai_result = qwen_service.chat_with_rag(
-                question=request.message,
-                context=context,
-                conversation_history=history[:-1] if len(history) > 1 else None
+        ai_result = None
+        
+        # 6. 优先使用工具调用（Function Calling）
+        if qwen_svc.available and tools_context:
+            logger.info(f"【Chat】用户 {request.username} 使用工具调用模式")
+            ai_result = qwen_svc.chat_with_tools(
+                messages=history,
+                tools_context=tools_context
             )
-        else:
-            # 直接对话（无RAG）
-            messages = history + [{"role": "user", "content": request.message}]
-            ai_result = qwen_service.chat(messages)
         
-        if not ai_result["success"]:
+        # 7. 工具调用不可用或失败时，尝试 RAG 兜底
+        if not ai_result or not ai_result.get("success"):
+            edu_data = db.query(EducationData).filter(EducationData.user_id == user.id).first()
+            context = []
+            if edu_data and vec_store.available and qwen_svc.available:
+                try:
+                    query_embedding = qwen_svc.generate_embedding(request.message)
+                    if query_embedding:
+                        context = vec_store.search(user.id, query_embedding, top_k=5)
+                except Exception as e:
+                    logger.warning(f"向量检索失败: {e}")
+            
+            if context:
+                logger.info(f"【Chat】用户 {request.username} 使用 RAG 模式")
+                ai_result = qwen_svc.chat_with_rag(
+                    question=request.message,
+                    context=context,
+                    conversation_history=history[:-1] if len(history) > 1 else None
+                )
+            elif qwen_svc.available:
+                logger.info(f"【Chat】用户 {request.username} 使用纯对话模式")
+                ai_result = qwen_svc.chat(history)
+            else:
+                raise HTTPException(status_code=503, detail="AI 服务未配置，请联系管理员")
+        
+        if not ai_result.get("success"):
             raise HTTPException(status_code=500, detail=ai_result.get("message", "AI服务错误"))
         
-        # 7. 保存 AI 回复
+        # 8. 保存 AI 回复
         ai_msg = Message(
             conversation_id=conversation.id,
             role="assistant",
             content=ai_result["content"],
             message_meta={
                 "usage": ai_result.get("usage", {}),
-                "sources": ai_result.get("sources", [])
+                "sources": ai_result.get("sources", []),
+                "tool_calls": ai_result.get("tool_calls", [])
             }
         )
         db.add(ai_msg)
@@ -143,6 +167,7 @@ async def send_message(request: ChatRequest, db: Session = Depends(get_db)):
             message=ai_result["content"],
             conversation_id=conversation.id,
             sources=ai_result.get("sources", []),
+            tool_calls=ai_result.get("tool_calls", []),
             usage=ai_result.get("usage", {})
         )
         

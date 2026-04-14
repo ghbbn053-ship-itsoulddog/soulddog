@@ -13,14 +13,21 @@ import {
   GraduationCap,
   MessageSquare,
   ChevronLeft,
-  Sparkles
+  Sparkles,
+  Wrench,
+  LogOut
 } from "lucide-react";
+
+interface ToolCall {
+  name: string;
+}
 
 interface Message {
   id: number;
   role: "user" | "assistant";
   content: string;
   sources?: string[];
+  tool_calls?: ToolCall[];
   timestamp?: string;
 }
 
@@ -38,7 +45,6 @@ export default function ChatPage() {
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [username, setUsername] = useState("");
-  const [showUserModal, setShowUserModal] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -118,6 +124,7 @@ export default function ChatPage() {
           role: "assistant",
           content: data.message,
           sources: data.sources,
+          tool_calls: data.tool_calls,
           timestamp: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
         }]);
         setCurrentConversationId(data.conversation_id);
@@ -178,23 +185,29 @@ export default function ChatPage() {
     }
   };
 
-  // 页面加载时从 localStorage 读取用户名
+  // 页面加载时从 localStorage 读取用户名，未登录则跳转
   useEffect(() => {
     const savedUsername = localStorage.getItem("username");
     if (savedUsername) {
       setUsername(savedUsername);
-      setShowUserModal(false);
-      fetchConversations();
+      // fetchConversations 在 username 变化后触发
+    } else {
+      // 未登录，跳转到登录页
+      window.location.href = "/login";
     }
   }, []);
 
-  // 确认用户名
-  const confirmUsername = () => {
-    if (username.trim()) {
-      localStorage.setItem("username", username.trim());
-      setShowUserModal(false);
+  // 当 username 变化时加载对话列表
+  useEffect(() => {
+    if (username) {
       fetchConversations();
     }
+  }, [username]);
+
+  // 退出登录
+  const handleLogout = () => {
+    localStorage.removeItem("username");
+    window.location.href = "/login";
   };
 
   // 快捷问题
@@ -207,39 +220,6 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* 用户输入弹窗 */}
-      {showUserModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-300">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                <GraduationCap className="w-7 h-7 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">欢迎使用校园AI助手</h2>
-                <p className="text-sm text-gray-500">请输入学号开始对话</p>
-              </div>
-            </div>
-            <input
-              type="text"
-              placeholder="请输入学号"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && confirmUsername()}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
-              autoFocus
-            />
-            <button
-              onClick={confirmUsername}
-              disabled={!username.trim()}
-              className="w-full mt-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              开始对话
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* 移动端侧边栏遮罩 */}
       {sidebarOpen && (
         <div 
@@ -331,10 +311,11 @@ export default function ChatPage() {
               <p className="text-xs text-gray-500">学号登录</p>
             </div>
             <button
-              onClick={() => setShowUserModal(true)}
+              onClick={handleLogout}
               className="p-2 hover:bg-gray-200 rounded-lg transition"
+              title="退出登录"
             >
-              <Sparkles className="w-4 h-4 text-gray-500" />
+              <LogOut className="w-4 h-4 text-gray-500" />
             </button>
           </div>
         </div>
@@ -424,6 +405,24 @@ export default function ChatPage() {
                     `}>
                       <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                       
+                      {/* 工具调用标记 */}
+                      {msg.tool_calls && msg.tool_calls.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-gray-100 flex flex-wrap gap-1.5">
+                          {msg.tool_calls.map((tc, i) => (
+                            <span key={i} className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-lg border border-purple-200">
+                              <Wrench className="w-3 h-3" />
+                              {tc.name === "query_personal_info" ? "个人信息" :
+                               tc.name === "query_grades" ? "成绩查询" :
+                               tc.name === "query_schedule" ? "课表查询" :
+                               tc.name === "query_exam_schedule" ? "考试安排" :
+                               tc.name === "query_academic_progress" ? "学业进度" :
+                               tc.name === "refresh_all_data" ? "刷新数据" :
+                               tc.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
                       {/* 来源引用 */}
                       {msg.sources && msg.sources.length > 0 && (
                         <div className="mt-3 pt-2 border-t border-white/20 text-xs opacity-80">

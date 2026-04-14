@@ -133,7 +133,7 @@ services:
       - REDIS_PORT=6379
       - MILVUS_HOST=milvus
       - MILVUS_PORT=19530
-      - QWEN_API_KEY=${QWEN_API_KEY}
+      - QWEN_API_KEY=sk-6c8dc750b9744c9cb60ce0eb7fcfce0e
       - QWEN_MODEL=${QWEN_MODEL:-qwen-plus}
       - EDUCATION_SYSTEM_URL=${EDUCATION_SYSTEM_URL}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}

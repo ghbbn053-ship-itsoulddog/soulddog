@@ -2,12 +2,12 @@
 服务模块
 """
 
-from app.services.vector_store import VectorStore, vector_store
-from app.services.qwen_service import QwenService, qwen_service
+from app.services.vector_store import VectorStore, get_vector_store
+from app.services.qwen_service import QwenService, get_qwen_service
 
 __all__ = [
     "VectorStore",
-    "vector_store",
+    "get_vector_store",
     "QwenService",
-    "qwen_service",
+    "get_qwen_service",
 ]

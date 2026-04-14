@@ -19,6 +19,7 @@ class VectorStore:
         self.port = os.getenv("MILVUS_PORT", "19530")
         self.collection_name = os.getenv("MILVUS_COLLECTION", "campus_knowledge")
         self.collection = None
+        self.available = False
         self._connect()
     
     def _connect(self):
@@ -29,13 +30,17 @@ class VectorStore:
                 host=self.host,
                 port=self.port
             )
+            self.available = True
             logger.info(f"✅ Milvus 连接成功: {self.host}:{self.port}")
         except Exception as e:
-            logger.error(f"❌ Milvus 连接失败: {str(e)}")
-            raise
+            self.available = False
+            logger.warning(f"⚠️ Milvus 连接失败（服务不可用）: {str(e)}")
     
-    def create_collection(self, dim: int = 1024):
+    def create_collection(self, dim: int = 1536):
         """创建集合（如果不存在）"""
+        if not self.available:
+            logger.warning("⚠️ Milvus 不可用，跳过创建集合")
+            return
         try:
             if utility.has_collection(self.collection_name):
                 logger.info(f"集合 {self.collection_name} 已存在")
@@ -73,6 +78,9 @@ class VectorStore:
     def add_documents(self, user_id: int, texts: List[str], embeddings: List[List[float]], 
                       sources: List[str], metadatas: Optional[List[Dict]] = None) -> List[int]:
         """添加文档到向量库"""
+        if not self.available:
+            logger.warning("⚠️ Milvus 不可用，跳过添加文档")
+            return []
         try:
             if not self.collection:
                 self.create_collection(dim=len(embeddings[0]))
@@ -99,6 +107,9 @@ class VectorStore:
     
     def search(self, user_id: int, query_embedding: List[float], top_k: int = 5) -> List[Dict]:
         """搜索相似文档"""
+        if not self.available:
+            logger.warning("⚠️ Milvus 不可用，跳过搜索")
+            return []
         try:
             if not self.collection:
                 self.collection = Collection(self.collection_name)
@@ -142,6 +153,9 @@ class VectorStore:
     
     def delete_user_data(self, user_id: int):
         """删除用户的所有数据"""
+        if not self.available:
+            logger.warning("⚠️ Milvus 不可用，跳过删除")
+            return
         try:
             if not self.collection:
                 self.collection = Collection(self.collection_name)
@@ -159,5 +173,12 @@ class VectorStore:
         logger.info("✅ Milvus 连接已关闭")
 
 
-# 全局实例
-vector_store = VectorStore()
+# 全局实例（懒加载）
+_vector_store = None
+
+def get_vector_store() -> VectorStore:
+    """获取向量库实例（懒加载）"""
+    global _vector_store
+    if _vector_store is None:
+        _vector_store = VectorStore()
+    return _vector_store

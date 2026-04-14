@@ -2,7 +2,7 @@
 教务系统 AI 助手 - 后端 API
 """
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 import requests
@@ -11,6 +11,7 @@ import base64
 from typing import Optional
 import random
 import logging
+import time
 
 # 导入爬虫模块
 from scraper import JwxtScraper
@@ -28,9 +29,18 @@ from education_options import (
 try:
     from app.api import chat
     CHAT_API_AVAILABLE = True
-except ImportError:
+except Exception as e:
     CHAT_API_AVAILABLE = False
-    print("⚠️ Chat API 未启用")
+    print(f"⚠️ Chat API 未启用: {e}")
+
+# 导入数据库模型
+try:
+    from app.models import create_tables, get_db, User, EducationData
+    from app.services.data_processor import data_processor
+    DB_AVAILABLE = True
+except Exception as e:
+    DB_AVAILABLE = False
+    print(f"⚠️ 数据库模块未启用: {e}")
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -74,10 +84,30 @@ SERVERS = [
 # 结构: {username: {"session": requests.Session, "server_url": str}}
 SESSIONS = {}
 
+# 数据同步状态: {username: {"status": "syncing"/"completed"/"failed", "message": str, "timestamp": float}}
+SYNC_STATUS = {}
+
+# 将 SESSIONS 挂载到 app.state，供 Chat API 等路由模块访问
+app.state.sessions = SESSIONS
+
 # 注册 Chat API 路由（如果可用）
 if CHAT_API_AVAILABLE:
     app.include_router(chat.router)
     print("✅ Chat API 已启用")
+
+
+# 启动事件：自动建表
+@app.on_event("startup")
+async def startup_event():
+    """App 启动时自动创建数据库表"""
+    if DB_AVAILABLE:
+        try:
+            create_tables()
+            logger.info("✅ 数据库表创建/检查完成")
+        except Exception as e:
+            logger.error(f"❌ 数据库表创建失败: {e}")
+    else:
+        logger.warning("⚠️ 数据库模块不可用，跳过建表")
 
 
 def select_server(username: str) -> str:
@@ -192,7 +222,7 @@ async def get_captcha(username: str = None):
 
 
 @app.post("/api/login")
-async def login(request: Request):
+async def login(request: Request, background_tasks: BackgroundTasks):
     """
     登录接口
     参数: username, password, code (验证码), captcha_session_id
@@ -329,6 +359,9 @@ async def login(request: Request):
             logger.info(f"【登录】登录成功，session 已保存，当前 session 数量: {len(SESSIONS)}")
             logger.info(f"【登录】服务器 URL: {server_url}")
 
+            # 后台任务：自动爬取教务数据并存储
+            background_tasks.add_task(auto_crawl_and_store, username, session, server_url)
+
             return {
                 "success": True,
                 "message": "登录成功",
@@ -346,6 +379,67 @@ async def login(request: Request):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"登录失败: {str(e)}")
+
+
+# ===== 后台爬取任务 =====
+
+def auto_crawl_and_store(username: str, session, server_url: str):
+    """
+    登录成功后的后台任务：自动爬取全部教务数据并存储
+    1. 爬取全部数据
+    2. 存入 PostgreSQL
+    3. 向量化存入 Milvus
+    """
+    SYNC_STATUS[username] = {"status": "syncing", "message": "正在爬取教务数据...", "timestamp": time.time()}
+    
+    try:
+        logger.info(f"【自动爬取】开始为用户 {username} 爬取数据")
+        
+        # 1. 爬取全部数据
+        scraper = JwxtScraper(session, server_url)
+        result = scraper.get_all_data_for_vectorization()
+        
+        if not result.get("success"):
+            SYNC_STATUS[username] = {"status": "failed", "message": "爬取数据失败", "timestamp": time.time()}
+            logger.error(f"【自动爬取】用户 {username} 爬取失败")
+            return
+        
+        raw_data = result["data"]
+        logger.info(f"【自动爬取】用户 {username} 数据爬取完成")
+        
+        SYNC_STATUS[username] = {"status": "syncing", "message": "正在存储数据...", "timestamp": time.time()}
+        
+        # 2. 存入 PostgreSQL
+        if DB_AVAILABLE:
+            db = next(get_db())
+            try:
+                data_processor.process_and_store(username, raw_data, db)
+                
+                # 获取 user_id 用于向量化
+                user = db.query(User).filter(User.username == username).first()
+                user_id = user.id if user else None
+            finally:
+                db.close()
+            
+            # 3. 向量化存入 Milvus
+            if user_id:
+                SYNC_STATUS[username] = {"status": "syncing", "message": "正在向量化数据...", "timestamp": time.time()}
+                data_processor.vectorize_and_store(user_id, username, raw_data)
+        
+        SYNC_STATUS[username] = {"status": "completed", "message": "数据同步完成", "timestamp": time.time()}
+        logger.info(f"【自动爬取】用户 {username} 全部完成")
+        
+    except Exception as e:
+        SYNC_STATUS[username] = {"status": "failed", "message": f"同步失败: {str(e)}", "timestamp": time.time()}
+        logger.error(f"【自动爬取】用户 {username} 异常: {e}")
+
+
+@app.get("/api/sync-status")
+async def get_sync_status(username: str):
+    """查询数据同步状态"""
+    if username not in SYNC_STATUS:
+        return {"status": "none", "message": "未开始同步"}
+    return SYNC_STATUS[username]
 
 
 # ===== 数据爬取接口 =====
