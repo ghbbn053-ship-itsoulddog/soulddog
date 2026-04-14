@@ -381,14 +381,54 @@ async def login(request: Request, background_tasks: BackgroundTasks):
             logger.info(f"【登录】登录成功，session 已保存，当前 session 数量: {len(SESSIONS)}")
             logger.info(f"【登录】服务器 URL: {final_server_url}")
 
-            # 后台任务：自动爬取教务数据并存储
-            background_tasks.add_task(auto_crawl_and_store, username, session, final_server_url)
+            # 检查是否已有数据（避免重复爬取）
+            needs_sync = True
+            if DB_AVAILABLE:
+                try:
+                    from app.models.user import User
+                    from app.models.education_data import EducationData
+                    db = next(get_db())
+                    try:
+                        # 查询用户是否已有数据
+                        user = db.query(User).filter(User.username == username).first()
+                        if user:
+                            # 检查是否有教育数据
+                            data_count = db.query(EducationData).filter(
+                                EducationData.user_id == user.id
+                            ).count()
+                            
+                            if data_count > 0:
+                                logger.info(f"【登录】用户 {username} 已有 {data_count} 条数据，跳过自动爬取")
+                                needs_sync = False
+                                # 标记为已完成（实际是旧数据）
+                                SYNC_STATUS[username] = {
+                                    "status": "completed", 
+                                    "message": f"使用已有数据（{data_count}条）", 
+                                    "timestamp": time.time(),
+                                    "cached": True  # 标记是缓存数据
+                                }
+                        else:
+                            logger.info(f"【登录】用户 {username} 不存在，将创建并爬取数据")
+                    finally:
+                        db.close()
+                except Exception as e:
+                    logger.warning(f"【登录】检查数据失败: {e}，将执行爬取")
+            
+            # 只在没有数据时才后台爬取
+            if needs_sync:
+                logger.info(f"【登录】用户 {username} 无数据，启动后台爬取")
+                background_tasks.add_task(auto_crawl_and_store, username, session, final_server_url)
+                sync_message = "首次登录，正在后台同步教务数据..."
+            else:
+                sync_message = "已加载历史数据"
 
             return {
                 "success": True,
                 "message": "登录成功",
                 "username": username,
-                "session_id": session.cookies.get("JSESSIONID", "")
+                "session_id": session.cookies.get("JSESSIONID", ""),
+                "sync_status": "completed" if not needs_sync else "syncing",
+                "sync_message": sync_message
             }
 
         # 默认返回失败
@@ -462,6 +502,32 @@ async def get_sync_status(username: str):
     if username not in SYNC_STATUS:
         return {"status": "none", "message": "未开始同步"}
     return SYNC_STATUS[username]
+
+
+@app.post("/api/sync-data")
+async def sync_education_data(username: str, background_tasks: BackgroundTasks):
+    """手动触发数据同步（更新数据）"""
+    if username not in SESSIONS:
+        raise HTTPException(status_code=401, detail="未登录，请先登录")
+    
+    # 检查是否已在同步中
+    if username in SYNC_STATUS and SYNC_STATUS[username].get("status") == "syncing":
+        return {
+            "success": False,
+            "message": "数据同步中，请稍后重试"
+        }
+    
+    user_data = SESSIONS[username]
+    session = user_data["session"]
+    server_url = user_data["server_url"]
+    
+    # 启动后台同步
+    background_tasks.add_task(auto_crawl_and_store, username, session, server_url)
+    
+    return {
+        "success": True,
+        "message": "已开始同步数据，可在后台查看进度"
+    }
 
 
 # ===== 数据爬取接口 =====

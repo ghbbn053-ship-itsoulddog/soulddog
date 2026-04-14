@@ -108,9 +108,25 @@ export default function LoginPage() {
       if (data.success) {
         // 保存用户名到 localStorage
         localStorage.setItem("username", username);
-        // 显示同步状态并轮询
-        setSyncStatus("syncing");
-        pollSyncStatus(username);
+        
+        // 检查同步状态
+        const syncStatus = data.sync_status;
+        const syncMessage = data.sync_message || "";
+        
+        if (syncStatus === "completed") {
+          // 已有数据，直接跳转（带提示）
+          setSyncStatus("completed");
+          if (syncMessage) {
+            // 显示提示信息
+            setError(syncMessage); // 复用error显示，但用不同颜色
+          }
+          // 1秒后跳转
+          setTimeout(() => router.push("/chat"), 1000);
+        } else {
+          // 首次登录，需要后台同步
+          setSyncStatus("syncing");
+          pollSyncStatus(username);
+        }
       } else {
         setError(data.message || data.detail || "登录失败");
         fetchCaptcha(); // 刷新验证码
