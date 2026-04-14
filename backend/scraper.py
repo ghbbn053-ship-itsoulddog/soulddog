@@ -248,9 +248,12 @@ class JwxtScraper:
         - xsfs: 显示方式 (all=显示全部成绩, max=显示最好成绩)
         """
         try:
-            # 成绩查询页面URL（根据深度爬取HTML第723行：/jsxsd/kscj/cjcx_list）
-            url = f"{self.base_url}kscj/cjcx_query"
-            logger.info(f"【成绩调试】请求URL: {url}")
+            # 根据深度爬取HTML第723行：查询表单提交到 /jsxsd/kscj/cjcx_list
+            query_url = f"{self.base_url}kscj/cjcx_query"
+            result_url = f"{self.base_url}kscj/cjcx_list"
+            
+            logger.info(f"【成绩调试】查询页面URL: {query_url}")
+            logger.info(f"【成绩调试】结果提交URL: {result_url}")
             
             # 构建表单数据
             data = {
@@ -261,8 +264,8 @@ class JwxtScraper:
                 "xsfs": xsfs
             }
 
-            # POST提交查询表单
-            response = self.session.post(url, data=data, timeout=10)
+            # POST提交查询表单到cjcx_list获取成绩结果
+            response = self.session.post(result_url, data=data, timeout=10)
             logger.info(f"【成绩调试】响应状态: {response.status_code}")
             logger.info(f"【成绩调试】响应URL: {response.url}")
             html_text = self._fix_encoding(response)
@@ -310,16 +313,21 @@ class JwxtScraper:
             # 提取数据行
             grades = []
             rows = grade_table.find_all('tr')
+            logger.info(f"【成绩调试】表格共有 {len(rows)} 行")
             
             # 跳过表头行（第一行通常是th）
-            for row in rows:
+            for row_idx, row in enumerate(rows):
                 # 跳过表头
                 if row.find('th'):
+                    logger.info(f"【成绩调试】第{row_idx}行是表头，跳过")
                     continue
                     
                 cells = row.find_all('td')
+                logger.info(f"【成绩调试】第{row_idx}行有 {len(cells)} 个单元格")
+                
                 if cells and len(cells) >= 10:
-                    grade_data = {
+                    try:
+                        grade_data = {
                         "序号": cells[0].get_text(strip=True),
                         "开课学期": cells[1].get_text(strip=True),
                         "课程编号": cells[2].get_text(strip=True),
@@ -339,6 +347,9 @@ class JwxtScraper:
                         "备注": cells[16].get_text(strip=True) if len(cells) > 16 else ""
                     }
                     grades.append(grade_data)
+                    logger.info(f"【成绩调试】成功解析第{row_idx}行: {grade_data.get('课程名称', '未知')}")
+                else:
+                    logger.info(f"【成绩调试】第{row_idx}行单元格不足10个({len(cells)}个)，跳过")
 
             # 提取统计信息
             stats = self._extract_grade_stats(soup)
