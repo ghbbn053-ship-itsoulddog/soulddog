@@ -120,10 +120,14 @@ class DataProcessor:
                 logger.warning("【向量化】千问服务不可用，跳过向量化")
                 return False
 
-            # 1. 先删除该用户的旧向量数据
+            # 1. 确保 Collection 存在
+            if not vs.collection:
+                vs.create_collection(dim=1536)
+
+            # 2. 删除该用户的旧向量数据
             vs.delete_user_data(user_id)
 
-            # 2. 数据分块
+            # 3. 数据分块
             chunks = self.chunk_education_data(raw_data, username)
             if not chunks:
                 logger.warning("【向量化】无数据可向量化")

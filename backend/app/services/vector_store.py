@@ -158,7 +158,9 @@ class VectorStore:
             return
         try:
             if not self.collection:
-                self.collection = Collection(self.collection_name)
+                # Collection 不存在，无需删除
+                logger.info(f"ℹ️ Collection 不存在，跳过删除用户 {user_id} 数据")
+                return
             
             self.collection.delete(expr=f"user_id == {user_id}")
             logger.info(f"✅ 删除用户 {user_id} 的所有向量数据")
