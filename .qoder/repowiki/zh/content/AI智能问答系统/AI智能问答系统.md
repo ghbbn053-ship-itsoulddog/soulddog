@@ -5,6 +5,7 @@
 - [backend/main.py](file://backend/main.py)
 - [backend/app/api/chat.py](file://backend/app/api/chat.py)
 - [backend/app/services/vector_store.py](file://backend/app/services/vector_store.py)
+- [backend/app/services/data_processor.py](file://backend/app/services/data_processor.py)
 - [backend/app/models/conversation.py](file://backend/app/models/conversation.py)
 - [backend/app/models/education_data.py](file://backend/app/models/education_data.py)
 - [backend/app/models/base.py](file://backend/app/models/base.py)
@@ -14,7 +15,15 @@
 - [backend/docker-compose.yml](file://backend/docker-compose.yml)
 - [backend/test_login.py](file://backend/test_login.py)
 - [backend/test_scraper.py](file://backend/test_scraper.py)
+- [backend/app/services/qwen_service.py](file://backend/app/services/qwen_service.py)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 更新向量存储服务的错误处理机制，增强了Milvus集成的稳定性和可靠性
+- 改进集合管理功能，包括集合存在性检查和自动创建机制
+- 优化用户数据删除功能，增加了集合存在性验证和异常处理
+- 增强日志记录和警告机制，提供更好的调试和监控能力
 
 ## 目录
 1. [简介](#简介)
@@ -61,27 +70,27 @@ SVC_VEC --> DB
 SVC_QWEN --> DB
 ```
 
-图表来源
+**图表来源**
 - [backend/main.py:1-120](file://backend/main.py#L1-L120)
 - [backend/app/api/chat.py:1-60](file://backend/app/api/chat.py#L1-L60)
 - [backend/app/services/vector_store.py:1-40](file://backend/app/services/vector_store.py#L1-L40)
 - [backend/docker-compose.yml:1-148](file://backend/docker-compose.yml#L1-L148)
 
-章节来源
+**章节来源**
 - [backend/main.py:1-120](file://backend/main.py#L1-L120)
 - [backend/docker-compose.yml:1-148](file://backend/docker-compose.yml#L1-L148)
 
 ## 核心组件
 - RAG对话流程：用户消息进入API层，先持久化对话与消息，再根据用户是否有教育数据决定是否走向量检索增强，随后调用千问服务生成回复并回写消息元数据（用量、来源等）
-- 向量数据库（Milvus）：提供集合创建、文档插入、相似度检索与按用户维度过滤
+- 向量数据库（Milvus）：提供集合创建、文档插入、相似度检索与按用户维度过滤，具备完善的错误处理和状态管理
 - 千问（qwen-plus）：提供文本嵌入与对话生成能力，支持RAG上下文增强
 - 教育数据爬取：统一的JwxtScraper类，覆盖个人信息、成绩、课表、培养方案、学业进度、考试安排等
 - 对话历史管理：基于SQLAlchemy的会话与消息模型，支持查询、删除、历史回放
 - 教育选项工具：提供院系、学期、课程性质、修读类别等静态选项查询与描述映射
 
-章节来源
+**章节来源**
 - [backend/app/api/chat.py:45-154](file://backend/app/api/chat.py#L45-L154)
-- [backend/app/services/vector_store.py:14-164](file://backend/app/services/vector_store.py#L14-L164)
+- [backend/app/services/vector_store.py:14-192](file://backend/app/services/vector_store.py#L14-L192)
 - [backend/scraper.py:13-120](file://backend/scraper.py#L13-L120)
 - [backend/app/models/conversation.py:11-42](file://backend/app/models/conversation.py#L11-L42)
 - [backend/education_options.py:130-260](file://backend/education_options.py#L130-L260)
@@ -116,11 +125,11 @@ API->>DB : 保存AI回复含meta
 API-->>Client : 返回回复、来源、用量
 ```
 
-图表来源
+**图表来源**
 - [backend/app/api/chat.py:45-154](file://backend/app/api/chat.py#L45-L154)
-- [backend/app/services/vector_store.py:100-142](file://backend/app/services/vector_store.py#L100-L142)
+- [backend/app/services/vector_store.py:108-153](file://backend/app/services/vector_store.py#L108-L153)
 
-章节来源
+**章节来源**
 - [backend/app/api/chat.py:45-154](file://backend/app/api/chat.py#L45-L154)
 
 ## 详细组件分析
@@ -147,37 +156,44 @@ CallDirect --> SaveAIMsg
 SaveAIMsg --> End(["返回响应"])
 ```
 
-图表来源
+**图表来源**
 - [backend/app/api/chat.py:54-154](file://backend/app/api/chat.py#L54-L154)
 
-章节来源
+**章节来源**
 - [backend/app/api/chat.py:45-154](file://backend/app/api/chat.py#L45-L154)
 
-### 向量存储服务（Milvus）
-- 连接与集合管理：支持按维度动态创建集合，设置索引类型（IVF_FLAT）、距离度量（COSINE）
-- 文档入库：支持批量插入，包含user_id、text、embedding、source、metadata
-- 检索：按用户过滤表达式、nprobe参数、top_k返回，输出文本、来源、元数据与相似度分数
-- 数据清理：按用户维度删除数据
+### 向量存储服务（Milvus）- 错误处理与集合管理改进
+**更新** 向量存储服务经过重大改进，增强了错误处理和集合管理的稳定性
+
+- **连接管理**：支持自动连接检测，连接失败时设置可用状态标志，避免后续操作
+- **集合管理**：改进的集合创建流程，包含存在性检查、自动创建和索引建立
+- **文档入库**：增强的批量插入功能，包含数据验证和异常处理
+- **检索优化**：改进的搜索参数配置和结果格式化
+- **数据清理**：增强的用户数据删除功能，包含集合存在性验证和异常处理
+- **日志记录**：全面的日志记录机制，提供详细的调试信息
 
 ```mermaid
 classDiagram
 class VectorStore {
-+host
-+port
-+collection_name
-+create_collection(dim)
++host : string
++port : string
++collection_name : string
++available : bool
++collection : Collection
++_connect()
++create_collection(dim) void
 +add_documents(user_id, texts, embeddings, sources, metadatas) List[int]
 +search(user_id, query_embedding, top_k) List[Dict]
-+delete_user_data(user_id)
-+close()
++delete_user_data(user_id) void
++close() void
 }
 ```
 
-图表来源
-- [backend/app/services/vector_store.py:14-164](file://backend/app/services/vector_store.py#L14-L164)
+**图表来源**
+- [backend/app/services/vector_store.py:14-192](file://backend/app/services/vector_store.py#L14-L192)
 
-章节来源
-- [backend/app/services/vector_store.py:14-164](file://backend/app/services/vector_store.py#L14-L164)
+**章节来源**
+- [backend/app/services/vector_store.py:14-192](file://backend/app/services/vector_store.py#L14-L192)
 
 ### 教育数据模型与对话模型
 - 用户模型：包含学号、姓名、学院、专业、班级、激活状态与时间戳
@@ -233,20 +249,20 @@ USERS ||--o{ CONVERSATIONS : "拥有"
 CONVERSATIONS ||--o{ MESSAGES : "包含"
 ```
 
-图表来源
+**图表来源**
 - [backend/app/models/user.py:11-33](file://backend/app/models/user.py#L11-L33)
 - [backend/app/models/education_data.py:11-48](file://backend/app/models/education_data.py#L11-L48)
 - [backend/app/models/conversation.py:11-42](file://backend/app/models/conversation.py#L11-L42)
 
-章节来源
+**章节来源**
 - [backend/app/models/user.py:11-33](file://backend/app/models/user.py#L11-L33)
 - [backend/app/models/education_data.py:11-48](file://backend/app/models/education_data.py#L11-L48)
 - [backend/app/models/conversation.py:11-42](file://backend/app/models/conversation.py#L11-L42)
 
 ### 教务数据爬取（JwxtScraper）
 - 支持验证码获取、登录、个人信息、学籍卡片、成绩、课表、培养方案、学业进度、考试安排、执行计划、选课信息等
-- 提供“我的培养方案”与“学业进度”等个性化查询
-- 提供“所有数据聚合”接口，便于一次性向量化存储
+- 提供"我的培养方案"与"学业进度"等个性化查询
+- 提供"所有数据聚合"接口，便于一次性向量化存储
 
 ```mermaid
 classDiagram
@@ -266,10 +282,10 @@ class JwxtScraper {
 }
 ```
 
-图表来源
+**图表来源**
 - [backend/scraper.py:13-120](file://backend/scraper.py#L13-L120)
 
-章节来源
+**章节来源**
 - [backend/scraper.py:13-120](file://backend/scraper.py#L13-L120)
 
 ### 教育选项工具（AI工具）
@@ -293,10 +309,10 @@ class OptionsTools {
 }
 ```
 
-图表来源
+**图表来源**
 - [backend/education_options.py:130-260](file://backend/education_options.py#L130-L260)
 
-章节来源
+**章节来源**
 - [backend/education_options.py:130-260](file://backend/education_options.py#L130-L260)
 
 ## 依赖分析
@@ -315,63 +331,83 @@ DB --> PG["PostgreSQL"]
 QW --> LLM["千问API"]
 ```
 
-图表来源
+**图表来源**
 - [backend/docker-compose.yml:72-92](file://backend/docker-compose.yml#L72-L92)
 - [backend/app/api/chat.py:11-14](file://backend/app/api/chat.py#L11-L14)
 
-章节来源
-- [backend/docker-compose.yml:1-148](file://backend/docker-compose.yml#L1-L148)
+**章节来源**
+- [backend/docker-compose.yml:1-167](file://backend/docker-compose.yml#L1-L167)
 - [backend/app/api/chat.py:11-14](file://backend/app/api/chat.py#L11-L14)
 
 ## 性能考虑
-- 向量检索优化
+- **向量检索优化**
   - 索引类型：IVF_FLAT，适合中小规模向量库；可通过nlist与nprobe参数平衡召回与延迟
   - 距离度量：COSINE适用于文本嵌入
   - 过滤：按user_id过滤避免跨用户检索
-- 批量处理
+- **批量处理**
   - 插入：批量entities减少网络往返
   - 检索：批量查询可合并为一次请求（若上游支持）
-- 并发控制
+- **并发控制**
   - API层使用同步FastAPI；如需高并发，建议引入异步模式与连接池
   - 向量检索与LLM调用建议限流与超时控制
-- 缓存策略
+- **缓存策略**
   - 建议使用Redis缓存热点问题的嵌入与检索结果（注意失效策略）
   - 对高频选项数据可做本地缓存
-- 数据库优化
+- **数据库优化**
   - 对会话与消息表建立索引（conversation_id、created_at）
   - 分页查询历史消息，限制最大上下文长度
+- **错误处理优化**
+  - 增强的异常捕获和日志记录
+  - 优雅降级机制，确保系统稳定性
 
 ## 故障排除指南
-- 登录与验证码
+- **登录与验证码**
   - 验证码session过期：前端需重新获取验证码并携带captcha_session_id
   - 登录失败常见原因：密码错误、验证码错误、用户名不存在；检查响应内容与URL跳转
-- Milvus连接与检索
+- **Milvus连接与检索**
   - 连接失败：确认容器健康、环境变量（MILVUS_HOST/MILVUS_PORT）、集合存在
   - 检索无结果：检查nprobe、过滤表达式、向量维度一致
-- PostgreSQL会话
+  - 集合管理：检查集合存在性、索引状态和数据完整性
+- **PostgreSQL会话**
   - 会话泄漏：确保每个请求正确关闭数据库会话
   - 表结构不一致：运行迁移或重建数据库
-- 前后端联调
+- **前后端联调**
   - CORS：开发环境允许所有来源，生产需限制
   - 健康检查：/api/health用于快速验证服务可用性
+- **错误处理与日志**
+  - 查看详细的日志信息，包括连接状态、操作结果和异常详情
+  - 检查环境变量配置和依赖服务状态
 
-章节来源
+**章节来源**
 - [backend/main.py:135-328](file://backend/main.py#L135-L328)
-- [backend/app/services/vector_store.py:24-71](file://backend/app/services/vector_store.py#L24-L71)
+- [backend/app/services/vector_store.py:25-180](file://backend/app/services/vector_store.py#L25-L180)
 - [backend/docker-compose.yml:120-127](file://backend/docker-compose.yml#L120-L127)
 
 ## 结论
-本系统以RAG为核心，结合Milvus向量检索与千问大模型，实现了针对教务场景的智能问答能力。通过统一的爬虫与数据模型，系统能够将结构化与非结构化的教育数据转化为可检索的知识库，并在对话过程中动态增强回答质量。后续可在缓存、批量处理、并发扩展与模型微调等方面持续优化。
+本系统以RAG为核心，结合Milvus向量检索与千问大模型，实现了针对教务场景的智能问答能力。通过统一的爬虫与数据模型，系统能够将结构化与非结构化的教育数据转化为可检索的知识库，并在对话过程中动态增强回答质量。
+
+**重要更新**：最新的向量存储服务改进显著提升了系统的稳定性和可靠性。通过增强的错误处理机制、完善的集合管理和用户数据清理功能，系统现在能够更好地应对生产环境中的各种异常情况。这些改进包括：
+
+- 更好的连接状态管理
+- 增强的异常捕获和日志记录
+- 优雅的降级机制
+- 改进的数据一致性保证
+
+后续可在缓存、批量处理、并发扩展与模型微调等方面持续优化。
 
 ## 附录
-- 快速启动
+- **快速启动**
   - 使用docker-compose一键启动：postgres、redis、etcd、minio、milvus、frontend、backend
   - 环境变量：数据库、Milvus、千问API密钥、CORS等
-- 测试参考
+- **测试参考**
   - 登录测试：test_login.py
   - 爬虫功能测试：test_scraper.py
+- **配置示例**
+  - Milvus环境变量：MILVUS_HOST、MILVUS_PORT、MILVUS_COLLECTION
+  - 千问API配置：QWEN_API_KEY、QWEN_MODEL
+  - 数据库连接：POSTGRES_HOST、POSTGRES_PORT、POSTGRES_DB
 
-章节来源
-- [backend/docker-compose.yml:1-148](file://backend/docker-compose.yml#L1-L148)
+**章节来源**
+- [backend/docker-compose.yml:1-167](file://backend/docker-compose.yml#L1-L167)
 - [backend/test_login.py:1-152](file://backend/test_login.py#L1-L152)
 - [backend/test_scraper.py:1-280](file://backend/test_scraper.py#L1-L280)

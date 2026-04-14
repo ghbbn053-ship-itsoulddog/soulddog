@@ -2,19 +2,18 @@
 
 <cite>
 **本文档引用的文件**
-- [backend/app/api/education.py](file://backend/app/api/education.py)
-- [backend/main.py](file://backend/main.py)
 - [backend/scraper.py](file://backend/scraper.py)
+- [backend/main.py](file://backend/main.py)
 - [backend/education_options.py](file://backend/education_options.py)
-- [backend/app/models/education_data.py](file://backend/app/models/education_data.py)
 - [backend/test_scraper.py](file://backend/test_scraper.py)
 </cite>
 
 ## 更新摘要
 **变更内容**
-- 修正了课表查询端点的URL构造逻辑，确保正确的课程数据获取
-- 更新了课表查询接口的URL路径为 `/api/schedule`
-- 完善了课表查询参数的详细说明和使用示例
+- 新增对kbcontent div元素的解析支持，实现多课程块解析机制
+- 改进教师、周次、教室信息提取逻辑，增强对复杂HTML结构的处理能力
+- 优化课表查询接口的URL构造逻辑，确保正确的课程数据获取
+- 完善课表查询参数的详细说明和使用示例
 
 ## 目录
 1. [简介](#简介)
@@ -31,7 +30,7 @@
 
 本文档详细说明了教务系统中的课表查询接口，重点介绍 `/api/schedule` 接口的完整规范。该接口支持按学期和周次查询课表，提供了灵活的查询参数组合，能够满足不同场景下的课表查询需求。
 
-**更新** 课表查询接口现已修复URL构造逻辑，确保正确的课程数据获取。接口路径为 `/api/schedule`，支持GET请求方式。
+**更新** 课表查询接口现已重大改进，新增对kbcontent div元素的解析支持，实现多课程块解析机制，显著增强了对复杂HTML结构的处理能力和数据提取准确性。
 
 系统基于FastAPI框架构建，采用前后端分离架构，通过爬虫技术从教务系统中抓取课表数据，并提供RESTful API接口供前端应用调用。
 
@@ -63,12 +62,12 @@ Model --> Database
 ```
 
 **图表来源**
-- [backend/main.py:455-488](file://backend/main.py#L455-L488)
-- [backend/app/api/education.py:93-103](file://backend/app/api/education.py#L93-L103)
+- [backend/main.py:574-603](file://backend/main.py#L574-L603)
+- [backend/scraper.py:373-533](file://backend/scraper.py#L373-L533)
 
 **章节来源**
 - [backend/main.py:1-124](file://backend/main.py#L1-L124)
-- [backend/app/api/education.py:1-13](file://backend/app/api/education.py#L1-L13)
+- [backend/scraper.py:1-1318](file://backend/scraper.py#L1-L1318)
 
 ## 核心组件
 
@@ -77,7 +76,7 @@ Model --> Database
 系统提供了两个主要的课表查询接口：
 
 1. **FastAPI路由接口** (`/api/schedule`)
-   - **更新** 修正了URL构造逻辑，确保正确的课程数据获取
+   - **更新** 优化了URL构造逻辑，确保正确的课程数据获取
    - 适用于需要用户认证的场景
    - 使用数据库会话管理
    - 支持异步操作
@@ -95,7 +94,7 @@ Model --> Database
 - **学期参数映射** (`xnxq01id`)
 - **周次参数映射** (`zc`)
 - **HTML解析和数据提取**
-- **更新** 修正了课表查询端点URL构造逻辑
+- **更新** 新增对kbcontent div元素的解析支持，实现多课程块解析机制
 
 ### 数据模型层
 
@@ -106,9 +105,8 @@ Model --> Database
 - JSON字段支持灵活的数据结构
 
 **章节来源**
-- [backend/app/api/education.py:93-103](file://backend/app/api/education.py#L93-L103)
-- [backend/scraper.py:348-516](file://backend/scraper.py#L348-L516)
-- [backend/app/models/education_data.py:11-103](file://backend/app/models/education_data.py#L11-L103)
+- [backend/scraper.py:373-533](file://backend/scraper.py#L373-L533)
+- [backend/education_options.py:130-260](file://backend/education_options.py#L130-L260)
 
 ## 架构概览
 
@@ -125,6 +123,8 @@ API->>Service : 调用课表查询服务
 Service->>Scraper : get_schedule(semester, week)
 Scraper->>JWXT : POST /jsxsd/xskb/xskb_list.do
 Scraper->>Scraper : 解析HTML课表
+Scraper->>Scraper : 处理kbcontent div元素
+Scraper->>Scraper : 多课程块解析
 Scraper-->>Service : 返回课程数据
 Service-->>API : 格式化响应数据
 API-->>Client : JSON响应
@@ -132,8 +132,8 @@ Note over Client,JWXT : 异步处理，支持并发请求
 ```
 
 **图表来源**
-- [backend/main.py:480-510](file://backend/main.py#L480-L510)
-- [backend/scraper.py:348-372](file://backend/scraper.py#L348-L372)
+- [backend/main.py:574-603](file://backend/main.py#L574-L603)
+- [backend/scraper.py:373-533](file://backend/scraper.py#L373-L533)
 
 ## 详细组件分析
 
@@ -174,7 +174,7 @@ ReturnSemester --> End([结束])
 ```
 
 **图表来源**
-- [backend/scraper.py:315-318](file://backend/scraper.py#L315-L318)
+- [backend/scraper.py:373-396](file://backend/scraper.py#L373-L396)
 
 #### 周次参数规范
 
@@ -213,8 +213,8 @@ APIResponse --> ScheduleResponse : 包含多个
 ```
 
 **图表来源**
-- [backend/scraper.py:474-484](file://backend/scraper.py#L474-L484)
-- [backend/main.py:494-502](file://backend/main.py#L494-L502)
+- [backend/scraper.py:490-500](file://backend/scraper.py#L490-L500)
+- [backend/main.py:588-596](file://backend/main.py#L588-L596)
 
 #### 实际使用示例
 
@@ -251,8 +251,9 @@ CheckTable --> |否| ReturnEmpty["返回空课表"]
 CheckTable --> |是| ParseRows[解析行数据]
 ParseRows --> ExtractPeriod[提取节次信息]
 ExtractPeriod --> LoopDays[遍历星期列]
-LoopDays --> ExtractCourse[提取课程信息]
-ExtractCourse --> ParseCourseInfo[解析课程详细信息]
+LoopDays --> FindKBContent[查找kbcontent div元素]
+FindKBContent --> SplitBlocks[分割多课程块]
+SplitBlocks --> ParseCourseInfo[解析课程详细信息]
 ParseCourseInfo --> AddToResult[添加到结果集]
 AddToResult --> CheckRemarks[检查备注信息]
 CheckRemarks --> ReturnResult[返回最终结果]
@@ -261,7 +262,7 @@ ReturnResult --> End
 ```
 
 **图表来源**
-- [backend/scraper.py:376-499](file://backend/scraper.py#L376-L499)
+- [backend/scraper.py:438-500](file://backend/scraper.py#L438-L500)
 
 #### 课程信息字段详解
 
@@ -275,6 +276,52 @@ ReturnResult --> End
 | `地点` | string | 上课教室信息 | "拓新楼(SS1)133" |
 | `周次` | string | 上课周次范围 | "1-16" |
 | `节次信息` | string | 节次详细信息 | "[01-02]节" |
+
+### 多课程块解析机制
+
+**更新** 新增对kbcontent div元素的解析支持，实现多课程块解析机制：
+
+```mermaid
+flowchart TD
+Start([开始处理课表]) --> ParseTable[解析课表表格]
+ParseTable --> FindKBContent[查找kbcontent div元素]
+FindKBContent --> CheckDiv{"找到kbcontent元素?"}
+CheckDiv --> |否| ProcessNormal[正常处理课表]
+CheckDiv --> |是| SplitBlocks[分割多课程块]
+SplitBlocks --> RegexSplit[使用正则表达式分割<br/>21-22个短横线]
+RegexSplit --> ParseBlock[解析每个课程块]
+ParseBlock --> ExtractFields[提取字段信息]
+ExtractFields --> ValidateData{数据有效?}
+ValidateData --> |是| AddToResult[添加到结果集]
+ValidateData --> |否| SkipBlock[跳过无效块]
+SkipBlock --> NextBlock[处理下一个块]
+NextBlock --> ParseBlock
+AddToResult --> ProcessNormal
+ProcessNormal --> ReturnData[返回处理后的数据]
+ReturnData --> End([结束])
+```
+
+**图表来源**
+- [backend/scraper.py:447-461](file://backend/scraper.py#L447-L461)
+
+### 增强的信息提取逻辑
+
+**更新** 改进教师、周次、教室信息提取逻辑：
+
+```mermaid
+flowchart TD
+Start([开始提取课程信息]) --> GetLines[获取文本行]
+GetLines --> ExtractName[提取课程名称<br/>第一行]
+ExtractName --> FindTeacher[查找font[title='老师']]
+FindTeacher --> FindWeeks[查找font[title='周次(节次)']]
+FindWeeks --> FindLocation[查找font[title='教室']]
+FindLocation --> ExtractSections[提取节次信息<br/>包含'节'和'['的行]
+ExtractSections --> BuildCourseData[构建课程数据对象]
+BuildCourseData --> End([结束])
+```
+
+**图表来源**
+- [backend/scraper.py:471-499](file://backend/scraper.py#L471-L499)
 
 ### 未安排时间课程处理
 
@@ -296,7 +343,7 @@ ReturnData --> End([结束])
 ```
 
 **图表来源**
-- [backend/scraper.py:486-499](file://backend/scraper.py#L486-L499)
+- [backend/scraper.py:502-515](file://backend/scraper.py#L502-L515)
 
 ## 依赖关系分析
 
@@ -312,24 +359,20 @@ SQLAlchemy[sqlalchemy]
 end
 subgraph "内部模块"
 Main[main.py]
-EducationAPI[education.py]
 Scraper[scraper.py]
 Options[education_options.py]
-Models[education_data.py]
+Test[tests]
 end
-Main --> EducationAPI
 Main --> Scraper
 Main --> Options
-EducationAPI --> Scraper
-EducationAPI --> Models
 Scraper --> Requests
 Scraper --> BeautifulSoup
-Models --> SQLAlchemy
+Options --> Test
 ```
 
 **图表来源**
 - [backend/main.py:15-25](file://backend/main.py#L15-L25)
-- [backend/app/api/education.py:1-11](file://backend/app/api/education.py#L1-L11)
+- [backend/scraper.py:1-1318](file://backend/scraper.py#L1-L1318)
 
 ### 数据流分析
 
@@ -346,6 +389,7 @@ Main->>API : 路由转发
 API->>Service : 业务逻辑处理
 Service->>Scraper : 数据抓取
 Scraper->>Scraper : HTML解析
+Scraper->>Scraper : 多课程块处理
 Scraper->>Database : 数据存储
 Database-->>Scraper : 存储确认
 Scraper-->>Service : 解析结果
@@ -354,13 +398,12 @@ API-->>Client : JSON响应
 ```
 
 **图表来源**
-- [backend/main.py:480-510](file://backend/main.py#L480-L510)
-- [backend/app/api/education.py:93-103](file://backend/app/api/education.py#L93-L103)
+- [backend/main.py:574-603](file://backend/main.py#L574-L603)
+- [backend/scraper.py:373-533](file://backend/scraper.py#L373-L533)
 
 **章节来源**
-- [backend/main.py:480-510](file://backend/main.py#L480-L510)
-- [backend/app/api/education.py:93-103](file://backend/app/api/education.py#L93-L103)
-- [backend/scraper.py:348-516](file://backend/scraper.py#L348-L516)
+- [backend/main.py:574-603](file://backend/main.py#L574-L603)
+- [backend/scraper.py:373-533](file://backend/scraper.py#L373-L533)
 
 ## 性能考虑
 
@@ -399,7 +442,7 @@ Return200 --> End
 ```
 
 **图表来源**
-- [backend/main.py:506-509](file://backend/main.py#L506-L509)
+- [backend/main.py:602-603](file://backend/main.py#L602-L603)
 
 ## 故障排除指南
 
@@ -411,6 +454,7 @@ Return200 --> End
 | 参数错误 | 400参数错误 | 学期格式不正确 | 检查学期参数格式 |
 | 网络超时 | 504网关超时 | 教务系统繁忙 | 增加超时时间或稍后重试 |
 | 数据解析失败 | 500服务器错误 | HTML结构变化 | 更新解析规则 |
+| 多课程块解析失败 | 课程信息不完整 | kbcontent元素格式变化 | 检查正则表达式匹配 |
 
 ### 调试建议
 
@@ -428,14 +472,14 @@ Return200 --> End
    - 确保周次参数为有效的数字或范围
 
 **章节来源**
-- [backend/main.py:506-509](file://backend/main.py#L506-L509)
-- [backend/scraper.py:511-516](file://backend/scraper.py#L511-L516)
+- [backend/main.py:602-603](file://backend/main.py#L602-L603)
+- [backend/scraper.py:528-533](file://backend/scraper.py#L528-L533)
 
 ## 结论
 
 课表查询API提供了灵活而强大的课表查询功能，支持按学期和周次的精确查询。系统采用模块化设计，具有良好的扩展性和维护性。
 
-**更新** 课表查询接口现已修复URL构造逻辑，确保正确的课程数据获取。接口路径为 `/api/schedule`，支持GET请求方式，能够稳定地从教务系统中抓取课表数据。
+**更新** 课表查询接口现已重大改进，新增对kbcontent div元素的解析支持，实现多课程块解析机制，显著增强了对复杂HTML结构的处理能力和数据提取准确性。接口路径为 `/api/schedule`，支持GET请求方式，能够稳定地从教务系统中抓取课表数据。
 
 ### 主要特性
 
@@ -443,7 +487,9 @@ Return200 --> End
 2. **完整的数据结构**：包含课程的所有必要信息
 3. **健壮的错误处理**：提供清晰的错误信息和恢复机制
 4. **高性能设计**：支持并发处理和缓存机制
-5. **稳定的URL构造**：修正了课表查询端点的URL构造逻辑
+5. **稳定的URL构造**：优化了课表查询端点的URL构造逻辑
+6. **增强的HTML解析**：新增多课程块解析机制，支持复杂HTML结构
+7. **精确的信息提取**：改进教师、周次、教室信息提取逻辑
 
 ### 最佳实践
 
@@ -451,5 +497,6 @@ Return200 --> End
 2. **错误处理**：实现完善的异常处理和日志记录
 3. **性能优化**：合理使用缓存和连接池
 4. **监控告警**：建立完善的监控和告警机制
+5. **兼容性考虑**：关注HTML结构变化，及时更新解析规则
 
-该API为教务系统的课表查询提供了标准化的解决方案，能够满足各种复杂的查询需求。
+该API为教务系统的课表查询提供了标准化的解决方案，能够满足各种复杂的查询需求，特别是在处理复杂HTML结构和多课程块场景下表现优异。

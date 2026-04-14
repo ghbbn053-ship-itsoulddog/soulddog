@@ -4,7 +4,6 @@
 **本文档引用的文件**
 - [main.py](file://backend/main.py)
 - [scraper.py](file://backend/scraper.py)
-- [education.py](file://backend/app/api/education.py)
 - [education_data.py](file://backend/app/models/education_data.py)
 - [education_options.py](file://backend/education_options.py)
 - [requirements.txt](file://backend/requirements.txt)
@@ -13,10 +12,11 @@
 
 ## 更新摘要
 **所做更改**
-- 更新了URL构造修复相关的章节内容
-- 修正了培养方案查询端点的URL构造逻辑说明
-- 补充了JwxtScraper类中URL构造的具体实现细节
-- 更新了相关API接口的使用示例和数据结构说明
+- 新增rowspan处理机制的详细说明，包括cat_rem、nat_rem、mod_rem倒计时变量
+- 补充课程代码识别和验证机制的说明
+- 更新培养方案数据结构，增加学时相关信息字段
+- 完善URL构造修复的相关内容
+- 增强数据解析算法的技术细节说明
 
 ## 目录
 1. [简介](#简介)
@@ -38,8 +38,9 @@
 - 解析培养方案中的课程要求和学分要求
 - 支持按学期和课程性质进行筛选
 - 提供培养方案与实际课程安排的关联分析
+- **新增**：智能处理HTML表格rowspan属性，确保课程类别、性质、模块信息的准确解析
 
-**更新** 本次更新重点关注URL构造修复，确保培养方案查询端点能够正确访问培养计划数据
+**更新** 本次更新重点关注rowspan处理机制的实现，解决了复杂表格结构下的数据解析问题
 
 ## 项目结构
 
@@ -97,8 +98,8 @@ JwxtScraper类负责与教务系统的交互，实现了多种数据抓取功能
 EducationData模型定义了存储培养方案数据的数据库结构，采用JSON格式存储，支持灵活的数据扩展和查询。
 
 **章节来源**
-- [main.py:490-517](file://backend/main.py#L490-L517)
-- [scraper.py:558-685](file://backend/scraper.py#L558-L685)
+- [main.py:606-629](file://backend/main.py#L606-L629)
+- [scraper.py:623-782](file://backend/scraper.py#L623-L782)
 - [education_data.py:11-47](file://backend/app/models/education_data.py#L11-L47)
 
 ## 架构概览
@@ -116,15 +117,15 @@ API->>API : 验证用户登录状态
 API->>Scraper : 创建爬虫实例
 Scraper->>EduSystem : 访问培养方案页面
 EduSystem-->>Scraper : 返回HTML内容
-Scraper->>Scraper : 解析HTML数据
+Scraper->>Scraper : 解析HTML数据含rowspan处理
 Scraper-->>API : 返回培养方案数据
 API-->>Client : 返回JSON响应
 Note over Client,EduSystem : 异步数据处理流程
 ```
 
 **图表来源**
-- [main.py:490-517](file://backend/main.py#L490-L517)
-- [scraper.py:558-685](file://backend/scraper.py#L558-L685)
+- [main.py:606-629](file://backend/main.py#L606-L629)
+- [scraper.py:623-782](file://backend/scraper.py#L623-L782)
 
 ## 详细组件分析
 
@@ -165,6 +166,13 @@ class CourseItem {
 +学分 number
 +建议修读学期 string
 +考核方式 string
++授课周数 string
++总学时 string
++理论学时 string
++实验学时 string
++实习学时 string
++其他学时 string
++是否适用辅修 string
 }
 class CreditStats {
 +总学分要求 number
@@ -177,7 +185,7 @@ TrainingPlanData --> CreditStats : 包含
 ```
 
 **图表来源**
-- [scraper.py:573-677](file://backend/scraper.py#L573-L677)
+- [scraper.py:721-737](file://backend/scraper.py#L721-L737)
 
 #### 课程要求解析
 
@@ -193,6 +201,13 @@ TrainingPlanData --> CreditStats : 包含
 | 学分 | number | 课程学分数 | 3 |
 | 建议修读学期 | string | 推荐修读学期 | "4" |
 | 考核方式 | string | 考核形式（考试、考查） | "考试" |
+| **新增** | **string** | **授课周数** | **"16周"** |
+| **新增** | **string** | **总学时** | **"48学时"** |
+| **新增** | **string** | **理论学时** | **"32学时"** |
+| **新增** | **string** | **实验学时** | **"16学时"** |
+| **新增** | **string** | **实习学时** | **""** |
+| **新增** | **string** | **其他学时** | **""** |
+| **新增** | **string** | **是否适用辅修** | **"是"** |
 
 #### 学分要求计算
 
@@ -202,7 +217,7 @@ TrainingPlanData --> CreditStats : 包含
 - 还需学分：总学分要求与已修学分的差额
 
 **章节来源**
-- [scraper.py:558-685](file://backend/scraper.py#L558-L685)
+- [scraper.py:623-782](file://backend/scraper.py#L623-L782)
 - [test_scraper.py:240-250](file://backend/test_scraper.py#L240-L250)
 
 ### 数据模型设计
@@ -351,8 +366,95 @@ async def get_my_training_plan_api(username: str):
 - 与教务系统预期的URL结构匹配
 
 **章节来源**
-- [scraper.py:606-731](file://backend/scraper.py#L606-L731)
-- [main.py:512-535](file://backend/main.py#L512-L535)
+- [scraper.py:629-631](file://backend/scraper.py#L629-L631)
+- [main.py:612-615](file://backend/main.py#L612-L615)
+
+### rowspan处理机制详解
+
+**新增** 本次更新重点介绍了rowspan处理机制的实现
+
+#### 倒计时变量系统
+
+为了正确处理HTML表格中的rowspan属性，系统引入了三个倒计时变量：
+
+```python
+# 初始化倒计时变量
+cat_rem = 0  # 课程类别倒计时
+nat_rem = 0  # 课程性质倒计时  
+mod_rem = 0  # 课程模块倒计时
+```
+
+这些变量的作用是：
+- **>0**：表示该列当前行仍被上方单元格占据
+- **=0**：表示需要从新的td单元格中读取新值
+
+#### 课程类别处理流程
+
+```mermaid
+flowchart TD
+A[开始处理课程类别] --> B{cat_rem > 0?}
+B --> |是| C[cat_rem -= 1]
+C --> D[保持当前课程类别]
+D --> E[继续处理下一个单元格]
+B --> |否| F{是否有rowspan属性?}
+F --> |是| G[cat_rem = int(rowspan) - 1]
+G --> H[更新current_category]
+H --> I[ci += 1]
+I --> E
+F --> |否| J[保持空值或上一个有效值]
+J --> E
+```
+
+**图表来源**
+- [scraper.py:684-691](file://backend/scraper.py#L684-L691)
+
+#### 课程性质和模块处理
+
+类似的处理逻辑适用于课程性质和课程模块：
+
+```python
+# 处理课程性质列
+if nat_rem > 0:
+    nat_rem -= 1
+else:
+    if ci < len(td_cells) and td_cells[ci].get('rowspan'):
+        nat_rem = int(td_cells[ci].get('rowspan')) - 1
+        current_nature = _clean_cell(td_cells[ci])
+        ci += 1
+
+# 处理课程模块列
+if mod_rem > 0:
+    mod_rem -= 1
+else:
+    if ci < len(td_cells) and td_cells[ci].get('rowspan'):
+        mod_rem = int(td_cells[ci].get('rowspan')) - 1
+        current_module = _clean_cell(td_cells[ci])
+        ci += 1
+```
+
+**图表来源**
+- [scraper.py:693-709](file://backend/scraper.py#L693-L709)
+
+#### 课程代码识别和验证
+
+**更新** 新增了课程代码识别和验证机制：
+
+```python
+try:
+    course_code = _clean_cell(course_cells[0])
+    if not course_code or len(course_code) < 5:
+        continue
+```
+
+这个验证确保：
+- 课程代码不能为空
+- 课程代码长度至少为5位字符
+- 避免将非课程代码的数据误认为课程代码
+
+**章节来源**
+- [scraper.py:665-668](file://backend/scraper.py#L665-L668)
+- [scraper.py:684-709](file://backend/scraper.py#L684-L709)
+- [scraper.py:716-719](file://backend/scraper.py#L716-L719)
 
 ## 依赖关系分析
 
@@ -466,6 +568,8 @@ C --> H
 | 培养方案为空 | 网页结构变化 | 更新解析规则 |
 | 学分统计错误 | 数据格式变化 | 检查正则表达式 |
 | 课程列表不完整 | 网页分页问题 | 实现分页处理 |
+| **新增** | **rowspan解析失败** | **检查倒计时变量逻辑** |
+| **新增** | **课程代码识别错误** | **验证课程代码长度** |
 
 #### 性能问题
 
@@ -484,10 +588,11 @@ C --> H
 3. **性能监控**：跟踪API响应时间和错误率
 4. **日志分析**：记录详细的错误信息和调试信息
 
-**更新** 针对URL构造修复，新增了以下调试要点：
-- 验证基础URL配置是否正确
-- 检查URL拼接逻辑是否符合预期
-- 确认服务器URL与验证码获取URL的一致性
+**更新** 针对rowspan处理机制，新增了以下调试要点：
+- 验证倒计时变量cat_rem、nat_rem、mod_rem的正确更新
+- 检查rowspan属性的解析和计算逻辑
+- 确认课程代码识别和验证机制正常工作
+- 测试复杂表格结构下的数据完整性
 
 **章节来源**
 - [test_login.py:1-152](file://backend/test_login.py#L1-L152)
@@ -503,11 +608,13 @@ C --> H
 2. **实时更新**：直接从教务系统抓取最新数据
 3. **灵活扩展**：支持多种课程性质和学期组合
 4. **性能优化**：异步处理和缓存策略提升响应速度
+5. ****rowspan处理**：智能解析复杂表格结构，确保数据准确性
 
-**更新** 最重要的改进是URL构造逻辑的修复，确保了：
+**更新** 最重要的改进是rowspan处理机制的实现，确保了：
 - 稳定的培养方案数据访问
 - 正确的基础URL拼接
 - 与教务系统预期的URL结构完全匹配
+- **新增**：智能处理HTML表格rowspan属性，解决复杂表格结构下的数据解析问题
 
 ### 未来改进方向
 
@@ -515,5 +622,6 @@ C --> H
 2. **缓存优化**：实现更智能的缓存策略
 3. **监控完善**：增加更详细的性能指标监控
 4. **错误处理**：提供更友好的错误提示信息
+5. ****rowspan处理优化**：进一步优化rowspan解析算法，提升处理效率
 
 该API为学生提供了清晰的课程规划指导，帮助他们更好地理解和执行培养方案要求，是教务系统智能化转型的重要组成部分。

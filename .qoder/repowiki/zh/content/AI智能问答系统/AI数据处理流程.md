@@ -13,7 +13,15 @@
 - [requirements.txt](file://backend/requirements.txt)
 - [education_options.py](file://backend/education_options.py)
 - [test_scraper.py](file://backend/test_scraper.py)
+- [data_processor.py](file://backend/app/services/data_processor.py)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 更新了向量化处理流程，强调操作顺序的重新排序以提高系统健壮性
+- 新增了集合存在性检查的详细说明
+- 增强了数据删除操作的安全性描述
+- 完善了数据处理流程的可靠性保障措施
 
 ## 目录
 1. [简介](#简介)
@@ -41,7 +49,7 @@ SCR["爬虫模块<br/>JwxtScraper"]
 VEC["向量数据库服务<br/>VectorStore(Milvus)"]
 QWEN["AI服务<br/>QwenService(RAG)"]
 DB["数据库模型<br/>User/EducationData"]
-end
+END
 API --> SCR
 API --> VEC
 API --> QWEN
@@ -140,6 +148,11 @@ Quality --> End(["输出结构化数据"])
 - 嵌入生成：使用QwenService的generate_embedding接口生成向量，当前实现为占位，实际项目中可替换为sentence-transformers、OpenAI Embedding或其他开源模型。
 - 批量处理策略：VectorStore支持批量插入，减少网络往返与索引构建压力；插入后flush以确保可见性。
 
+**更新** 向量化过程中的操作顺序已重新排序，确保系统健壮性：
+- 首先检查集合存在性，避免在不存在的集合上执行删除操作
+- 确保Collection对象存在后再执行数据删除
+- 通过utility.has_collection()方法进行存在性检查
+
 ```mermaid
 sequenceDiagram
 participant API as "API"
@@ -191,10 +204,19 @@ class VectorStore {
 - 版本控制：在EducationData模型中维护last_updated时间戳，作为数据新鲜度依据；可扩展为版本号字段。
 - 一致性保证：删除与插入操作在同一事务中进行（数据库层），向量库层面通过flush确保可见性；AI检索时按user_id过滤，避免跨用户污染。
 
+**更新** 数据删除操作的健壮性增强：
+- 在执行delete_user_data之前，先检查Collection对象是否存在
+- 如果Collection不存在，则记录信息并跳过删除操作
+- 这种设计避免了在不存在的集合上执行删除操作可能引发的异常
+
 ```mermaid
 flowchart TD
-SyncStart(["触发同步"]) --> Del["删除用户旧数据"]
+SyncStart(["触发同步"]) --> Check["检查集合存在性"]
+Check --> Exists{"集合存在？"}
+Exists --> |是| Del["删除用户旧数据"]
+Exists --> |否| Skip["跳过删除操作"]
 Del --> Insert["批量插入新数据"]
+Skip --> Insert
 Insert --> Flush["flush可见性"]
 Flush --> Done(["完成同步"])
 ```
@@ -274,7 +296,7 @@ REQ --> DP
 - [base.py:10-28](file://backend/app/models/base.py#L10-L28)
 
 ## 结论
-该AI数据处理流程以JwxtScraper为核心采集器，结合QwenService与VectorStore实现从数据到向量再到检索与问答的闭环。通过结构化的数据清洗、标准化与向量化，配合Milvus的索引与查询优化，能够为教务问答提供稳定高效的RAG能力。后续可在嵌入模型替换、增量更新策略与缓存体系方面进一步优化。
+该AI数据处理流程以JwxtScraper为核心采集器，结合QwenService与VectorStore实现从数据到向量再到检索与问答的闭环。通过结构化的数据清洗、标准化与向量化，配合Milvus的索引与查询优化，能够为教务问答提供稳定高效的RAG能力。最新的操作顺序优化确保了数据删除操作的健壮性，通过先检查集合存在性再执行删除，有效避免了潜在的异常情况。后续可在嵌入模型替换、增量更新策略与缓存体系方面进一步优化。
 
 ## 附录
 - 数据模型关系：User与EducationData一对一/一对多关系，支持按用户隔离与持久化。
