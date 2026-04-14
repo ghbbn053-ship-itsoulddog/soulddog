@@ -328,26 +328,29 @@ class JwxtScraper:
                 if cells and len(cells) >= 10:
                     try:
                         grade_data = {
-                        "序号": cells[0].get_text(strip=True),
-                        "开课学期": cells[1].get_text(strip=True),
-                        "课程编号": cells[2].get_text(strip=True),
-                        "课程名称": cells[3].get_text(strip=True),
-                        "平时成绩": cells[4].get_text(strip=True),
-                        "实验成绩": cells[5].get_text(strip=True),
-                        "期末成绩": cells[6].get_text(strip=True),
-                        "成绩": cells[7].get_text(strip=True),
-                        "学分": cells[8].get_text(strip=True),
-                        "总学时": cells[9].get_text(strip=True),
-                        "考核方式": cells[10].get_text(strip=True) if len(cells) > 10 else "",
-                        "课程属性": cells[11].get_text(strip=True) if len(cells) > 11 else "",
-                        "课程性质": cells[12].get_text(strip=True) if len(cells) > 12 else "",
-                        "通选课分类": cells[13].get_text(strip=True) if len(cells) > 13 else "",
-                        "考试性质": cells[14].get_text(strip=True) if len(cells) > 14 else "",
-                        "成绩标识": cells[15].get_text(strip=True) if len(cells) > 15 else "",
-                        "备注": cells[16].get_text(strip=True) if len(cells) > 16 else ""
-                    }
-                    grades.append(grade_data)
-                    logger.info(f"【成绩调试】成功解析第{row_idx}行: {grade_data.get('课程名称', '未知')}")
+                            "序号": cells[0].get_text(strip=True),
+                            "开课学期": cells[1].get_text(strip=True),
+                            "课程编号": cells[2].get_text(strip=True),
+                            "课程名称": cells[3].get_text(strip=True),
+                            "平时成绩": cells[4].get_text(strip=True),
+                            "实验成绩": cells[5].get_text(strip=True),
+                            "期末成绩": cells[6].get_text(strip=True),
+                            "成绩": cells[7].get_text(strip=True),
+                            "学分": cells[8].get_text(strip=True),
+                            "总学时": cells[9].get_text(strip=True),
+                            "考核方式": cells[10].get_text(strip=True) if len(cells) > 10 else "",
+                            "课程属性": cells[11].get_text(strip=True) if len(cells) > 11 else "",
+                            "课程性质": cells[12].get_text(strip=True) if len(cells) > 12 else "",
+                            "通选课分类": cells[13].get_text(strip=True) if len(cells) > 13 else "",
+                            "考试性质": cells[14].get_text(strip=True) if len(cells) > 14 else "",
+                            "成绩标识": cells[15].get_text(strip=True) if len(cells) > 15 else "",
+                            "备注": cells[16].get_text(strip=True) if len(cells) > 16 else ""
+                        }
+                        grades.append(grade_data)
+                        logger.info(f"【成绩调试】成功解析第{row_idx}行: {grade_data.get('课程名称', '未知')}")
+                    except Exception as e:
+                        logger.warning(f"【成绩调试】第{row_idx}行解析失败: {str(e)}")
+                        continue
                 else:
                     logger.info(f"【成绩调试】第{row_idx}行单元格不足10个({len(cells)}个)，跳过")
 
