@@ -225,16 +225,20 @@ class JwxtScraper:
                    fxkc: str = "0", xsfs: str = "all") -> Dict:
         """
         获取成绩列表
+        基于深度爬取真实HTML修复
         参数:
-        - kksj: 开课时间
-        - kcxz: 课程性质
-        - kcmc: 课程名称
+        - kksj: 开课时间（学期），如 "2024-2025-1"
+        - kcxz: 课程性质，如 "01"(必修), "02"(选修)
+        - kcmc: 课程名称（模糊搜索）
         - fxkc: 修读类别 (0=主修课程, 1=辅修课程)
         - xsfs: 显示方式 (all=显示全部成绩, max=显示最好成绩)
         """
         try:
-            # 构建查询参数
-            params = {
+            # 成绩提交URL（根据深度爬取crawl_tree.json）
+            url = f"{self.base_url}/kscj/cjcx_query"
+            
+            # 构建表单数据
+            data = {
                 "kksj": kksj,
                 "kcxz": kcxz,
                 "kcmc": kcmc,
@@ -242,14 +246,13 @@ class JwxtScraper:
                 "xsfs": xsfs
             }
 
-            # 提交成绩查询
-            url = f"{self.base_url}kscj/cjcx_list"
-            response = self.session.post(url, data=params, timeout=10)
+            # POST提交查询表单
+            response = self.session.post(url, data=data, timeout=10)
             html_text = self._fix_encoding(response)
 
             soup = BeautifulSoup(html_text, 'html.parser')
 
-            # 解析成绩表格 - 根据实际HTML结构，表格ID为dataList
+            # 解析成绩表格 - 根据真实HTML，表格ID为dataList
             grade_table = soup.find('table', id='dataList')
 
             if not grade_table:
@@ -262,8 +265,14 @@ class JwxtScraper:
 
             # 提取数据行
             grades = []
-            rows = grade_table.find_all('tr')[1:]  # 跳过表头行
+            rows = grade_table.find_all('tr')
+            
+            # 跳过表头行（第一行通常是th）
             for row in rows:
+                # 跳过表头
+                if row.find('th'):
+                    continue
+                    
                 cells = row.find_all('td')
                 if cells and len(cells) >= 10:
                     grade_data = {
@@ -369,26 +378,24 @@ class JwxtScraper:
             xsfs="all"
         )
 
-    def get_schedule(self, semester: str = "", week: str = "") -> Dict:
+    def get_schedule(self, semester: str = "") -> Dict:
         """
         获取学期课表
+        基于深度爬取真实HTML修复
         参数:
         - semester: 学期，如 "2024-2025-2"，为空则获取当前学期
-        - week: 周次，如 "1", "2"，为空则获取全部
         返回: 课程列表，包含课程名称、时间、地点、教师等信息
         """
         try:
-            # 课表查询页面
-            url = f"{self.base_url}xskb/xskb_list.do"
+            # 课表查询URL（根据深度爬取crawl_tree.json）
+            url = f"{self.base_url}/xskb/xskb_list.do"
 
             # 构建表单数据
             data = {}
             if semester:
                 data["xnxq01id"] = semester
-            if week:
-                data["zc"] = week
 
-            # 提交查询
+            # POST提交查询
             if data:
                 response = self.session.post(url, data=data, timeout=10)
             else:
@@ -397,7 +404,7 @@ class JwxtScraper:
             html_text = self._fix_encoding(response)
             soup = BeautifulSoup(html_text, 'html.parser')
 
-            # 查找课表表格
+            # 查找课表表格（真实HTML中表格ID为kbtable）
             schedule_table = soup.find('table', id='kbtable')
 
             if not schedule_table:
@@ -406,13 +413,12 @@ class JwxtScraper:
                     "success": True,
                     "data": [],
                     "count": 0,
-                    "semester": semester,
-                    "week": week
+                    "semester": semester
                 }
 
             # 解析课表
             courses = []
-            rows = schedule_table.find_all('tr')[1:]  # 跳过表头
+            rows = schedule_table.find_all('tr')
 
             # 节次映射
             period_map = {
@@ -424,7 +430,11 @@ class JwxtScraper:
                 "第十一十二节": "11-12"
             }
 
-            for row in rows:
+            # 跳过表头行
+            for row_idx, row in enumerate(rows):
+                if row.find('th'):
+                    continue
+                    
                 cells = row.find_all(['th', 'td'])
                 if len(cells) >= 8:
                     # 节次信息 (第一二节、第三四节等)
@@ -439,11 +449,11 @@ class JwxtScraper:
                         course_divs = cell.find_all('div', class_='kbcontent')
 
                         for div in course_divs:
-                            # 跳过空单元格（&nbsp; → \xa0，strip 后为空）
+                            # 跳过空单元格
                             if not div.get_text(strip=True):
                                 continue
 
-                            # kbcontent 多课程分隔符：21 个短横线（kbcontent1 为 22 个）
+                            # kbcontent 多课程分隔符：21 个短横线
                             inner_html = div.decode_contents()
                             course_blocks_html = _kb_re.split(r'-{21,22}', inner_html)
 
@@ -469,7 +479,7 @@ class JwxtScraper:
 
                                 course_name = lines[0]
 
-                                # 用 font[title] 精确提取各字段，无需猜测行顺序
+                                # 用 font[title] 精确提取各字段
                                 teacher_font = block_soup.find('font', title='老师')
                                 teacher = teacher_font.get_text(strip=True) if teacher_font else ""
 
@@ -623,11 +633,12 @@ class JwxtScraper:
     def get_my_training_plan(self) -> Dict:
         """
         获取"我的培养方案"（当前登录学生）
-         URL: /jsxsd/pyfa/pyfazd_query
-        返回详细的培养方案，包括课程类别、模块、学分要求等
+        URL: /jsxsd/pyfa/pyfa_query
+        基于深度爬取真实HTML修复（1__jsxsd_pyfa_pyfa_query.html）
+        返回详细的培养方案，包括学期、课程代码、课程名称、学分等
         """
         try:
-            url = f"{self.base_url}pyfa/pyfazd_query"
+            url = f"{self.base_url}/pyfa/pyfa_query"
             response = self.session.get(url, timeout=10)
             html_text = self._fix_encoding(response)
 
@@ -635,158 +646,72 @@ class JwxtScraper:
 
             # 解析个人培养方案
             plan_data = {
-                "基本信息": {},
-                "课程列表": [],
-                "学分统计": {
-                    "总学分要求": 0,
-                    "已修学分": 0,
-                    "还需学分": 0
-                }
+                "课程列表": []
             }
 
-            # 提取专业名称和版本
-            title_font = soup.find('font', style=lambda x: x and 'font-size:16px' in x)
-            if title_font:
-                plan_data["基本信息"]["专业版本"] = title_font.get_text(strip=True)
-
-            # 提取学院名称
-            college_match = soup.find('span', style=lambda x: x and 'font-size: 20pt' in x)
-            if college_match:
-                plan_data["基本信息"]["学院"] = college_match.get_text(strip=True).replace('学院', '').strip()
-
-            # 查找课程表格 - 使用正则直接提取 mxh 表格（避免 BeautifulSoup 解析整个文档时的截断问题）
-            import re as _re
-            mxh_match = _re.search(r"<table[^>]*id=['\"]mxh['\"][^>]*>(.*?)</table>", html_text, _re.DOTALL | _re.IGNORECASE)
+            # 查找课程表格 - 根据真实HTML，表格没有id='mxh'，直接查找所有table
+            # 真实表格结构：序号、学期、课程代码、课程名称、开课院系、学分、学时、考核方式、性质、是否适用
+            all_tables = soup.find_all('table')
             
-            if mxh_match:
-                mxh_html = mxh_match.group(0)
-                table_soup = BeautifulSoup(mxh_html, 'html.parser')
-                rows = table_soup.find_all('tr')
-                logger.info(f"【培养方案】正则提取 mxh 表格，共 {len(rows)} 行")
+            target_table = None
+            for table in all_tables:
+                rows = table.find_all('tr')
+                if len(rows) > 10:  # 课程表格应该有超过10行
+                    # 检查是否包含课程代码（10位数字）
+                    import re
+                    for row in rows[:5]:  # 检查前5行
+                        cells = row.find_all('td')
+                        for cell in cells:
+                            if re.match(r'^\d{10}$', cell.get_text(strip=True)):
+                                target_table = table
+                                break
+                        if target_table:
+                            break
+                if target_table:
+                    break
             
-                current_category = ""  # 当前课程类别
-                current_nature = ""    # 当前课程性质
-                current_module = ""    # 当前课程模块
-                # rowspan 倒计时：>0 表示该列当前行仍被上方单元格占据
-                cat_rem = 0
-                nat_rem = 0
-                mod_rem = 0
-            
-                def _clean_cell(c):
-                    return c.get_text(strip=True).replace('\xa0', '').strip()
-            
+            if target_table:
+                rows = target_table.find_all('tr')
+                logger.info(f"【培养方案】找到课程表格，共 {len(rows)} 行")
+                
                 for row in rows:
-                    # 跳过表头行（含 th 元素）
+                    # 跳过表头行
                     if row.find('th'):
                         continue
-            
-                    td_cells = row.find_all('td')
-                    if not td_cells:
-                        continue
-            
-                    # 过滤掉隐藏的 input 标签（有些行会有 <input type="hidden">）
-                    td_cells = [td for td in td_cells if td.find('input', type='hidden') is None]
-                    if not td_cells:
-                        continue
                     
-                    # 调试日志：打印前 5 行的 td 数量
-                    if len(plan_data["课程列表"]) < 3:
-                        logger.debug(f"【培养方案】行解析: td数量={len(td_cells)}, cat_rem={cat_rem}, nat_rem={nat_rem}, mod_rem={mod_rem}")
-            
-                    ci = 0  # 当前 td 下标
-            
-                    # 处理课程类别列（rowspan 追踪）
-                    if cat_rem > 0:
-                        cat_rem -= 1
-                    else:
-                        if ci < len(td_cells) and td_cells[ci].get('rowspan'):
-                            cat_rem = int(td_cells[ci].get('rowspan')) - 1
-                            current_category = _clean_cell(td_cells[ci])
-                            ci += 1
-            
-                    # 处理课程性质列
-                    if nat_rem > 0:
-                        nat_rem -= 1
-                    else:
-                        if ci < len(td_cells) and td_cells[ci].get('rowspan'):
-                            nat_rem = int(td_cells[ci].get('rowspan')) - 1
-                            current_nature = _clean_cell(td_cells[ci])
-                            ci += 1
-            
-                    # 处理课程模块列
-                    if mod_rem > 0:
-                        mod_rem -= 1
-                    else:
-                        if ci < len(td_cells) and td_cells[ci].get('rowspan'):
-                            mod_rem = int(td_cells[ci].get('rowspan')) - 1
-                            current_module = _clean_cell(td_cells[ci])
-                            ci += 1
-            
-                    # 剩余单元格：课程代码、课程名称、学分……
-                    course_cells = td_cells[ci:]
-                    if len(course_cells) < 3:
-                        continue
-            
-                    try:
-                        course_code = _clean_cell(course_cells[0])
-                        if not course_code or len(course_code) < 5:
+                    cells = row.find_all('td')
+                    # 真实HTML列结构：
+                    # 0:序号 1:学期 2:课程代码 3:课程名称 4:开课院系 5:学分 6:学时 7:考核方式 8:性质 9:是否适用
+                    if len(cells) >= 10:
+                        try:
+                            course_code = cells[2].get_text(strip=True)
+                            # 验证课程代码格式（应该是10位数字）
+                            if not re.match(r'^\d{10}$', course_code):
+                                continue
+                            
+                            course = {
+                                "序号": cells[0].get_text(strip=True),
+                                "学期": cells[1].get_text(strip=True),
+                                "课程代码": course_code,
+                                "课程名称": cells[3].get_text(strip=True),
+                                "开课院系": cells[4].get_text(strip=True),
+                                "学分": cells[5].get_text(strip=True),
+                                "学时": cells[6].get_text(strip=True),
+                                "考核方式": cells[7].get_text(strip=True),
+                                "性质": cells[8].get_text(strip=True),
+                                "是否适用": cells[9].get_text(strip=True)
+                            }
+                            plan_data["课程列表"].append(course)
+                        except Exception as e:
+                            logger.warning(f"解析课程行失败: {str(e)}")
                             continue
-            
-                        course = {
-                            "课程类别": current_category,
-                            "课程性质": current_nature,
-                            "课程模块": current_module,
-                            "课程代码": course_code,
-                            "课程名称": _clean_cell(course_cells[1]) if len(course_cells) > 1 else "",
-                            "学分": _clean_cell(course_cells[2]) if len(course_cells) > 2 else "",
-                            "授课周数": _clean_cell(course_cells[3]) if len(course_cells) > 3 else "",
-                            "总学时": _clean_cell(course_cells[4]) if len(course_cells) > 4 else "",
-                            "理论学时": _clean_cell(course_cells[5]) if len(course_cells) > 5 else "",
-                            "实验学时": _clean_cell(course_cells[6]) if len(course_cells) > 6 else "",
-                            "实习学时": _clean_cell(course_cells[7]) if len(course_cells) > 7 else "",
-                            "其他学时": _clean_cell(course_cells[8]) if len(course_cells) > 8 else "",
-                            "建议修读学期": _clean_cell(course_cells[9]) if len(course_cells) > 9 else "",
-                            "是否适用辅修": _clean_cell(course_cells[10]) if len(course_cells) > 10 else "",
-                            "考核方式": _clean_cell(course_cells[11]) if len(course_cells) > 11 else ""
-                        }
-                        plan_data["课程列表"].append(course)
-                    except Exception as e:
-                        logger.warning(f"解析课程行失败: {str(e)}")
-                        continue
-
-            # 提取学分统计信息
-            page_text = soup.get_text()
-            import re
-
-            # 查找学分统计
-            credit_patterns = [
-                r'应修满\s*(\d+)\s*学分',
-                r'总学分[:：]\s*(\d+)',
-                r'最低毕业学分[:：]\s*(\d+)'
-            ]
-            for pattern in credit_patterns:
-                match = re.search(pattern, page_text)
-                if match:
-                    plan_data["学分统计"]["总学分要求"] = int(match.group(1))
-                    break
-
-            # 计算已修学分（从课程列表中统计）
-            total_credits = 0
-            for course in plan_data["课程列表"]:
-                try:
-                    credit = float(course.get("学分", 0) or 0)
-                    total_credits += credit
-                except:
-                    pass
-            plan_data["学分统计"]["计划学分"] = total_credits
 
             logger.info(f"成功获取我的培养方案，共 {len(plan_data['课程列表'])} 门课程")
 
             return {
                 "success": True,
                 "data": plan_data,
-                "count": len(plan_data["课程列表"]),
-                "raw_html": html_text  # 保存原始HTML供分析
+                "count": len(plan_data["课程列表"])
             }
 
         except Exception as e:

@@ -268,32 +268,37 @@ class DataProcessor:
                     "metadata": {"type": "schedule", "day": day},
                 })
 
-        # === 4. 培养方案 — 按课程类别分组 ===
+        # === 4. 培养方案 — 按学期分组 ===
         plan = raw_data.get("培养方案", {})
         if isinstance(plan, dict):
             plan_courses = plan.get("课程列表", [])
             if plan_courses:
-                category_courses = {}
+                # 按学期分组
+                semester_courses = {}
                 for c in plan_courses:
-                    cat = c.get("课程类别", "其他")
-                    if cat not in category_courses:
-                        category_courses[cat] = []
-                    category_courses[cat].append(c)
+                    semester = c.get("学期", c.get("建议修读学期", "未知学期"))
+                    if semester not in semester_courses:
+                        semester_courses[semester] = []
+                    semester_courses[semester].append(c)
 
-                for cat, courses in category_courses.items():
-                    lines = [f"培养方案 - {cat}："]
+                for semester, courses in semester_courses.items():
+                    lines = [f"培养方案 - {semester}："]
                     for c in courses:
                         line = (
-                            f"  {c.get('课程名称', '')} "
+                            f"  {c.get('课程代码', '')} "
+                            f"{c.get('课程名称', '')} "
                             f"学分{c.get('学分', '')} "
-                            f"建议学期{c.get('建议修读学期', '')}"
+                            f"学时{c.get('学时', '')} "
+                            f"性质{c.get('性质', c.get('课程性质', ''))} "
+                            f"考核{c.get('考核方式', '')} "
+                            f"院系{c.get('开课院系', '')}"
                         )
                         lines.append(line)
                     text = "\n".join(lines)
                     chunks.append({
                         "text": text,
                         "source": "培养方案",
-                        "metadata": {"type": "training_plan", "category": cat},
+                        "metadata": {"type": "training_plan", "semester": semester},
                     })
 
             # 基本信息和学分统计
