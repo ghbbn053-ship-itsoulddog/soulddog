@@ -157,17 +157,22 @@ class VectorStore:
             logger.warning("⚠️ Milvus 不可用，跳过删除")
             return
         try:
-            if not self.collection:
-                # Collection 不存在，无需删除
-                logger.info(f"ℹ️ Collection 不存在，跳过删除用户 {user_id} 数据")
+            # 检查 Collection 是否存在
+            if not utility.has_collection(self.collection_name):
+                logger.info(f"ℹ️ Collection '{self.collection_name}' 不存在，跳过删除用户 {user_id} 数据")
                 return
+            
+            # 加载 Collection
+            if not self.collection:
+                self.collection = Collection(self.collection_name)
             
             self.collection.delete(expr=f"user_id == {user_id}")
             logger.info(f"✅ 删除用户 {user_id} 的所有向量数据")
             
         except Exception as e:
             logger.error(f"❌ 删除数据失败: {str(e)}")
-            raise
+            # 不抛出异常，避免阻塞后续流程
+            return
     
     def close(self):
         """关闭连接"""
