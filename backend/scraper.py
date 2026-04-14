@@ -725,13 +725,13 @@ class JwxtScraper:
                 rows = table.find_all('tr')
                 logger.info(f"【培养方案调试】表格{table_idx}有 {len(rows)} 行")
                 if len(rows) > 10:  # 课程表格应该有超过10行
-                    # 检查是否包含课程代码（10位数字）
+                    # 检查是否包含课程代码（8位数字，根据深度爬取HTML）
                     import re
                     for row in rows[:5]:  # 检查前5行
                         cells = row.find_all('td')
                         for cell in cells:
                             cell_text = cell.get_text(strip=True)
-                            if re.match(r'^\d{10}$', cell_text):
+                            if re.match(r'^\d{8}$', cell_text):  # 8位数字
                                 logger.info(f"【培养方案调试】表格{table_idx}找到课程代码: {cell_text}")
                                 target_table = table
                                 break
@@ -758,8 +758,8 @@ class JwxtScraper:
                     if len(cells) >= 10:
                         try:
                             course_code = cells[2].get_text(strip=True)
-                            # 验证课程代码格式（应该是10位数字）
-                            if not re.match(r'^\d{10}$', course_code):
+                            # 验证课程代码格式（应该是8位数字）
+                            if not re.match(r'^\d{8}$', course_code):
                                 continue
                             
                             course = {
