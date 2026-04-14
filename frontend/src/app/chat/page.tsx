@@ -1,6 +1,7 @@
-"use client";
+'use client';
 
 import React, { useState, useRef, useEffect } from "react";
+import MarkdownMessage from "@/components/MarkdownMessage";
 import { 
   Send, 
   User, 
@@ -92,7 +93,7 @@ export default function ChatPage() {
     }
   };
 
-  // 发送消息
+  // 发送消息（流式版本）
   const sendMessage = async () => {
     if (!input.trim() || !username || isLoading) return;
 
@@ -106,8 +107,17 @@ export default function ChatPage() {
     }]);
     setIsLoading(true);
 
+    // 添加一个空的assistant消息用于流式更新
+    const assistantMsgId = Date.now() + 1;
+    setMessages(prev => [...prev, {
+      id: assistantMsgId,
+      role: "assistant",
+      content: "",
+      timestamp: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    }]);
+
     try {
-      const res = await fetch(`${API_BASE}/api/chat/send`, {
+      const response = await fetch(`${API_BASE}/api/chat/send-stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -117,33 +127,71 @@ export default function ChatPage() {
         })
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setMessages(prev => [...prev, {
-          id: Date.now() + 1,
-          role: "assistant",
-          content: data.message,
-          sources: data.sources,
-          tool_calls: data.tool_calls,
-          timestamp: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-        }]);
-        setCurrentConversationId(data.conversation_id);
-        fetchConversations();
-      } else {
-        setMessages(prev => [...prev, {
-          id: Date.now() + 1,
-          role: "assistant",
-          content: "抱歉，服务暂时不可用，请稍后再试。",
-          timestamp: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-        }]);
+      if (!response.ok) {
+        throw new Error("请求失败");
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("无法读取响应流");
+      }
+
+      const decoder = new TextDecoder();
+      let aiContent = "";
+      let conversationId = currentConversationId;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value, { stream: true });
+        const lines = text.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.done) {
+                // 流式完成
+                if (data.conversation_id) {
+                  conversationId = data.conversation_id;
+                  setCurrentConversationId(conversationId);
+                  fetchConversations();
+                }
+                break;
+              }
+              
+              if (data.conversation_id && !conversationId) {
+                conversationId = data.conversation_id;
+              }
+              
+              if (data.content) {
+                aiContent += data.content;
+                // 更新消息内容
+                setMessages(prev => 
+                  prev.map(msg => 
+                    msg.id === assistantMsgId 
+                      ? { ...msg, content: aiContent }
+                      : msg
+                  )
+                );
+              }
+            } catch (e) {
+              // 忽略解析错误
+            }
+          }
+        }
       }
     } catch (error) {
-      setMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        role: "assistant",
-        content: "网络错误，请检查连接。",
-        timestamp: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-      }]);
+      console.error("流式消息失败:", error);
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.id === assistantMsgId 
+            ? { ...msg, content: "抱歉，服务暂时不可用，请稍后再试。" }
+            : msg
+        )
+      );
     } finally {
       setIsLoading(false);
     }
@@ -428,7 +476,11 @@ export default function ChatPage() {
                         : "bg-white border border-gray-200 rounded-bl-md"
                       }
                     `}>
-                      <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                      {msg.role === 'assistant' ? (
+                        <MarkdownMessage content={msg.content || "✨ 正在思考..."} />
+                      ) : (
+                        <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                      )}
                       
                       {/* 工具调用标记 */}
                       {msg.tool_calls && msg.tool_calls.length > 0 && (

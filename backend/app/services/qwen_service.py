@@ -187,18 +187,50 @@ class QwenService:
                     }
                 }
             else:
-                logger.error(f"❌ 千问调用失败: {response.message}")
-                return {
-                    "success": False,
-                    "message": f"AI服务错误: {response.message}"
-                }
-                
+                logger.error(f"❌ 千问调用失败: {response.code} - {response.message}")
+                return {"success": False, "message": f"AI调用失败: {response.message}"}
         except Exception as e:
-            logger.error(f"❌ 千问服务异常: {str(e)}")
-            return {
-                "success": False,
-                "message": f"AI服务异常: {str(e)}"
-            }
+            logger.error(f"❌ 千问对话异常: {e}")
+            return {"success": False, "message": f"AI对话异常: {str(e)}"}
+
+    def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):
+        """
+        流式对话 - 生成器模式
+        
+        Yields:
+            str: 每次生成的文本块
+        """
+        if not self.available:
+            yield "[AI服务未配置]"
+            return
+        
+        try:
+            # 添加系统提示
+            full_messages = [{"role": "system", "content": self.system_prompt}] + messages
+            
+            # 调用流式API
+            responses = Generation.call(
+                model=self.model,
+                messages=full_messages,
+                temperature=temperature,
+                result_format="message",
+                stream=True,  # 启用流式
+                incremental_output=True  # 增量输出
+            )
+            
+            # 逐个yield生成的内容
+            for response in responses:
+                if response.status_code == 200:
+                    content = response.output.choices[0].message.content
+                    if content:
+                        yield content
+                else:
+                    logger.error(f"流式调用失败: {response.message}")
+                    yield f"\n[错误: {response.message}]"
+                    
+        except Exception as e:
+            logger.error(f"流式对话异常: {e}")
+            yield f"\n[异常: {str(e)}]"
     
     def chat_with_tools(self, messages: List[Dict], tools_context: Dict = None) -> Dict:
         """

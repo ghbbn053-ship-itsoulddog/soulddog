@@ -3,10 +3,12 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
 import logging
+import json
 
 from app.models import get_db, User, Conversation, Message, EducationData
 from app.services import get_qwen_service, get_vector_store
@@ -266,3 +268,99 @@ async def delete_conversation(conversation_id: int, username: str = None, db: Se
         db.rollback()
         logger.error(f"删除对话失败: {str(e)}")
         raise HTTPException(status_code=500, detail="删除对话失败")
+
+
+@router.post("/send-stream")
+async def send_message_stream(request: ChatRequest, http_request: Request, db: Session = Depends(get_db)):
+    """
+    流式发送消息给 AI（SSE）
+    返回 Server-Sent Events 格式的流式响应
+    """
+    try:
+        qwen_svc = get_qwen_service()
+        
+        if not qwen_svc.available:
+            async def error_stream():
+                yield f"data: {json.dumps({'content': '[AI服务未配置]', 'done': True})}\n\n"
+            return StreamingResponse(error_stream(), media_type="text/event-stream")
+        
+        # 1. 查找或创建用户
+        user = db.query(User).filter(User.username == request.username).first()
+        if not user:
+            user = User(username=request.username, name=request.username)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        
+        # 2. 查找或创建对话
+        if request.conversation_id:
+            conversation = db.query(Conversation).filter(
+                Conversation.id == request.conversation_id,
+                Conversation.user_id == user.id
+            ).first()
+            if not conversation:
+                raise HTTPException(status_code=404, detail="对话不存在")
+        else:
+            title = request.message[:20] + "..." if len(request.message) > 20 else request.message
+            conversation = Conversation(user_id=user.id, title=title)
+            db.add(conversation)
+            db.commit()
+            db.refresh(conversation)
+        
+        # 3. 保存用户消息
+        user_msg = Message(
+            conversation_id=conversation.id,
+            role="user",
+            content=request.message
+        )
+        db.add(user_msg)
+        db.commit()
+        
+        # 4. 获取历史对话
+        history_messages = db.query(Message).filter(
+            Message.conversation_id == conversation.id
+        ).order_by(Message.created_at.desc()).limit(10).all()
+        
+        history = []
+        for msg in reversed(history_messages):
+            history.append({"role": msg.role, "content": msg.content})
+        
+        # 5. 流式生成AI回复
+        async def generate():
+            full_content = ""
+            
+            # 发送对话ID
+            yield f"data: {json.dumps({'conversation_id': conversation.id, 'done': False})}\n\n"
+            
+            # 流式调用AI
+            for chunk in qwen_svc.chat_stream(history):
+                full_content += chunk
+                yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
+            
+            # 保存AI回复
+            ai_msg = Message(
+                conversation_id=conversation.id,
+                role="assistant",
+                content=full_content
+            )
+            db.add(ai_msg)
+            db.commit()
+            
+            # 发送完成信号
+            yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id})}\n\n"
+        
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"流式聊天失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"流式聊天失败: {str(e)}")
