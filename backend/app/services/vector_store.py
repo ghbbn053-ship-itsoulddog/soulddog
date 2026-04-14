@@ -77,7 +77,7 @@ class VectorStore:
     
     def add_documents(self, user_id: int, texts: List[str], embeddings: List[List[float]], 
                       sources: List[str], metadatas: Optional[List[Dict]] = None) -> List[int]:
-        """添加文档到向量库"""
+        """添加文档到向量库（自动去重）"""
         if not self.available:
             logger.warning("⚠️ Milvus 不可用，跳过添加文档")
             return []
@@ -85,20 +85,58 @@ class VectorStore:
             if not self.collection:
                 self.create_collection(dim=len(embeddings[0]))
             
+            # 确保 Collection 已加载
+            self.collection.load()
+            
+            # 查询已存在的文本（去重）
+            existing_texts = set()
+            try:
+                # 获取该用户的所有文本
+                existing_results = self.collection.query(
+                    expr=f"user_id == {user_id}",
+                    output_fields=["text"]
+                )
+                existing_texts = {item['text'] for item in existing_results}
+                logger.info(f"📊 用户 {user_id} 已有 {len(existing_texts)} 条数据")
+            except Exception as e:
+                logger.warning(f"⚠️ 查询已有数据失败: {str(e)}")
+            
+            # 过滤掉已存在的文本
+            new_texts = []
+            new_embeddings = []
+            new_sources = []
+            new_metadatas = []
+            
+            for i, text in enumerate(texts):
+                if text not in existing_texts:
+                    new_texts.append(text)
+                    new_embeddings.append(embeddings[i])
+                    new_sources.append(sources[i])
+                    if metadatas:
+                        new_metadatas.append(metadatas[i])
+                    else:
+                        new_metadatas.append({})
+            
+            if not new_texts:
+                logger.info(f"ℹ️ 用户 {user_id} 没有新数据需要添加")
+                return []
+            
+            logger.info(f"📝 准备插入 {len(new_texts)} 条新数据（过滤掉 {len(texts) - len(new_texts)} 条重复）")
+            
             # 准备数据
             entities = [
-                [user_id] * len(texts),  # user_id
-                texts,  # text
-                embeddings,  # embedding
-                sources,  # source
-                [json.dumps(m) if m else "" for m in (metadatas or [{}] * len(texts))]  # metadata
+                [user_id] * len(new_texts),  # user_id
+                new_texts,  # text
+                new_embeddings,  # embedding
+                new_sources,  # source
+                [json.dumps(m) if m else "" for m in new_metadatas]  # metadata
             ]
             
             # 插入数据
             insert_result = self.collection.insert(entities)
             self.collection.flush()
             
-            logger.info(f"✅ 插入 {len(texts)} 条文档，ID: {insert_result.primary_keys}")
+            logger.info(f"✅ 插入 {len(new_texts)} 条新文档，ID: {insert_result.primary_keys}")
             return insert_result.primary_keys
             
         except Exception as e:
@@ -162,11 +200,15 @@ class VectorStore:
                 logger.info(f"ℹ️ Collection '{self.collection_name}' 不存在，跳过删除用户 {user_id} 数据")
                 return
             
-            # 加载 Collection
+            # 确保 Collection 已加载
             if not self.collection:
                 self.collection = Collection(self.collection_name)
             
+            # 加载 Collection 到内存
+            self.collection.load()
+            
             self.collection.delete(expr=f"user_id == {user_id}")
+            self.collection.flush()
             logger.info(f"✅ 删除用户 {user_id} 的所有向量数据")
             
         except Exception as e:
