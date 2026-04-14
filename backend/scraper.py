@@ -693,13 +693,20 @@ class JwxtScraper:
         """
         try:
             url = f"{self.base_url}pyfa/pyfa_query"
+            logger.info(f"【培养方案调试】请求URL: {url}")
             response = self.session.get(url, timeout=10)
+            logger.info(f"【培养方案调试】响应状态: {response.status_code}")
+            logger.info(f"【培养方案调试】响应URL: {response.url}")
             html_text = self._fix_encoding(response)
+            logger.info(f"【培养方案调试】HTML长度: {len(html_text)}")
             
             # 保存HTML到文件用于调试
             with open('/tmp/debug_training_plan.html', 'w', encoding='utf-8') as f:
                 f.write(html_text)
             logger.info(f"【培养方案调试】HTML已保存到 /tmp/debug_training_plan.html")
+            
+            # 输出HTML前500字符用于调试
+            logger.info(f"【培养方案调试】HTML前500字符: {html_text[:500]}")
 
             soup = BeautifulSoup(html_text, 'html.parser')
 
@@ -711,23 +718,30 @@ class JwxtScraper:
             # 查找课程表格 - 根据真实HTML，表格没有id='mxh'，直接查找所有table
             # 真实表格结构：序号、学期、课程代码、课程名称、开课院系、学分、学时、考核方式、性质、是否适用
             all_tables = soup.find_all('table')
+            logger.info(f"【培养方案调试】找到 {len(all_tables)} 个表格")
             
             target_table = None
-            for table in all_tables:
+            for table_idx, table in enumerate(all_tables):
                 rows = table.find_all('tr')
+                logger.info(f"【培养方案调试】表格{table_idx}有 {len(rows)} 行")
                 if len(rows) > 10:  # 课程表格应该有超过10行
                     # 检查是否包含课程代码（10位数字）
                     import re
                     for row in rows[:5]:  # 检查前5行
                         cells = row.find_all('td')
                         for cell in cells:
-                            if re.match(r'^\d{10}$', cell.get_text(strip=True)):
+                            cell_text = cell.get_text(strip=True)
+                            if re.match(r'^\d{10}$', cell_text):
+                                logger.info(f"【培养方案调试】表格{table_idx}找到课程代码: {cell_text}")
                                 target_table = table
                                 break
                         if target_table:
                             break
                 if target_table:
                     break
+            
+            if not target_table:
+                logger.warning(f"【培养方案调试】未找到包含课程代码的表格")
             
             if target_table:
                 rows = target_table.find_all('tr')

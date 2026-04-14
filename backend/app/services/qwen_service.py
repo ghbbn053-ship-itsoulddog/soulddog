@@ -215,8 +215,13 @@ class QwenService:
             
             assistant_msg = response.output.choices[0].message
             
-            # 检查是否有工具调用
-            tool_calls = getattr(assistant_msg, 'tool_calls', None)
+            # 检查是否有工具调用（兼容dict和对象两种格式）
+            if isinstance(assistant_msg, dict):
+                tool_calls = assistant_msg.get('tool_calls', None)
+            else:
+                tool_calls = getattr(assistant_msg, 'tool_calls', None)
+            
+            logger.info(f"【工具调用】assistant_msg类型: {type(assistant_msg)}, tool_calls: {tool_calls}")
             
             if not tool_calls:
                 # 没有工具调用，直接返回回答
