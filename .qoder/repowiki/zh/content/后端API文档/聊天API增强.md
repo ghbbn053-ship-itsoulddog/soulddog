@@ -12,11 +12,20 @@
 - [backend/app/models/education_data.py](file://backend/app/models/education_data.py)
 - [backend/scraper.py](file://backend/scraper.py)
 - [frontend/src/app/chat/page.tsx](file://frontend/src/app/chat/page.tsx)
+- [frontend/src/app/login/page.tsx](file://frontend/src/app/login/page.tsx)
 - [backend/app/models/base.py](file://backend/app/models/base.py)
 - [backend/requirements.txt](file://backend/requirements.txt)
 - [docker-compose.yml](file://docker-compose.yml)
 - [README-Windows.md](file://README-Windows.md)
 </cite>
+
+## 更新摘要
+**所做更改**
+- 新增用户认证和授权机制章节，涵盖登录流程、会话管理和权限控制
+- 更新聊天API架构图，反映新增的认证流程
+- 新增消息级联删除和数据完整性保护机制
+- 增强错误处理和异常管理章节
+- 更新前端登录界面和聊天界面的认证集成
 
 ## 目录
 1. [项目概述](#项目概述)
@@ -24,10 +33,12 @@
 3. [核心组件](#核心组件)
 4. [架构概览](#架构概览)
 5. [详细组件分析](#详细组件分析)
-6. [依赖关系分析](#依赖关系分析)
-7. [性能考虑](#性能考虑)
-8. [故障排除指南](#故障排除指南)
-9. [结论](#结论)
+6. [用户认证和授权机制](#用户认证和授权机制)
+7. [消息级联删除和数据完整性](#消息级联删除和数据完整性)
+8. [依赖关系分析](#依赖关系分析)
+9. [性能考虑](#性能考虑)
+10. [故障排除指南](#故障排除指南)
+11. [结论](#结论)
 
 ## 项目概述
 
@@ -38,6 +49,8 @@
 - **实时数据查询**：通过爬虫技术实时查询教务系统数据
 - **对话历史管理**：完整的对话记录和历史查询功能
 - **向量化知识库**：基于Milvus的向量检索系统
+- **用户认证授权**：完整的用户登录、会话管理和权限控制
+- **消息级联删除**：确保数据一致性的自动清理机制
 - **前后端分离架构**：React前端 + FastAPI后端 + Python爬虫
 
 ## 项目结构
@@ -49,10 +62,13 @@ FE[Next.js前端]
 ChatUI[聊天界面]
 LoginUI[登录界面]
 end
+subgraph "认证层"
+AuthAPI[认证API]
+CaptchaAPI[验证码API]
+end
 subgraph "后端层"
 API[FastAPI后端]
 ChatAPI[聊天API]
-AuthAPI[认证API]
 DataAPI[数据API]
 end
 subgraph "服务层"
@@ -66,12 +82,10 @@ Postgres[PostgreSQL]
 Milvus[Milvus向量库]
 Redis[Redis缓存]
 end
-FE --> API
-ChatUI --> FE
-LoginUI --> FE
-API --> ChatAPI
-API --> AuthAPI
-API --> DataAPI
+FE --> AuthAPI
+FE --> ChatUI
+FE --> LoginUI
+AuthAPI --> API
 ChatAPI --> Qwen
 ChatAPI --> Vector
 ChatAPI --> Scraper
@@ -83,11 +97,11 @@ Scraper --> Postgres
 ```
 
 **图表来源**
-- [backend/main.py:1-100](file://backend/main.py#L1-L100)
-- [backend/app/api/chat.py:1-50](file://backend/app/api/chat.py#L1-L50)
+- [backend/main.py:126-154](file://backend/main.py#L126-L154)
+- [backend/app/api/chat.py:46-179](file://backend/app/api/chat.py#L46-L179)
 
 **章节来源**
-- [backend/main.py:1-150](file://backend/main.py#L1-L150)
+- [backend/main.py:126-154](file://backend/main.py#L126-L154)
 - [docker-compose.yml:1-167](file://docker-compose.yml#L1-L167)
 
 ## 核心组件
@@ -96,15 +110,19 @@ Scraper --> Postgres
 
 聊天API是整个系统的核心，提供了完整的对话功能，包括工具调用、RAG检索和纯对话三种模式。
 
-### 2. AI服务集成
+### 2. 用户认证系统
+
+实现了完整的用户认证和授权机制，包括验证码获取、用户登录、会话管理和权限控制。
+
+### 3. AI服务集成
 
 集成了阿里云千问大模型，支持Function Calling和RAG增强功能。
 
-### 3. 数据处理管道
+### 4. 数据处理管道
 
 实现了从爬取数据到向量化的完整数据处理流程。
 
-### 4. 向量检索系统
+### 5. 向量检索系统
 
 基于Milvus的向量数据库，提供高效的相似性检索。
 
@@ -117,12 +135,16 @@ Scraper --> Postgres
 ```mermaid
 sequenceDiagram
 participant Client as 客户端
+participant Auth as 认证API
 participant API as 聊天API
 participant Qwen as 千问服务
 participant Vector as 向量库
 participant DB as 数据库
 participant Scraper as 爬虫服务
-Client->>API : POST /api/chat/send
+Client->>Auth : POST /api/login
+Auth->>DB : 验证用户凭据
+Auth-->>Client : 返回登录结果
+Client->>API : POST /api/chat/send (携带用户名)
 API->>DB : 查找用户和对话
 API->>Qwen : 检查工具调用能力
 alt 用户已登录
@@ -317,6 +339,136 @@ SaveAIMsg3 --> End
 **章节来源**
 - [frontend/src/app/chat/page.tsx:40-490](file://frontend/src/app/chat/page.tsx#L40-L490)
 
+## 用户认证和授权机制
+
+### 登录流程
+
+系统实现了完整的用户认证流程，包括验证码获取、用户登录和会话管理：
+
+#### 验证码获取
+- 支持根据学号选择服务器
+- 生成临时验证码会话ID
+- 返回base64编码的图片
+
+#### 用户登录
+- 验证用户名、密码和验证码
+- 自动选择服务器（优先使用验证码时的服务器）
+- 保存用户会话和服务器URL
+- 后台异步爬取和存储数据
+
+#### 会话管理
+- 使用内存存储用户会话
+- 支持会话状态检查
+- 提供会话超时处理
+
+```mermaid
+sequenceDiagram
+participant Client as 客户端
+participant Captcha as 验证码API
+participant Login as 登录API
+participant Session as 会话存储
+Client->>Captcha : GET /api/captcha
+Captcha->>Session : 创建验证码会话
+Captcha-->>Client : 返回验证码图片
+Client->>Login : POST /api/login
+Login->>Session : 验证验证码会话
+Login->>Session : 保存用户会话
+Login-->>Client : 返回登录结果
+```
+
+**图表来源**
+- [backend/main.py:166-235](file://backend/main.py#L166-L235)
+- [backend/main.py:237-444](file://backend/main.py#L237-L444)
+
+### 权限控制
+
+系统实现了基于用户名的权限控制机制：
+
+#### 会话归属检查
+- 在删除对话时验证用户身份
+- 确保用户只能操作自己的对话
+- 提供详细的错误信息
+
+#### 数据访问控制
+- 所有数据查询接口都需要有效的会话
+- 自动检查用户登录状态
+- 提供统一的错误处理
+
+**章节来源**
+- [backend/app/api/chat.py:232-269](file://backend/app/api/chat.py#L232-L269)
+- [backend/main.py:535-549](file://backend/main.py#L535-L549)
+
+### 前端认证集成
+
+前端实现了完整的认证界面和状态管理：
+
+#### 登录界面
+- 验证码图片显示和刷新
+- 用户名、密码输入验证
+- 登录状态实时反馈
+- 数据同步状态轮询
+
+#### 会话状态管理
+- 自动保存用户名到本地存储
+- 设置会话Cookie
+- 支持会话过期处理
+
+**章节来源**
+- [frontend/src/app/login/page.tsx:1-328](file://frontend/src/app/login/page.tsx#L1-L328)
+
+## 消息级联删除和数据完整性
+
+### 级联删除机制
+
+系统实现了完整的数据级联删除机制，确保数据一致性：
+
+#### 对话删除流程
+1. 验证用户身份和对话归属
+2. 显式删除该对话的所有消息
+3. 删除对话记录
+4. 保证数据完整性
+
+#### 数据完整性保护
+- 使用SQLAlchemy级联删除
+- 确保外键约束不被破坏
+- 提供事务回滚机制
+
+```mermaid
+flowchart TD
+DeleteConv[删除对话请求] --> CheckUser{验证用户身份}
+CheckUser --> |通过| CheckConv{检查对话归属}
+CheckUser --> |失败| Error1[返回400错误]
+CheckConv --> |通过| DeleteMessages[删除所有消息]
+CheckConv --> |失败| Error2[返回404错误]
+DeleteMessages --> DeleteConvRecord[删除对话记录]
+DeleteConvRecord --> Commit[提交事务]
+Commit --> Success[删除成功]
+Error1 --> Rollback[回滚事务]
+Error2 --> Rollback
+Rollback --> End[结束]
+Success --> End
+```
+
+**图表来源**
+- [backend/app/api/chat.py:232-269](file://backend/app/api/chat.py#L232-L269)
+
+### 错误处理机制
+
+系统实现了详细的错误处理和异常管理：
+
+#### HTTP异常处理
+- 统一的HTTP状态码返回
+- 详细的错误信息描述
+- 日志记录和监控
+
+#### 数据库事务管理
+- 自动事务回滚
+- 连接池管理
+- 连接泄漏防护
+
+**章节来源**
+- [backend/app/api/chat.py:264-269](file://backend/app/api/chat.py#L264-L269)
+
 ## 依赖关系分析
 
 ```mermaid
@@ -331,6 +483,7 @@ BeautifulSoup[BeautifulSoup4 4.12.3]
 end
 subgraph "内部模块"
 ChatAPI[聊天API]
+AuthAPI[认证API]
 QwenService[千问服务]
 VectorStore[向量存储]
 DataProcessor[数据处理器]
@@ -342,6 +495,7 @@ ChatAPI --> VectorStore
 ChatAPI --> DataProcessor
 ChatAPI --> Scraper
 ChatAPI --> Models
+AuthAPI --> Models
 QwenService --> DashScope
 VectorStore --> Milvus
 DataProcessor --> SQLAlchemy
@@ -379,6 +533,11 @@ Models --> SQLAlchemy
 - 无限滚动：对话历史分页加载
 - 响应式设计：适配不同设备
 
+### 5. 认证性能优化
+- 会话缓存：内存存储用户会话
+- 验证码缓存：短期验证码会话
+- 并发控制：防止重复登录
+
 ## 故障排除指南
 
 ### 1. AI服务不可用
@@ -409,6 +568,20 @@ Models --> SQLAlchemy
 - 验证教务系统URL
 - 确认验证码功能正常
 
+### 5. 认证失败
+**症状**：登录失败或会话无效
+**解决方案**：
+- 检查验证码会话是否过期
+- 验证用户名密码正确性
+- 确认服务器选择正确
+
+### 6. 数据删除失败
+**症状**：对话删除后数据仍然存在
+**解决方案**：
+- 检查用户身份验证
+- 验证对话归属检查
+- 确认事务提交成功
+
 **章节来源**
 - [backend/app/services/qwen_service.py:23-28](file://backend/app/services/qwen_service.py#L23-L28)
 - [backend/app/services/vector_store.py:25-37](file://backend/app/services/vector_store.py#L25-L37)
@@ -421,17 +594,21 @@ Models --> SQLAlchemy
 - **多模态AI对话**：结合工具调用和RAG增强
 - **实时数据集成**：通过爬虫技术获取最新数据
 - **智能知识管理**：向量化存储和检索
+- **完整的认证体系**：用户登录、会话管理和权限控制
+- **数据完整性保障**：级联删除和事务管理
 - **完整的开发环境**：Docker容器化部署
 
 ### 应用价值
 - 为学生提供智能化的教务咨询服务
 - 展示了AI技术在教育领域的实际应用
 - 提供了可扩展的架构模式
+- 确保了用户数据的安全性和完整性
 
 ### 未来发展方向
 - 支持更多AI模型
 - 增强多语言支持
 - 优化性能和可扩展性
 - 扩展更多教务功能
+- 增强安全性和合规性
 
-这个项目为构建智能教育应用提供了完整的参考实现，展示了如何将传统教务系统与现代AI技术有机结合。
+这个项目为构建智能教育应用提供了完整的参考实现，展示了如何将传统教务系统与现代AI技术有机结合，同时确保了系统的安全性、可靠性和可维护性。

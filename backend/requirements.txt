@@ -45,3 +45,6 @@ psycopg2-binary==2.9.10
 # 数据处理
 pandas==2.2.3
 numpy==1.26.4
+
+# MCP (Model Context Protocol)
+mcp==1.6.0

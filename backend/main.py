@@ -33,6 +33,14 @@ except Exception as e:
     CHAT_API_AVAILABLE = False
     print(f"⚠️ Chat API 未启用: {e}")
 
+# 导入 MCP API
+try:
+    from app.api import mcp as mcp_router
+    MCP_API_AVAILABLE = True
+except Exception as e:
+    MCP_API_AVAILABLE = False
+    print(f"⚠️ MCP API 未启用: {e}")
+
 # 导入数据库模型
 try:
     from app.models import create_tables, get_db, User, EducationData
@@ -95,6 +103,11 @@ if CHAT_API_AVAILABLE:
     app.include_router(chat.router)
     print("✅ Chat API 已启用")
 
+# 注册 MCP API 路由（如果可用）
+if MCP_API_AVAILABLE:
+    app.include_router(mcp_router.router)
+    print("✅ MCP API 已启用")
+
 
 # 启动事件：自动建表
 @app.on_event("startup")
@@ -145,6 +158,14 @@ async def root():
     if CHAT_API_AVAILABLE:
         endpoints["chat"] = "/api/chat/send - AI对话"
         endpoints["conversations"] = "/api/chat/conversations/{username} - 对话列表"
+    
+    # 添加 MCP API
+    if MCP_API_AVAILABLE:
+        endpoints["mcp"] = {
+            "list_tools": "/api/mcp/tools - 列出所有MCP工具",
+            "call_tool": "/api/mcp/tools/{tool_name} - 调用MCP工具",
+            "tool_schema": "/api/mcp/tools/{tool_name}/schema - 获取工具Schema"
+        }
     
     return {
         "message": "教务系统 AI 助手 API",

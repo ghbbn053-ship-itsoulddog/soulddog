@@ -1,0 +1,106 @@
+{
+  "name": "教务系统助手",
+  "version": "1.0.0",
+  "description": "查询成绩、课表、学业进度等教务系统数据的OpenClaw Skill",
+  "author": "Campus AI Team",
+  "license": "MIT",
+  "repository": "https://github.com/ghbbn053-ship-itsoulddog/soulddog",
+  
+  "mcpServers": {
+    "education-system": {
+      "command": "python",
+      "args": ["mcp_server.py"],
+      "cwd": "./backend",
+      "env": {
+        "PYTHONPATH": "./backend"
+      },
+      "disabled": false,
+      "alwaysAllow": []
+    }
+  },
+  
+  "tools": [
+    "query_grades",
+    "query_schedule", 
+    "query_academic_progress",
+    "query_training_plan",
+    "query_exam_schedule",
+    "query_personal_info"
+  ],
+  
+  "capabilities": {
+    "grades": {
+      "description": "查询学生成绩，支持按学期筛选",
+      "tool": "query_grades",
+      "examples": [
+        "查询我的成绩",
+        "查询2024-2025-1学期的成绩",
+        "我这学期考得怎么样"
+      ]
+    },
+    "schedule": {
+      "description": "查询课程表",
+      "tool": "query_schedule",
+      "examples": [
+        "查询我的课表",
+        "今天有什么课",
+        "这学期的课程安排"
+      ]
+    },
+    "academic_progress": {
+      "description": "查询学业进度和学分情况",
+      "tool": "query_academic_progress",
+      "examples": [
+        "我还差多少学分毕业",
+        "查询我的学业进度",
+        "我的学分完成情况"
+      ]
+    },
+    "training_plan": {
+      "description": "查询培养方案",
+      "tool": "query_training_plan",
+      "examples": [
+        "查询我的培养方案",
+        "我需要修哪些课程",
+        "专业培养要求"
+      ]
+    },
+    "exam_schedule": {
+      "description": "查询考试安排",
+      "tool": "query_exam_schedule",
+      "examples": [
+        "查询考试安排",
+        "什么时候期末考试",
+        "我的考试时间表"
+      ]
+    },
+    "personal_info": {
+      "description": "查询个人基本信息",
+      "tool": "query_personal_info",
+      "examples": [
+        "查询我的个人信息",
+        "我的专业和班级",
+        "我的学籍信息"
+      ]
+    }
+  },
+  
+  "setup": {
+    "prerequisites": [
+      "Python 3.8+",
+      "已登录教务系统的Web端"
+    ],
+    "steps": [
+      "1. 克隆项目: git clone https://github.com/ghbbn053-ship-itsoulddog/soulddog",
+      "2. 安装依赖: cd backend && pip install -r requirements.txt",
+      "3. 在Web端登录教务系统",
+      "4. 在OpenClaw配置中添加此Skill"
+    ]
+  },
+  
+  "notes": [
+    "使用前需要先在Web端登录教务系统",
+    "MCP Server会读取Web端保存的Session",
+    "支持多用户，但每次查询需要指定学号"
+  ]
+}

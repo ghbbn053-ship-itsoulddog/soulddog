@@ -16,13 +16,15 @@
 - [frontend/src/app/layout.tsx](file://frontend/src/app/layout.tsx)
 - [package.json](file://package.json)
 - [backend/requirements.txt](file://backend/requirements.txt)
+- [src/components/ui/sidebar.tsx](file://src/components/ui/sidebar.tsx)
 </cite>
 
 ## 更新摘要
 **变更内容**
-- 更新了UI优化部分，重点反映聊天界面历史对话列表样式简化
-- 新增了具体的样式变更说明，包括内边距减少、活动状态样式简化、图标大小优化
-- 增强了视觉设计改进的详细描述和效果说明
+- 更新了用户名传递机制，现在前端会自动将当前用户名传递到后端API
+- 修复了侧边栏CSS样式问题，将默认宽度从lg:w-0改为lg:w-72
+- 增强了会话管理功能，包括localStorage集成和自动恢复机制
+- 优化了UI交互体验，特别是历史对话列表的样式简化
 
 ## 目录
 1. [简介](#简介)
@@ -30,17 +32,20 @@
 3. [核心组件](#核心组件)
 4. [架构概览](#架构概览)
 5. [详细组件分析](#详细组件分析)
-6. [UI优化更新](#ui优化更新)
-7. [依赖关系分析](#依赖关系分析)
-8. [性能考虑](#性能考虑)
-9. [故障排除指南](#故障排除指南)
-10. [结论](#结论)
+6. [用户名传递机制](#用户名传递机制)
+7. [侧边栏样式修复](#侧边栏样式修复)
+8. [会话管理增强](#会话管理增强)
+9. [UI优化更新](#ui优化更新)
+10. [依赖关系分析](#依赖关系分析)
+11. [性能考虑](#性能考虑)
+12. [故障排除指南](#故障排除指南)
+13. [结论](#结论)
 
 ## 简介
 
 智能教务系统AI助手是一个基于Next.js和FastAPI构建的现代化校园AI助手应用。该系统提供了完整的AI聊天界面，支持实时对话、对话历史管理和RAG（检索增强生成）功能。系统采用前后端分离架构，前端使用React和TypeScript，后端使用Python和FastAPI，实现了从用户认证到AI对话的完整业务流程。
 
-**更新** 系统现已完成了UI优化升级，特别针对聊天界面的历史对话列表进行了样式简化，采用更简约的设计风格，提升了整体视觉体验和用户交互效率。
+**更新** 系统现已完成了多项重要更新，包括自动用户名传递机制、侧边栏样式修复和会话管理增强功能，显著提升了用户体验和系统稳定性。
 
 ## 项目结构
 
@@ -55,38 +60,40 @@ C[登录页面]
 D[中间件]
 E[UI 组件库]
 F[全局样式]
+G[侧边栏组件]
 end
 subgraph "后端 (Backend)"
-G[FastAPI 应用]
-H[聊天API]
-I[数据模型]
-J[向量存储服务]
-K[教育数据服务]
+H[FastAPI 应用]
+I[聊天API]
+J[数据模型]
+K[向量存储服务]
+L[教育数据服务]
 end
 subgraph "数据库"
-L[PostgreSQL]
-M[Milvus 向量数据库]
+M[PostgreSQL]
+N[Milvus 向量数据库]
 end
-A --> G
+A --> H
 B --> A
 C --> A
 D --> A
 E --> A
 F --> A
-G --> L
-G --> M
-H --> I
-H --> J
-H --> K
+G --> A
+H --> M
+H --> N
+I --> J
+I --> K
+I --> L
 ```
 
 **图表来源**
 - [frontend/src/app/chat/page.tsx:1-515](file://frontend/src/app/chat/page.tsx#L1-L515)
-- [backend/app/api/chat.py:1-249](file://backend/app/api/chat.py#L1-L249)
+- [backend/app/api/chat.py:1-269](file://backend/app/api/chat.py#L1-L269)
 
 **章节来源**
 - [frontend/src/app/chat/page.tsx:1-515](file://frontend/src/app/chat/page.tsx#L1-L515)
-- [backend/app/api/chat.py:1-249](file://backend/app/api/chat.py#L1-L249)
+- [backend/app/api/chat.py:1-269](file://backend/app/api/chat.py#L1-L269)
 
 ## 核心组件
 
@@ -101,6 +108,7 @@ H --> K
 - **用户认证**：基于学号的简单认证机制
 - **快捷问题**：预设的常见问题模板
 - **会话持久化**：自动保存和恢复对话状态
+- **自动用户名传递**：前端自动将用户名传递到后端API
 
 #### UI组件架构：
 
@@ -148,40 +156,6 @@ Message --> Conversation : belongs_to
 **章节来源**
 - [frontend/src/app/chat/page.tsx:40-515](file://frontend/src/app/chat/page.tsx#L40-L515)
 
-### 会话管理增强
-
-**更新** 系统现在实现了完整的会话管理增强功能：
-
-#### 会话持久化机制：
-- **localStorage集成**：自动保存当前对话ID到浏览器本地存储
-- **自动恢复功能**：页面加载时自动恢复之前的对话状态
-- **跨页面保持**：用户离开页面后返回时自动恢复对话
-- **状态同步**：当前会话ID与UI状态保持同步
-
-#### 会话恢复流程：
-
-```mermaid
-sequenceDiagram
-participant U as 用户
-participant LS as localStorage
-participant CP as ChatPage组件
-participant API as 后端API
-U->>LS : 访问聊天页面
-LS-->>CP : 读取current_conversation_id
-CP->>CP : 解析会话ID
-CP->>API : 调用fetchHistory(会话ID)
-API-->>CP : 返回对话历史
-CP->>CP : 更新UI状态
-CP->>U : 显示恢复的对话
-```
-
-**图表来源**
-- [frontend/src/app/chat/page.tsx:189-209](file://frontend/src/app/chat/page.tsx#L189-L209)
-- [frontend/src/app/chat/page.tsx:218-225](file://frontend/src/app/chat/page.tsx#L218-L225)
-
-**章节来源**
-- [frontend/src/app/chat/page.tsx:189-225](file://frontend/src/app/chat/page.tsx#L189-L225)
-
 ### 后端API架构
 
 后端采用RESTful API设计，提供了完整的聊天功能：
@@ -226,7 +200,7 @@ CONVERSATION ||--o{ MESSAGE : contains
 - [backend/app/models/conversation.py:11-42](file://backend/app/models/conversation.py#L11-L42)
 
 **章节来源**
-- [backend/app/api/chat.py:46-249](file://backend/app/api/chat.py#L46-L249)
+- [backend/app/api/chat.py:46-269](file://backend/app/api/chat.py#L46-L269)
 - [backend/app/models/conversation.py:11-42](file://backend/app/models/conversation.py#L11-L42)
 
 ## 架构概览
@@ -241,21 +215,22 @@ B[Next.js 应用]
 C[聊天界面]
 D[中间件]
 E[localStorage]
+F[用户名传递]
 end
 subgraph "API网关层"
-F[Nginx 反向代理]
-G[CORS 中间件]
+G[Nginx 反向代理]
+H[CORS 中间件]
 end
 subgraph "业务逻辑层"
-H[FastAPI 应用]
-I[聊天服务]
-J[认证服务]
-K[RAG 服务]
+I[FastAPI 应用]
+J[聊天服务]
+K[认证服务]
+L[RAG 服务]
 end
 subgraph "数据存储层"
-L[PostgreSQL 数据库]
-M[Milvus 向量数据库]
-N[Redis 缓存]
+M[PostgreSQL 数据库]
+N[Milvus 向量数据库]
+O[Redis 缓存]
 end
 A --> B
 B --> D
@@ -264,13 +239,14 @@ E --> F
 F --> G
 G --> H
 H --> I
-H --> J
-H --> K
+I --> J
+I --> K
 I --> L
-I --> M
-I --> N
-J --> L
+J --> M
+J --> N
+J --> O
 K --> M
+L --> N
 ```
 
 **图表来源**
@@ -293,7 +269,7 @@ participant VS as 向量存储
 U->>C : 输入消息并点击发送
 C->>C : 验证输入和状态
 C->>C : 添加用户消息到UI
-C->>API : POST /api/chat/send
+C->>API : POST /api/chat/send (包含用户名)
 API->>DB : 查找或创建用户
 API->>DB : 创建或查找对话
 API->>DB : 保存用户消息
@@ -345,48 +321,7 @@ F --> O
 
 **章节来源**
 - [frontend/src/app/chat/page.tsx:76-150](file://frontend/src/app/chat/page.tsx#L76-L150)
-- [backend/app/api/chat.py:181-249](file://backend/app/api/chat.py#L181-L249)
-
-### 会话管理增强机制
-
-**更新** 会话管理现在包含以下增强功能：
-
-#### 会话持久化策略：
-- **localStorage存储**：使用`current_conversation_id`键存储当前会话ID
-- **自动保存**：当`currentConversationId`变化时自动保存到localStorage
-- **自动恢复**：页面加载时从localStorage读取并恢复会话状态
-- **状态同步**：确保UI状态与localStorage保持一致
-
-#### 会话恢复流程：
-
-```mermaid
-flowchart TD
-A[页面加载] --> B{检查localStorage}
-B --> |存在用户名| C[读取用户名]
-C --> D{存在会话ID?}
-D --> |是| E[读取会话ID]
-E --> F[解析为数字]
-F --> G{ID有效?}
-G --> |是| H[设置currentConversationId]
-H --> I[延迟加载历史]
-I --> J[fetchHistory会话ID]
-G --> |否| K[继续正常流程]
-D --> |否| K
-B --> |不存在用户名| L[跳转到登录页]
-```
-
-**图表来源**
-- [frontend/src/app/chat/page.tsx:189-209](file://frontend/src/app/chat/page.tsx#L189-L209)
-
-#### 会话清理机制：
-- **新建对话**：清除localStorage中的会话ID
-- **删除对话**：自动清理相关会话数据
-- **退出登录**：清除用户名和会话ID
-- **状态同步**：确保localStorage与UI状态一致
-
-**章节来源**
-- [frontend/src/app/chat/page.tsx:160-187](file://frontend/src/app/chat/page.tsx#L160-L187)
-- [frontend/src/app/chat/page.tsx:218-234](file://frontend/src/app/chat/page.tsx#L218-L234)
+- [backend/app/api/chat.py:181-269](file://backend/app/api/chat.py#L181-L269)
 
 ### 实时消息交互机制
 
@@ -479,6 +414,153 @@ J --> K[返回客户端]
 
 **章节来源**
 - [frontend/src/app/chat/page.tsx:96-106](file://frontend/src/app/chat/page.tsx#L96-L106)
+
+## 用户名传递机制
+
+**更新** 系统现已实现了自动用户名传递机制，这是本次更新的重要功能增强：
+
+### 自动用户名传递实现
+
+#### 前端实现：
+- **状态管理**：`username`状态变量存储当前登录用户的学号
+- **localStorage集成**：页面加载时从localStorage读取用户名
+- **自动传递**：发送消息时自动将用户名包含在请求体中
+- **中间件验证**：通过cookie进行中间件级别的用户验证
+
+#### 后端API支持：
+- **请求模型**：`ChatRequest`包含`username`字段
+- **用户查找**：根据用户名查找或创建用户记录
+- **会话关联**：确保对话与正确的用户关联
+- **权限控制**：基于用户名的对话访问控制
+
+#### 用户名传递流程：
+
+```mermaid
+sequenceDiagram
+participant L as 登录页面
+participant LS as localStorage
+participant C as Chat页面
+participant API as 后端API
+L->>LS : 保存用户名
+LS-->>C : 读取用户名
+C->>C : 设置username状态
+C->>API : 发送消息(包含username)
+API->>API : 验证用户名
+API->>API : 查找用户记录
+API->>API : 创建或获取对话
+API-->>C : 返回AI回复
+```
+
+**图表来源**
+- [frontend/src/app/chat/page.tsx:189-209](file://frontend/src/app/chat/page.tsx#L189-L209)
+- [frontend/src/app/login/page.tsx:108-114](file://frontend/src/app/login/page.tsx#L108-L114)
+- [backend/app/api/chat.py:46-172](file://backend/app/api/chat.py#L46-L172)
+
+#### 关键实现细节：
+
+**章节来源**
+- [frontend/src/app/chat/page.tsx:110-118](file://frontend/src/app/chat/page.tsx#L110-L118)
+- [frontend/src/app/chat/page.tsx:189-209](file://frontend/src/app/chat/page.tsx#L189-L209)
+- [frontend/src/app/login/page.tsx:108-114](file://frontend/src/app/login/page.tsx#L108-L114)
+- [backend/app/api/chat.py:20-24](file://backend/app/api/chat.py#L20-L24)
+
+## 侧边栏样式修复
+
+**更新** 系统已修复侧边栏CSS样式问题，将默认宽度从`lg:w-0`改为`lg:w-72`：
+
+### 侧边栏宽度修复
+
+#### 问题描述：
+- **原问题**：侧边栏在桌面端默认宽度为`lg:w-0`，导致侧边栏不可见
+- **解决方案**：修改为`lg:w-72`，确保侧边栏在桌面端始终可见
+- **响应式设计**：保留移动端的折叠行为，仅在桌面端固定宽度
+
+#### 样式实现：
+
+```mermaid
+graph TB
+subgraph "侧边栏样式修复"
+A[原始样式: lg:w-0] --> B[修复后样式: lg:w-72]
+B --> C[响应式宽度控制]
+C --> D[桌面端: lg:w-72]
+C --> E[移动端: lg:translate-x-0]
+C --> F[移动端: lg:w-72]
+end
+```
+
+**图表来源**
+- [frontend/src/app/chat/page.tsx:258](file://frontend/src/app/chat/page.tsx#L258)
+
+#### 修复前后的对比：
+
+| 断点 | 修复前 | 修复后 | 改进效果 |
+|------|--------|--------|----------|
+| 移动端 | `-translate-x-full lg:translate-x-0 lg:w-72` | `-translate-x-full lg:translate-x-0 lg:w-72` | 保持一致 |
+| 桌面端 | `translate-x-0 w-72` | `translate-x-0 w-72` | 保持一致 |
+| 默认宽度 | `lg:w-0` | `lg:w-72` | 侧边栏可见性提升 |
+| 响应式行为 | `lg:translate-x-0 lg:w-72` | `lg:translate-x-0 lg:w-72` | 交互体验优化 |
+
+#### 样式类详解：
+
+**章节来源**
+- [frontend/src/app/chat/page.tsx:255-261](file://frontend/src/app/chat/page.tsx#L255-L261)
+- [frontend/src/app/chat/page.tsx:258](file://frontend/src/app/chat/page.tsx#L258)
+
+### 响应式设计优化
+
+#### 移动端适配：
+- **滑动行为**：侧边栏支持滑动展开/收起
+- **遮罩层**：点击遮罩自动关闭侧边栏
+- **动画效果**：平滑的展开/收起动画
+
+#### 桌面端优化：
+- **固定宽度**：侧边栏宽度固定为72单位
+- **背景模糊**：使用backdrop-blur实现毛玻璃效果
+- **阴影设计**：左侧边框阴影增强层次感
+
+**章节来源**
+- [frontend/src/app/chat/page.tsx:245-347](file://frontend/src/app/chat/page.tsx#L245-L347)
+
+## 会话管理增强
+
+**更新** 会话管理现在包含以下增强功能：
+
+### 会话持久化策略
+- **localStorage存储**：使用`current_conversation_id`键存储当前会话ID
+- **自动保存**：当`currentConversationId`变化时自动保存到localStorage
+- **自动恢复**：页面加载时从localStorage读取并恢复会话状态
+- **状态同步**：确保UI状态与localStorage保持一致
+
+### 会话恢复流程
+
+```mermaid
+flowchart TD
+A[页面加载] --> B{检查localStorage}
+B --> |存在用户名| C[读取用户名]
+C --> D{存在会话ID?}
+D --> |是| E[读取会话ID]
+E --> F[解析为数字]
+F --> G{ID有效?}
+G --> |是| H[设置currentConversationId]
+H --> I[延迟加载历史]
+I --> J[fetchHistory会话ID]
+G --> |否| K[继续正常流程]
+D --> |否| K
+B --> |不存在用户名| L[跳转到登录页]
+```
+
+**图表来源**
+- [frontend/src/app/chat/page.tsx:189-209](file://frontend/src/app/chat/page.tsx#L189-L209)
+
+### 会话清理机制
+- **新建对话**：清除localStorage中的会话ID
+- **删除对话**：自动清理相关会话数据
+- **退出登录**：清除用户名和会话ID
+- **状态同步**：确保localStorage与UI状态一致
+
+**章节来源**
+- [frontend/src/app/chat/page.tsx:160-187](file://frontend/src/app/chat/page.tsx#L160-L187)
+- [frontend/src/app/chat/page.tsx:218-234](file://frontend/src/app/chat/page.tsx#L218-L234)
 
 ## UI优化更新
 
@@ -669,12 +751,14 @@ F --> I
 - **界面卡顿**：监控消息数量和渲染性能
 - **样式异常**：验证Tailwind配置和CSS类名
 - **会话恢复失败**：检查localStorage访问权限
-- **UI样式问题**：确认最新的样式变更是否正确应用
+- **用户名传递失败**：确认localStorage中用户名存在且正确
+- **侧边栏显示问题**：检查lg:w-72类名是否正确应用
 
 #### 后端问题：
 - **数据库连接失败**：检查连接字符串和权限
 - **AI服务超时**：监控API响应时间和错误率
 - **向量检索失败**：验证Milvus连接和数据完整性
+- **用户名验证失败**：检查用户名格式和数据库记录
 
 #### 性能问题：
 - **响应缓慢**：分析数据库查询和AI调用时间
@@ -706,12 +790,25 @@ F --> I
 - **可扩展性**：模块化的组件设计和清晰的依赖关系
 - **会话管理增强**：智能的会话持久化和自动恢复机制
 - **UI优化升级**：简约设计风格的全面应用
+- **自动用户名传递**：增强了系统的安全性和用户体验
+- **侧边栏修复**：解决了重要的UI显示问题
 
 ### 会话管理增强：
 - **智能持久化**：自动保存当前对话状态到localStorage
 - **无缝恢复**：用户返回页面时自动恢复之前的对话
 - **状态同步**：确保UI状态与本地存储保持一致
 - **清理机制**：完善的会话清理和数据管理
+
+### 用户名传递机制：
+- **自动传递**：前端自动将用户名传递到后端API
+- **安全验证**：通过cookie和中间件进行用户身份验证
+- **会话关联**：确保对话与正确的用户关联
+- **权限控制**：基于用户名的对话访问控制
+
+### 侧边栏样式修复：
+- **显示问题解决**：修复了侧边栏在桌面端不可见的问题
+- **响应式设计**：保持移动端的折叠行为，优化桌面端体验
+- **样式一致性**：确保不同断点下的样式一致性
 
 ### UI优化成果：
 - **设计简化**：历史对话列表采用更简约的设计风格
@@ -727,4 +824,4 @@ F --> I
 - **会话管理优化**：进一步优化会话恢复的性能和可靠性
 - **UI一致性**：持续优化其他界面组件的样式一致性
 
-该系统为校园AI助手应用提供了一个坚实的技术基础，能够支持未来更多的功能扩展和性能优化需求。会话管理增强功能和UI优化升级显著提升了用户体验，使用户能够在不同页面间无缝切换而不会丢失对话状态，同时享受更简洁、更高效的界面设计。
+该系统为校园AI助手应用提供了一个坚实的技术基础，能够支持未来更多的功能扩展和性能优化需求。会话管理增强功能、自动用户名传递机制和侧边栏样式修复显著提升了用户体验，使用户能够在不同页面间无缝切换而不会丢失对话状态，同时享受更简洁、更高效的界面设计。
