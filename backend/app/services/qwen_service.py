@@ -193,9 +193,14 @@ class QwenService:
             logger.error(f"❌ 千问对话异常: {e}")
             return {"success": False, "message": f"AI对话异常: {str(e)}"}
 
-    def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):
+    def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7, education_context: str = ""):
         """
         流式对话 - 生成器模式
+        
+        Args:
+            messages: 对话历史
+            temperature: 温度参数
+            education_context: 教务数据上下文（可选，注入到系统提示中）
         
         Yields:
             str: 每次生成的文本块
@@ -205,8 +210,11 @@ class QwenService:
             return
         
         try:
-            # 添加系统提示
-            full_messages = [{"role": "system", "content": self.system_prompt}] + messages
+            # 添加系统提示（可附加教务数据上下文）
+            system_content = self.system_prompt
+            if education_context:
+                system_content += f"\n\n【该学生的教务系统真实数据】\n{education_context}\n\n请严格基于以上真实数据回答学生的问题，不要编造任何数据。"
+            full_messages = [{"role": "system", "content": system_content}] + messages
             
             # 调用流式API
             responses = Generation.call(

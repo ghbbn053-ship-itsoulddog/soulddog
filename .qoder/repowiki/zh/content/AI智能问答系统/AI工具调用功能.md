@@ -13,6 +13,8 @@
 - [backend/app/models/education_data.py](file://backend/app/models/education_data.py)
 - [backend/app/models/base.py](file://backend/app/models/base.py)
 - [frontend/src/app/chat/page.tsx](file://frontend/src/app/chat/page.tsx)
+- [backend/app/mcp/tools.py](file://backend/app/mcp/tools.py)
+- [backend/app/api/mcp.py](file://backend/app/api/mcp.py)
 - [docker-compose.yml](file://docker-compose.yml)
 - [backend/requirements.txt](file://backend/requirements.txt)
 </cite>
@@ -23,6 +25,7 @@
 - 增加了详细的工具调用结构日志记录功能
 - 改进了工具调用的错误处理和调试能力
 - **新增query_training_plan工具**：扩展AI在学术查询方面的能力，支持查询培养方案和课程规划
+- **新增MCP工具支持**：为OpenClaw平台提供标准化的工具接口
 
 ## 目录
 1. [简介](#简介)
@@ -46,6 +49,7 @@
 - **智能对话管理**：支持多轮对话、对话历史管理和工具调用追踪
 - **增强的工具调用兼容性**：支持字典和对象两种消息格式，提供详细的结构日志记录
 - **扩展的学术查询能力**：新增培养方案查询工具，支持课程规划和学分管理
+- **标准化MCP接口**：为OpenClaw平台提供标准化的工具调用接口
 
 ## 项目结构
 
@@ -63,6 +67,7 @@ API[FastAPI后端]
 ChatAPI[对话API]
 DataAPI[数据API]
 Services[业务服务层]
+MCPAPI[MCP API]
 end
 subgraph "数据存储"
 PG[(PostgreSQL)]
@@ -74,13 +79,20 @@ Qwen[千问AI服务]
 VectorStore[向量存储]
 DataProcessor[数据处理器]
 end
+subgraph "工具接口"
+MCPTools[MCP工具]
+OpenClaw[OpenClaw平台]
+end
 FE --> API
 ChatUI --> FE
 LoginUI --> FE
 API --> ChatAPI
 API --> DataAPI
+API --> MCPAPI
 ChatAPI --> Services
 DataAPI --> Services
+MCPAPI --> MCPTools
+MCPTools --> OpenClaw
 Services --> PG
 Services --> Milvus
 Services --> Qwen
@@ -91,6 +103,7 @@ Services --> DataProcessor
 **图表来源**
 - [backend/main.py:1-150](file://backend/main.py#L1-L150)
 - [frontend/src/app/chat/page.tsx:1-100](file://frontend/src/app/chat/page.tsx#L1-L100)
+- [backend/app/api/mcp.py:1-195](file://backend/app/api/mcp.py#L1-L195)
 
 **章节来源**
 - [backend/main.py:1-150](file://backend/main.py#L1-L150)
@@ -113,7 +126,7 @@ class QwenService {
 +chat_with_tools(messages, tools_context) Dict
 +chat_with_rag(question, context) Dict
 +generate_embedding(text) List[float]
--_execute_tool(func_name, args, context) Dict
++_execute_tool(func_name, args, context) Dict
 +支持字典和对象两种消息格式
 +详细工具调用结构日志记录
 }
@@ -142,17 +155,27 @@ class VectorStore {
 +search(user_id, query_embedding, top_k) List[Dict]
 +delete_user_data(user_id) void
 }
+class MCPTools {
++query_grades(username, semester) str
++query_schedule(username, semester) str
++query_academic_progress(username) str
++query_training_plan(username) str
++query_exam_schedule(username, semester) str
++query_personal_info(username) str
+}
 QwenService --> JwxtScraper : "调用工具"
 QwenService --> DataProcessor : "更新数据"
+MCPTools --> JwxtScraper : "调用工具"
 DataProcessor --> VectorStore : "向量化存储"
 DataProcessor --> Database : "持久化存储"
 ```
 
 **图表来源**
-- [backend/app/services/qwen_service.py:15-516](file://backend/app/services/qwen_service.py#L15-L516)
-- [backend/scraper.py:13-800](file://backend/scraper.py#L13-L800)
+- [backend/app/services/qwen_service.py:15-583](file://backend/app/services/qwen_service.py#L15-L583)
+- [backend/scraper.py:13-1504](file://backend/scraper.py#L13-L1504)
 - [backend/app/services/data_processor.py:13-347](file://backend/app/services/data_processor.py#L13-L347)
 - [backend/app/services/vector_store.py:14-185](file://backend/app/services/vector_store.py#L14-L185)
+- [backend/app/mcp/tools.py:183-310](file://backend/app/mcp/tools.py#L183-L310)
 
 ### 对话管理系统
 
@@ -182,11 +205,11 @@ Frontend-->>User : 显示AI回复
 
 **图表来源**
 - [backend/app/api/chat.py:46-179](file://backend/app/api/chat.py#L46-L179)
-- [backend/app/services/qwen_service.py:190-321](file://backend/app/services/qwen_service.py#L190-L321)
+- [backend/app/services/qwen_service.py:235-370](file://backend/app/services/qwen_service.py#L235-L370)
 
 **章节来源**
 - [backend/app/api/chat.py:46-179](file://backend/app/api/chat.py#L46-L179)
-- [backend/app/services/qwen_service.py:15-516](file://backend/app/services/qwen_service.py#L15-L516)
+- [backend/app/services/qwen_service.py:15-583](file://backend/app/services/qwen_service.py#L15-L583)
 
 ## 架构概览
 
@@ -202,6 +225,7 @@ subgraph "业务逻辑层"
 ChatService[对话服务]
 DataService[数据服务]
 VectorService[向量服务]
+MCPService[MCP服务]
 end
 subgraph "数据访问层"
 UserModel[用户模型]
@@ -213,11 +237,14 @@ QwenAPI[千问API]
 MilvusDB[Milvus向量库]
 PostgresDB[PostgreSQL]
 JwxtSystem[教务系统]
+OpenClaw[OpenClaw平台]
 end
 Router --> ChatService
 Router --> DataService
+Router --> MCPService
 ChatService --> QwenAPI
 ChatService --> VectorService
+MCPService --> OpenClaw
 DataService --> JwxtSystem
 VectorService --> MilvusDB
 ChatService --> PostgresDB
@@ -269,12 +296,12 @@ SaveHistory --> End([返回客户端])
 ```
 
 **图表来源**
-- [backend/app/services/qwen_service.py:190-321](file://backend/app/services/qwen_service.py#L190-L321)
-- [backend/app/services/qwen_service.py:322-403](file://backend/app/services/qwen_service.py#L322-L403)
+- [backend/app/services/qwen_service.py:235-370](file://backend/app/services/qwen_service.py#L235-L370)
+- [backend/app/services/qwen_service.py:372-471](file://backend/app/services/qwen_service.py#L372-L471)
 
 **章节来源**
-- [backend/app/services/qwen_service.py:46-143](file://backend/app/services/qwen_service.py#L46-L143)
-- [backend/app/services/qwen_service.py:190-321](file://backend/app/services/qwen_service.py#L190-L321)
+- [backend/app/services/qwen_service.py:46-156](file://backend/app/services/qwen_service.py#L46-L156)
+- [backend/app/services/qwen_service.py:235-370](file://backend/app/services/qwen_service.py#L235-L370)
 
 ### 工具调用兼容性增强
 
@@ -292,10 +319,10 @@ F --> G[生成统一结果格式]
 ```
 
 **图表来源**
-- [backend/app/services/qwen_service.py:218-224](file://backend/app/services/qwen_service.py#L218-L224)
+- [backend/app/services/qwen_service.py:267-273](file://backend/app/services/qwen_service.py#L267-L273)
 
 **章节来源**
-- [backend/app/services/qwen_service.py:218-224](file://backend/app/services/qwen_service.py#L218-L224)
+- [backend/app/services/qwen_service.py:267-273](file://backend/app/services/qwen_service.py#L267-L273)
 
 ### 详细工具调用结构日志记录
 
@@ -312,10 +339,10 @@ F --> G[工具调用完成]
 ```
 
 **图表来源**
-- [backend/app/services/qwen_service.py:224-309](file://backend/app/services/qwen_service.py#L224-L309)
+- [backend/app/services/qwen_service.py:273-358](file://backend/app/services/qwen_service.py#L273-L358)
 
 **章节来源**
-- [backend/app/services/qwen_service.py:224-309](file://backend/app/services/qwen_service.py#L224-L309)
+- [backend/app/services/qwen_service.py:273-358](file://backend/app/services/qwen_service.py#L273-L358)
 
 ### 培养方案查询工具实现
 
@@ -333,12 +360,34 @@ G --> H[AI生成自然语言回复]
 ```
 
 **图表来源**
-- [backend/app/services/qwen_service.py:401-417](file://backend/app/services/qwen_service.py#L401-L417)
-- [backend/scraper.py:710-818](file://backend/scraper.py#L710-L818)
+- [backend/app/services/qwen_service.py:433-449](file://backend/app/services/qwen_service.py#L433-L449)
+- [backend/scraper.py:788-896](file://backend/scraper.py#L788-L896)
 
 **章节来源**
-- [backend/app/services/qwen_service.py:401-417](file://backend/app/services/qwen_service.py#L401-L417)
-- [backend/scraper.py:710-818](file://backend/scraper.py#L710-L818)
+- [backend/app/services/qwen_service.py:127-143](file://backend/app/services/qwen_service.py#L127-L143)
+- [backend/scraper.py:788-896](file://backend/scraper.py#L788-L896)
+
+### MCP工具接口实现
+
+**新增功能** 系统为OpenClaw平台提供了标准化的MCP工具接口：
+
+```mermaid
+flowchart TD
+A[MCP客户端请求] --> B[HTTP API接收]
+B --> C[工具映射查找]
+C --> D[动态导入工具函数]
+D --> E[构建参数并调用]
+E --> F[异步执行工具]
+F --> G[返回标准化响应]
+```
+
+**图表来源**
+- [backend/app/api/mcp.py:96-146](file://backend/app/api/mcp.py#L96-L146)
+- [backend/app/mcp/tools.py:183-233](file://backend/app/mcp/tools.py#L183-L233)
+
+**章节来源**
+- [backend/app/api/mcp.py:1-195](file://backend/app/api/mcp.py#L1-L195)
+- [backend/app/mcp/tools.py:183-310](file://backend/app/mcp/tools.py#L183-L310)
 
 ### 数据处理和向量化流程
 
@@ -348,6 +397,7 @@ G --> H[AI生成自然语言回复]
 flowchart LR
 subgraph "数据爬取阶段"
 Scraper[JwxtScraper] --> RawData[原始数据]
+MCPTools[MCP工具] --> RawData
 end
 subgraph "数据处理阶段"
 RawData --> Chunking[数据分块]
@@ -434,15 +484,21 @@ Requests[Requests 2.32.3]
 BeautifulSoup[BeautifulSoup4 4.12.3]
 Selenium[Selenium 4.27.1]
 end
+subgraph "MCP平台"
+OpenClaw[OpenClaw 1.0]
+MCP[MCP规范]
+end
 FastAPI --> DashScope
 FastAPI --> SQLAlchemy
 FastAPI --> Milvus
+FastAPI --> OpenClaw
 NextJS --> FastAPI
 DashScope --> LangChain
 SQLAlchemy --> Postgres
 Milvus --> Redis
 Requests --> BeautifulSoup
 Selenium --> Requests
+OpenClaw --> MCP
 ```
 
 **图表来源**
@@ -466,11 +522,13 @@ Selenium --> Requests
 - **后台任务**：数据同步使用BackgroundTasks异步执行
 - **批量向量化**：数据分批处理避免超时
 - **并发控制**：工具调用支持并发执行
+- **异步MCP工具**：支持异步工具调用提高响应速度
 
 ### 性能监控
 - **日志系统**：完整的操作日志和错误追踪
 - **指标收集**：响应时间、错误率等关键指标
 - **资源监控**：数据库连接数、向量库状态监控
+- **工具调用监控**：详细的工具调用结构日志便于性能分析
 
 ## 故障排除指南
 
@@ -485,8 +543,10 @@ Selenium --> Requests
 | 前端无法连接 | API请求失败 | CORS配置问题 | 检查CORS设置 |
 | 工具调用格式错误 | 工具调用失败 | 消息格式不兼容 | 检查工具调用格式 |
 | **培养方案查询失败** | **培养方案为空** | **HTML结构变化** | **检查深度爬取HTML** |
+| **MCP工具调用失败** | **OpenClaw连接异常** | **MCP服务器未启动** | **检查MCP服务状态** |
+| **工具调用日志缺失** | **调试困难** | **日志级别设置过高** | **调整日志配置** |
 
-**更新** 新增了培养方案查询失败的故障排除指南
+**更新** 新增了MCP工具调用失败和工具调用日志缺失的故障排除指南
 
 ### 调试方法
 
@@ -496,6 +556,8 @@ Selenium --> Requests
 4. **向量库检查**：使用Milvus命令行工具检查向量状态
 5. **工具调用调试**：查看详细的工具调用结构日志
 6. **培养方案调试**：检查/tmp/debug_training_plan.html文件
+7. **MCP调试**：检查MCP服务器日志和OpenClaw连接状态
+8. **兼容性测试**：验证字典和对象两种消息格式的兼容性
 
 **章节来源**
 - [backend/main.py:45-47](file://backend/main.py#L45-L47)
@@ -513,6 +575,7 @@ Selenium --> Requests
 - **增强的兼容性**：支持字典和对象两种消息格式，提高系统稳定性
 - **完善的日志记录**：详细的工具调用结构日志便于调试和监控
 - **扩展的学术查询能力**：新增培养方案查询工具，支持课程规划和学分管理
+- **标准化接口**：为OpenClaw平台提供标准化的MCP工具接口
 
 ### 应用价值
 - **提升用户体验**：自然语言交互替代复杂的系统操作流程
@@ -521,8 +584,9 @@ Selenium --> Requests
 - **增强数据利用**：将静态的教务数据转化为动态的知识服务
 - **改善开发体验**：详细的日志记录和兼容性支持简化开发和维护
 - **支持学术规划**：培养方案查询工具帮助学生进行课程规划和学分管理
+- **促进平台生态**：标准化MCP接口支持第三方平台集成
 
 ### 发展前景
-系统具备良好的扩展性，可以轻松集成更多工具和服务，为校园智能化建设提供坚实的技术基础。通过持续优化AI模型和数据处理算法，系统将能够提供更加精准和智能的服务体验。
+系统具备良好的扩展性，可以轻松集成更多工具和服务，为校园智能化建设提供坚实的技术基础。通过持续优化AI模型和数据处理算法，系统将能够提供更加精准和智能的服务体验。同时，标准化的MCP接口为未来的平台化发展奠定了坚实基础。
 
-**更新** 新增了学术查询能力和培养方案工具的技术优势说明
+**更新** 新增了标准化接口和平台生态的技术优势说明

@@ -66,9 +66,9 @@ app.add_middleware(
 )
 
 # 教务系统配置
-JWXT_BASE_URL = "http://jwxt.gdufe.edu.cn"
-VERIFY_CODE_URL = f"{JWXT_BASE_URL}/jsxsd/verifycode.servlet"
-LOGIN_URL = f"{JWXT_BASE_URL}/jsxsd/xk/LoginToXkLdap"
+JWXT_BASE_URL = "http://jwxt.gdufe.edu.cn/jsxsd/"
+VERIFY_CODE_URL = f"{JWXT_BASE_URL}verifycode.servlet"
+LOGIN_URL = f"{JWXT_BASE_URL}xk/LoginToXkLdap"
 
 # 服务器列表（根据学号选择）
 SERVERS = [

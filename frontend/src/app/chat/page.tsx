@@ -98,23 +98,18 @@ export default function ChatPage() {
     if (!input.trim() || !username || isLoading) return;
 
     const userMessage = input.trim();
+    const now = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    const userMsgId = Date.now();
+    const assistantMsgId = userMsgId + 1;
+    
     setInput("");
-    setMessages(prev => [...prev, { 
-      id: Date.now(), 
-      role: "user", 
-      content: userMessage,
-      timestamp: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-    }]);
     setIsLoading(true);
-
-    // 添加一个空的assistant消息用于流式更新
-    const assistantMsgId = Date.now() + 1;
-    setMessages(prev => [...prev, {
-      id: assistantMsgId,
-      role: "assistant",
-      content: "",
-      timestamp: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-    }]);
+    
+    // 合并添加用户消息和空assistant消息，避免两次setState闪烁
+    setMessages(prev => [...prev, 
+      { id: userMsgId, role: "user", content: userMessage, timestamp: now },
+      { id: assistantMsgId, role: "assistant", content: "", timestamp: now }
+    ]);
 
     try {
       const response = await fetch(`${API_BASE}/api/chat/send-stream`, {
@@ -159,6 +154,16 @@ export default function ChatPage() {
                   setCurrentConversationId(conversationId);
                   fetchConversations();
                 }
+                // 处理工具调用标记
+                if (data.tool_calls && data.tool_calls.length > 0) {
+                  setMessages(prev => {
+                    const idx = prev.findIndex(msg => msg.id === assistantMsgId);
+                    if (idx === -1) return prev;
+                    const next = [...prev];
+                    next[idx] = { ...next[idx], tool_calls: data.tool_calls };
+                    return next;
+                  });
+                }
                 break;
               }
               
@@ -168,14 +173,17 @@ export default function ChatPage() {
               
               if (data.content) {
                 aiContent += data.content;
-                // 更新消息内容
-                setMessages(prev => 
-                  prev.map(msg => 
-                    msg.id === assistantMsgId 
-                      ? { ...msg, content: aiContent }
-                      : msg
-                  )
-                );
+                // 使用函数式更新，精确更新目标消息
+                const currentContent = aiContent;
+                setMessages(prev => {
+                  const idx = prev.findIndex(msg => msg.id === assistantMsgId);
+                  if (idx === -1) return prev;
+                  // 仅在内容变化时创建新数组
+                  if (prev[idx].content === currentContent) return prev;
+                  const next = [...prev];
+                  next[idx] = { ...next[idx], content: currentContent };
+                  return next;
+                });
               }
             } catch (e) {
               // 忽略解析错误
@@ -515,18 +523,7 @@ export default function ChatPage() {
                 </div>
               ))}
 
-              {/* 加载中 */}
-              {isLoading && (
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-md">
-                    <Bot className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-md px-4 py-3 shadow-sm flex items-center gap-3">
-                    <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
-                    <span className="text-sm text-gray-500">AI正在思考...</span>
-                  </div>
-                </div>
-              )}
+              {/* 加载中指示器：仅在assistant消息尚未出现时显示 */}
               <div ref={messagesEndRef} />
             </div>
           )}

@@ -34,17 +34,8 @@ class JwxtScraper:
         # 1. 先尝试 UTF-8（严格模式，不允许错误）
         try:
             text_utf8 = raw_bytes.decode('utf-8')
-            # UTF-8 解码成功，检查是否有中文
-            has_chinese = re.search(r'[\u4e00-\u9fff]', text_utf8)
-            if has_chinese:
-                response.encoding = 'utf-8'
-                logger.info("【编码】使用 UTF-8（检测到中文）")
-                return text_utf8
-            else:
-                # UTF-8 解码成功但没中文（可能是纯英文/数字页面）
-                response.encoding = 'utf-8'
-                logger.info("【编码】使用 UTF-8（无中文）")
-                return text_utf8
+            response.encoding = 'utf-8'
+            return text_utf8
         except (UnicodeDecodeError, ValueError):
             pass
         
@@ -53,6 +44,14 @@ class JwxtScraper:
         response.encoding = 'gb18030'
         logger.info("【编码】UTF-8 解码失败，使用 GB18030")
         return text_gb18030
+
+    def _check_session_valid(self, html_text: str) -> bool:
+        """检查响应内容是否表示 Session 已失效（被踢回登录页）"""
+        # 强智教务系统 Session 过期特征
+        if 'LoginToXk' in html_text and 'USERNAME' in html_text and 'PASSWORD' in html_text:
+            logger.warning("【Session】会话已过期，响应为登录页面")
+            return False
+        return True
 
     def get_captcha(self) -> bytes:
         """获取验证码图片"""
@@ -100,10 +99,14 @@ class JwxtScraper:
         基于深度爬取真实HTML修复
         """
         try:
-            # 先访问主页获取基本信息
-            main_url = f"{self.base_url}framework/xsMain.jsp"
+            # 先访问主页获取基本信息（参考登陆界面.txt: /jsxsd/framework/main.jsp）
+            main_url = f"{self.base_url}framework/main.jsp"
             response = self.session.get(main_url, timeout=10)
             html_text = self._fix_encoding(response)
+            
+            if not self._check_session_valid(html_text):
+                return {"success": False, "message": "会话已过期，请重新登录"}
+            
             soup = BeautifulSoup(html_text, 'html.parser')
             
             name = ""
@@ -144,9 +147,11 @@ class JwxtScraper:
                 card_html = self._fix_encoding(card_resp)
                 logger.info(f"【个人信息调试】学籍卡片HTML长度: {len(card_html)}")
                 # 保存HTML到文件用于调试
-                with open('/tmp/debug_personal_info.html', 'w', encoding='utf-8') as f:
+                import tempfile, os
+                debug_path = os.path.join(tempfile.gettempdir(), 'debug_personal_info.html')
+                with open(debug_path, 'w', encoding='utf-8') as f:
                     f.write(card_html)
-                logger.info(f"【个人信息调试】HTML已保存到 /tmp/debug_personal_info.html")
+                logger.info(f"【个人信息调试】HTML已保存到 {debug_path}")
                 card_soup = BeautifulSoup(card_html, 'html.parser')
                 
                 # 打印前500个字符用于调试
@@ -269,14 +274,20 @@ class JwxtScraper:
             logger.info(f"【成绩调试】响应状态: {response.status_code}")
             logger.info(f"【成绩调试】响应URL: {response.url}")
             html_text = self._fix_encoding(response)
+            
+            if not self._check_session_valid(html_text):
+                return {"success": False, "message": "会话已过期，请重新登录"}
+            
             logger.info(f"【成绩调试】HTML长度: {len(html_text)}")
 
             soup = BeautifulSoup(html_text, 'html.parser')
             
             # 保存HTML到文件用于调试
-            with open('/tmp/debug_grades.html', 'w', encoding='utf-8') as f:
+            import tempfile, os
+            debug_path_grades = os.path.join(tempfile.gettempdir(), 'debug_grades.html')
+            with open(debug_path_grades, 'w', encoding='utf-8') as f:
                 f.write(html_text)
-            logger.info(f"【成绩调试】HTML已保存到 /tmp/debug_grades.html")
+            logger.info(f"【成绩调试】HTML已保存到 {debug_path_grades}")
 
             # 查找所有表格
             all_tables = soup.find_all('table')
@@ -499,9 +510,12 @@ class JwxtScraper:
             html_text = self._fix_encoding(response)
             logger.info(f"【课表调试】HTML长度: {len(html_text)}")
             
+            if not self._check_session_valid(html_text):
+                return {"success": False, "message": "会话已过期，请重新登录"}
+            
             # 保存HTML到文件用于调试
-            import os
-            debug_path = '/tmp/debug_schedule.html'
+            import tempfile, os
+            debug_path = os.path.join(tempfile.gettempdir(), 'debug_schedule.html')
             try:
                 with open(debug_path, 'w', encoding='utf-8') as f:
                     f.write(html_text)
@@ -802,9 +816,11 @@ class JwxtScraper:
             logger.info(f"【培养方案调试】HTML长度: {len(html_text)}")
             
             # 保存HTML到文件用于调试
-            with open('/tmp/debug_training_plan.html', 'w', encoding='utf-8') as f:
+            import tempfile, os
+            debug_path_plan = os.path.join(tempfile.gettempdir(), 'debug_training_plan.html')
+            with open(debug_path_plan, 'w', encoding='utf-8') as f:
                 f.write(html_text)
-            logger.info(f"【培养方案调试】HTML已保存到 /tmp/debug_training_plan.html")
+            logger.info(f"【培养方案调试】HTML已保存到 {debug_path_plan}")
             
             # 输出HTML前500字符用于调试
             logger.info(f"【培养方案调试】HTML前500字符: {html_text[:500]}")
@@ -923,9 +939,11 @@ class JwxtScraper:
             logger.info(f"【学业进度调试】HTML长度: {len(html_text)}")
             
             # 保存HTML到文件用于调试
-            with open('/tmp/debug_academic_progress.html', 'w', encoding='utf-8') as f:
+            import tempfile, os
+            debug_path_progress = os.path.join(tempfile.gettempdir(), 'debug_academic_progress.html')
+            with open(debug_path_progress, 'w', encoding='utf-8') as f:
                 f.write(html_text)
-            logger.info(f"【学业进度调试】HTML已保存到 /tmp/debug_academic_progress.html")
+            logger.info(f"【学业进度调试】HTML已保存到 {debug_path_progress}")
             
             # 输出HTML前500字符用于调试
             logger.info(f"【学业进度调试】HTML前500字符: {html_text[:500]}")
@@ -1134,15 +1152,20 @@ class JwxtScraper:
         """
         查询教师信息（增强版）
         参数:
-        - name: 教师姓名（支持模糊查询，为空则查询所有）
+        - name: 教师姓名（支持模糊查询，不能为空）
         - department: 所属院系代码（可选）
         返回: 教师列表
         """
         try:
+            # 教务系统要求教师姓名不能为空（参考教师信息查询.txt JavaScript校验）
+            if not name or not name.strip():
+                return {
+                    "success": False,
+                    "message": "教师姓名不能为空，请至少输入一个字"
+                }
+
             # 构建查询参数
-            data = {}
-            if name:
-                data["jsxm"] = name
+            data = {"jsxm": name.strip()}
             if department:
                 data["kkyx"] = department
 
@@ -1177,7 +1200,13 @@ class JwxtScraper:
                     detail_url = ""
                     if detail_link and 'href' in detail_link.attrs:
                         href = detail_link['href']
-                        detail_url = href if href.startswith('http') else f"{self.base_url}{href}"
+                        # 处理相对链接中的 /jsxsd/ 前缀（避免与base_url重复）
+                        if href.startswith('http'):
+                            detail_url = href
+                        elif href.startswith('/jsxsd/'):
+                            detail_url = f"{self.base_url}{href[len('/jsxsd/'):]}"
+                        else:
+                            detail_url = f"{self.base_url}{href.lstrip('/')}"
                         if 'jg0101id=' in href:
                             teacher_id = href.split('jg0101id=')[1].split('&')[0]
 
@@ -1214,7 +1243,8 @@ class JwxtScraper:
         返回: 教师详细信息
         """
         try:
-            url = f"{self.base_url}jsxx/jsxx_detail"
+            # 参考教师信息查询.txt: /jsxsd/jsxx/jsxx_query_detail
+            url = f"{self.base_url}jsxx/jsxx_query_detail"
             params = {"jg0101id": teacher_id}
 
             response = self.session.get(url, params=params, timeout=10)
@@ -1379,7 +1409,8 @@ class JwxtScraper:
         返回: 执行计划详情
         """
         try:
-            url = f"{self.base_url}/jsxsd/pyfa/pyfa_query"
+            # 修复URL双前缀：base_url已含/jsxsd/，不需要再拼接
+            url = f"{self.base_url}pyfa/pyfa_query"
             response = self.session.get(url, timeout=10)
             html_text = self._fix_encoding(response)
 

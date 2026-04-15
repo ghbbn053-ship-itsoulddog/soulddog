@@ -9,6 +9,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 import logging
 import json
+import asyncio
 
 from app.models import get_db, User, Conversation, Message, EducationData
 from app.services import get_qwen_service, get_vector_store
@@ -274,7 +275,7 @@ async def delete_conversation(conversation_id: int, username: str = None, db: Se
 async def send_message_stream(request: ChatRequest, http_request: Request, db: Session = Depends(get_db)):
     """
     流式发送消息给 AI（SSE）
-    返回 Server-Sent Events 格式的流式响应
+    支持工具调用 + RAG + 纯流式对话
     """
     try:
         qwen_svc = get_qwen_service()
@@ -325,17 +326,93 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
         for msg in reversed(history_messages):
             history.append({"role": msg.role, "content": msg.content})
         
-        # 5. 流式生成AI回复
+        # 5. 获取工具上下文
+        sessions = getattr(http_request.app.state, 'sessions', {})
+        user_session_data = sessions.get(request.username)
+        
+        tools_context = None
+        if user_session_data:
+            tools_context = {
+                "session": user_session_data["session"],
+                "server_url": user_session_data["server_url"],
+                "username": request.username
+            }
+        
+        # 6. 尝试工具调用（非流式）获取教务数据
+        tool_result = None
+        if tools_context:
+            try:
+                tool_result = qwen_svc.chat_with_tools(messages=history, tools_context=tools_context)
+                if tool_result and tool_result.get("success") and tool_result.get("tool_calls"):
+                    # 工具调用成功，模拟流式输出结果
+                    content = tool_result["content"]
+                    tool_calls_info = tool_result.get("tool_calls", [])
+                    
+                    async def tool_stream():
+                        yield f"data: {json.dumps({'conversation_id': conversation.id, 'done': False})}\n\n"
+                        
+                        # 分块发送内容（模拟流式）
+                        chunk_size = 4
+                        for i in range(0, len(content), chunk_size):
+                            chunk = content[i:i+chunk_size]
+                            yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
+                            await asyncio.sleep(0.02)
+                        
+                        # 保存AI回复
+                        ai_msg = Message(
+                            conversation_id=conversation.id,
+                            role="assistant",
+                            content=content,
+                            message_meta={"tool_calls": tool_calls_info}
+                        )
+                        db.add(ai_msg)
+                        db.commit()
+                        
+                        yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info})}\n\n"
+                    
+                    return StreamingResponse(
+                        tool_stream(),
+                        media_type="text/event-stream",
+                        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+                    )
+            except Exception as e:
+                logger.warning(f"工具调用失败，降级为流式: {e}")
+        
+        # 7. 构建教务数据上下文（从数据库缓存）
+        edu_context = ""
+        try:
+            edu_data = db.query(EducationData).filter(EducationData.user_id == user.id).first()
+            if edu_data:
+                context_parts = []
+                if edu_data.personal_info:
+                    context_parts.append(f"个人信息：{json.dumps(edu_data.personal_info, ensure_ascii=False)}")
+                if edu_data.grades:
+                    grades_data = edu_data.grades[:20] if isinstance(edu_data.grades, list) else edu_data.grades
+                    context_parts.append(f"成绩数据：{json.dumps(grades_data, ensure_ascii=False)}")
+                if edu_data.grade_stats:
+                    context_parts.append(f"成绩统计：{json.dumps(edu_data.grade_stats, ensure_ascii=False)}")
+                if edu_data.schedule:
+                    context_parts.append(f"课表数据：{json.dumps(edu_data.schedule, ensure_ascii=False)}")
+                if edu_data.academic_progress:
+                    context_parts.append(f"学业进度：{json.dumps(edu_data.academic_progress, ensure_ascii=False)}")
+                if edu_data.exam_schedule:
+                    context_parts.append(f"考试安排：{json.dumps(edu_data.exam_schedule, ensure_ascii=False)}")
+                if context_parts:
+                    edu_context = "\n".join(context_parts)
+        except Exception as e:
+            logger.warning(f"加载教务数据缓存失败: {e}")
+        
+        # 8. 流式生成AI回复
         async def generate():
             full_content = ""
             
-            # 发送对话ID
             yield f"data: {json.dumps({'conversation_id': conversation.id, 'done': False})}\n\n"
             
-            # 流式调用AI
-            for chunk in qwen_svc.chat_stream(history):
+            # 流式调用AI（注入教务数据上下文）
+            for chunk in qwen_svc.chat_stream(history, education_context=edu_context):
                 full_content += chunk
                 yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
+                await asyncio.sleep(0)  # 让出事件循环，确保即时刷新
             
             # 保存AI回复
             ai_msg = Message(
@@ -346,7 +423,6 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
             db.add(ai_msg)
             db.commit()
             
-            # 发送完成信号
             yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id})}\n\n"
         
         return StreamingResponse(

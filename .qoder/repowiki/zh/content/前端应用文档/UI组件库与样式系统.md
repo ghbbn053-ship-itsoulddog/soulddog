@@ -17,9 +17,19 @@
 - [src/components/ui/checkbox.tsx](file://src/components/ui/checkbox.tsx)
 - [src/components/ui/select.tsx](file://src/components/ui/select.tsx)
 - [src/components/ui/alert.tsx](file://src/components/ui/alert.tsx)
+- [frontend/src/components/MarkdownMessage.tsx](file://frontend/src/components/MarkdownMessage.tsx)
+- [frontend/src/app/chat/page.tsx](file://frontend/src/app/chat/page.tsx)
+- [frontend/package.json](file://frontend/package.json)
 - [src/hooks/use-mobile.ts](file://src/hooks/use-mobile.ts)
 - [src/app/globals.css](file://src/app/globals.css)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 新增MarkdownMessage组件，支持富文本渲染和代码高亮功能
+- 更新聊天界面以支持Markdown内容显示
+- 添加react-markdown、remark-gfm、rehype-highlight等富文本处理依赖
+- 增强AI助手的消息展示能力，支持代码块、表格等富文本格式
 
 ## 目录
 1. [简介](#简介)
@@ -27,17 +37,21 @@
 3. [核心组件](#核心组件)
 4. [架构总览](#架构总览)
 5. [组件详解](#组件详解)
-6. [依赖关系分析](#依赖关系分析)
-7. [性能与可访问性](#性能与可访问性)
-8. [样式调试与维护指南](#样式调试与维护指南)
-9. [故障排查](#故障排查)
-10. [结论](#结论)
+6. [富文本渲染系统](#富文本渲染系统)
+7. [依赖关系分析](#依赖关系分析)
+8. [性能与可访问性](#性能与可访问性)
+9. [样式调试与维护指南](#样式调试与维护指南)
+10. [故障排查](#故障排查)
+11. [结论](#结论)
 
 ## 简介
 本文件面向智能教务系统AI助手的前端UI组件库与样式系统，聚焦于Shadcn/UI风格的组件集成与定制化使用，涵盖组件导入、样式覆盖与主题配置；对Button、Input、Card、Dialog等常用组件进行属性与事件说明；解释Tailwind CSS在本项目中的使用模式（含命名、响应式断点与自定义变量）；总结组件组合与复用策略；并提供可访问性、性能优化与浏览器兼容性的最佳实践及样式调试与维护建议。
 
+**更新** 新增MarkdownMessage组件，支持富文本渲染和代码高亮，增强AI助手的消息展示能力。
+
 ## 项目结构
 - 组件库位于 src/components/ui，采用按功能拆分的模块化组织，每个组件独立导出，便于按需引入与复用。
+- 富文本渲染系统位于frontend/src/components，包含MarkdownMessage组件专门处理Markdown内容渲染。
 - 样式系统基于 Tailwind CSS v4，通过 PostCSS 插件启用，全局样式集中于 src/app/globals.css，并以CSS变量驱动明暗主题切换。
 - 工具函数 cn 聚合 clsx 与 tailwind-merge，用于合并与去重类名，保证样式优先级与覆盖可控。
 - 组件多采用 Radix UI 原子能力与 class-variance-authority 的变体系统，统一风格与交互一致性。
@@ -50,6 +64,13 @@ P["@tailwindcss/postcss"]
 end
 subgraph "工具层"
 U["src/lib/utils.ts<br/>cn 合并类名"]
+end
+subgraph "富文本层"
+MM["MarkdownMessage<br/>富文本渲染"]
+RM["react-markdown"]
+RG["remark-gfm"]
+RH["rehype-highlight"]
+HL["highlight.js"]
 end
 subgraph "组件层"
 B["Button"]
@@ -74,28 +95,24 @@ U --> TB
 U --> CB
 U --> S
 U --> A
+MM --> RM
+MM --> RG
+MM --> RH
+MM --> HL
 ```
 
-图表来源
+**图表来源**
 - [postcss.config.mjs:1-8](file://postcss.config.mjs#L1-L8)
-- [src/app/globals.css:1-138](file://src/app/globals.css#L1-L138)
+- [src/app/globals.css:1-69](file://src/app/globals.css#L1-L69)
 - [src/lib/utils.ts:1-7](file://src/lib/utils.ts#L1-L7)
-- [src/components/ui/button.tsx:1-63](file://src/components/ui/button.tsx#L1-L63)
-- [src/components/ui/input.tsx:1-22](file://src/components/ui/input.tsx#L1-L22)
-- [src/components/ui/card.tsx:1-93](file://src/components/ui/card.tsx#L1-L93)
-- [src/components/ui/dialog.tsx:1-144](file://src/components/ui/dialog.tsx#L1-L144)
-- [src/components/ui/form.tsx:1-168](file://src/components/ui/form.tsx#L1-L168)
-- [src/components/ui/table.tsx:1-117](file://src/components/ui/table.tsx#L1-L117)
-- [src/components/ui/tabs.tsx:1-67](file://src/components/ui/tabs.tsx#L1-L67)
-- [src/components/ui/checkbox.tsx:1-33](file://src/components/ui/checkbox.tsx#L1-L33)
-- [src/components/ui/select.tsx:1-191](file://src/components/ui/select.tsx#L1-L191)
-- [src/components/ui/alert.tsx:1-67](file://src/components/ui/alert.tsx#L1-L67)
+- [frontend/src/components/MarkdownMessage.tsx:1-73](file://frontend/src/components/MarkdownMessage.tsx#L1-L73)
+- [frontend/src/app/chat/page.tsx:1-567](file://frontend/src/app/chat/page.tsx#L1-L567)
 
-章节来源
+**章节来源**
 - [components.json:1-22](file://components.json#L1-L22)
 - [package.json:1-92](file://package.json#L1-L92)
 - [postcss.config.mjs:1-8](file://postcss.config.mjs#L1-L8)
-- [src/app/globals.css:1-138](file://src/app/globals.css#L1-L138)
+- [src/app/globals.css:1-69](file://src/app/globals.css#L1-L69)
 - [src/lib/utils.ts:1-7](file://src/lib/utils.ts#L1-L7)
 
 ## 核心组件
@@ -110,7 +127,9 @@ U --> A
 - Select：下拉选择，支持组、值、触发器（含尺寸）、内容面板、项、分隔符与滚动按钮。
 - Alert：警示容器，支持默认与破坏性两种变体，内部含标题与描述区域。
 
-章节来源
+**更新** 新增MarkdownMessage组件，专门处理富文本渲染，支持代码高亮、表格显示等功能。
+
+**章节来源**
 - [src/components/ui/button.tsx:1-63](file://src/components/ui/button.tsx#L1-L63)
 - [src/components/ui/input.tsx:1-22](file://src/components/ui/input.tsx#L1-L22)
 - [src/components/ui/card.tsx:1-93](file://src/components/ui/card.tsx#L1-L93)
@@ -121,6 +140,7 @@ U --> A
 - [src/components/ui/checkbox.tsx:1-33](file://src/components/ui/checkbox.tsx#L1-L33)
 - [src/components/ui/select.tsx:1-191](file://src/components/ui/select.tsx#L1-L191)
 - [src/components/ui/alert.tsx:1-67](file://src/components/ui/alert.tsx#L1-L67)
+- [frontend/src/components/MarkdownMessage.tsx:1-73](file://frontend/src/components/MarkdownMessage.tsx#L1-L73)
 
 ## 架构总览
 - 组件风格：采用 Shadcn/UI 风格，通过 class-variance-authority 定义变体与默认样式，结合 Radix UI 提供无障碍与可访问性。
@@ -128,6 +148,7 @@ U --> A
 - 主题与颜色：使用 oklch 颜色空间，定义背景、前景、卡片、弹出层、主要/次要、边框、输入、环形光晕等变量，并在明/暗两套值之间切换。
 - 响应式与断点：广泛使用 sm/md 等 Tailwind 断点，部分组件使用自定义容器查询与网格布局。
 - 可访问性：组件普遍设置 role、aria-* 属性与键盘交互，确保屏幕阅读器友好。
+- 富文本系统：新增MarkdownMessage组件，基于react-markdown提供富文本渲染，支持GFM语法和代码高亮。
 
 ```mermaid
 graph TB
@@ -135,6 +156,14 @@ subgraph "主题与样式"
 V["CSS变量<br/>明/暗主题"]
 TW["Tailwind v4<br/>PostCSS插件"]
 CN["cn 合并类名"]
+PROSE["Prose样式<br/>富文本渲染"]
+end
+subgraph "富文本层"
+MM["MarkdownMessage"]
+RM["react-markdown"]
+RG["remark-gfm"]
+RH["rehype-highlight"]
+HL["highlight.js"]
 end
 subgraph "组件层"
 BTN["Button"]
@@ -159,22 +188,18 @@ CN --> TBZ
 CN --> CHK
 CN --> SEL
 CN --> ALR
+MM --> RM
+MM --> RG
+MM --> RH
+MM --> HL
+PROSE --> MM
 ```
 
-图表来源
-- [src/app/globals.css:1-138](file://src/app/globals.css#L1-L138)
+**图表来源**
+- [src/app/globals.css:1-69](file://src/app/globals.css#L1-L69)
 - [postcss.config.mjs:1-8](file://postcss.config.mjs#L1-L8)
 - [src/lib/utils.ts:1-7](file://src/lib/utils.ts#L1-L7)
-- [src/components/ui/button.tsx:1-63](file://src/components/ui/button.tsx#L1-L63)
-- [src/components/ui/input.tsx:1-22](file://src/components/ui/input.tsx#L1-L22)
-- [src/components/ui/card.tsx:1-93](file://src/components/ui/card.tsx#L1-L93)
-- [src/components/ui/dialog.tsx:1-144](file://src/components/ui/dialog.tsx#L1-L144)
-- [src/components/ui/form.tsx:1-168](file://src/components/ui/form.tsx#L1-L168)
-- [src/components/ui/table.tsx:1-117](file://src/components/ui/table.tsx#L1-L117)
-- [src/components/ui/tabs.tsx:1-67](file://src/components/ui/tabs.tsx#L1-L67)
-- [src/components/ui/checkbox.tsx:1-33](file://src/components/ui/checkbox.tsx#L1-L33)
-- [src/components/ui/select.tsx:1-191](file://src/components/ui/select.tsx#L1-L191)
-- [src/components/ui/alert.tsx:1-67](file://src/components/ui/alert.tsx#L1-L67)
+- [frontend/src/components/MarkdownMessage.tsx:1-73](file://frontend/src/components/MarkdownMessage.tsx#L1-L73)
 
 ## 组件详解
 
@@ -195,7 +220,7 @@ CN --> ALR
   - 图标按钮建议使用 icon 或 icon-sm 尺寸
   - 禁用态保持不可交互，避免视觉误导
 
-章节来源
+**章节来源**
 - [src/components/ui/button.tsx:1-63](file://src/components/ui/button.tsx#L1-L63)
 
 ### Input 输入框
@@ -210,20 +235,20 @@ CN --> ALR
 - 事件处理
   - onChange、onFocus、onBlur 等由透传属性支持
 
-章节来源
+**章节来源**
 - [src/components/ui/input.tsx:1-22](file://src/components/ui/input.tsx#L1-L22)
 
 ### Card 卡片
 - 功能要点
   - 卡片容器、头部、标题、描述、内容、底部与操作区域
-  - 头部支持网格布局与“存在操作时”的列排布
+  - 头部支持网格布局与"存在操作时"的列排布
   - 内容区域与底部提供内边距与分隔线约定
 - 关键属性
   - className：追加自定义样式
 - 使用建议
   - 将操作按钮放置于 CardAction，标题与描述置于 CardHeader 下
 
-章节来源
+**章节来源**
 - [src/components/ui/card.tsx:1-93](file://src/components/ui/card.tsx#L1-L93)
 
 ### Dialog 对话框
@@ -255,10 +280,10 @@ U->>C : 点击关闭按钮
 C->>R : 关闭对话框
 ```
 
-图表来源
+**图表来源**
 - [src/components/ui/dialog.tsx:1-144](file://src/components/ui/dialog.tsx#L1-L144)
 
-章节来源
+**章节来源**
 - [src/components/ui/dialog.tsx:1-144](file://src/components/ui/dialog.tsx#L1-L144)
 
 ### Form 表单
@@ -273,7 +298,7 @@ C->>R : 关闭对话框
   - 为每个字段提供唯一 name，并在 FormItem 中组合 Label 与 Control
   - 错误信息通过 FormMessage 渲染，避免手动拼接
 
-章节来源
+**章节来源**
 - [src/components/ui/form.tsx:1-168](file://src/components/ui/form.tsx#L1-L168)
 
 ### Table 表格
@@ -285,7 +310,7 @@ C->>R : 关闭对话框
 - 使用建议
   - 在 TableContainer 中嵌入 table，确保横向溢出可滚动
 
-章节来源
+**章节来源**
 - [src/components/ui/table.tsx:1-117](file://src/components/ui/table.tsx#L1-L117)
 
 ### Tabs 选项卡
@@ -296,7 +321,7 @@ C->>R : 关闭对话框
   - className：追加自定义样式
   - TabsTrigger 支持 data-state 判定激活态
 
-章节来源
+**章节来源**
 - [src/components/ui/tabs.tsx:1-67](file://src/components/ui/tabs.tsx#L1-L67)
 
 ### Checkbox 复选框
@@ -307,7 +332,7 @@ C->>R : 关闭对话框
   - className：追加自定义样式
   - 透传至原生 Checkbox 原语
 
-章节来源
+**章节来源**
 - [src/components/ui/checkbox.tsx:1-33](file://src/components/ui/checkbox.tsx#L1-L33)
 
 ### Select 下拉选择
@@ -323,7 +348,7 @@ C->>R : 关闭对话框
   - 使用 SelectValue 作为占位文本，SelectItem 中展示选项
   - 长列表配合滚动按钮提升可用性
 
-章节来源
+**章节来源**
 - [src/components/ui/select.tsx:1-191](file://src/components/ui/select.tsx#L1-L191)
 
 ### Alert 警示
@@ -334,17 +359,82 @@ C->>R : 关闭对话框
   - variant：变体类型
   - className：追加自定义样式
 
-章节来源
+**章节来源**
 - [src/components/ui/alert.tsx:1-67](file://src/components/ui/alert.tsx#L1-L67)
+
+## 富文本渲染系统
+
+### MarkdownMessage 组件
+- 功能要点
+  - 基于 react-markdown 提供富文本渲染
+  - 支持 GitHub Flavored Markdown (GFM) 语法
+  - 集成代码高亮功能，支持多种编程语言
+  - 自定义表格渲染，支持响应式表格显示
+  - 内置暗色主题适配
+- 核心特性
+  - 代码块高亮：支持行内代码和预格式化代码块
+  - 表格渲染：响应式表格，支持表头和单元格样式
+  - GFM支持：支持任务列表、删除线等扩展语法
+  - 主题适配：自动适配明暗主题切换
+- 关键属性
+  - content：要渲染的Markdown内容字符串
+- 自定义渲染器
+  - code：区分行内代码和代码块，提供不同样式
+  - pre：为代码块提供滚动容器和边框样式
+  - table/th/td：自定义表格样式，支持响应式布局
+
+```mermaid
+flowchart TD
+A[MarkdownMessage 组件] --> B[ReactMarkdown 核心]
+B --> C[remarkGfm 插件]
+B --> D[rehypeHighlight 插件]
+C --> E[GFM 语法解析]
+D --> F[代码高亮处理]
+E --> G[富文本内容渲染]
+F --> G
+G --> H[自定义组件渲染器]
+H --> I[代码块样式]
+H --> J[表格样式]
+H --> K[行内样式]
+```
+
+**图表来源**
+- [frontend/src/components/MarkdownMessage.tsx:1-73](file://frontend/src/components/MarkdownMessage.tsx#L1-L73)
+
+**章节来源**
+- [frontend/src/components/MarkdownMessage.tsx:1-73](file://frontend/src/components/MarkdownMessage.tsx#L1-L73)
+
+### 聊天界面富文本集成
+- 集成方式
+  - AI助手消息使用 MarkdownMessage 组件渲染
+  - 用户消息保持原有纯文本显示
+  - 支持代码块、表格、列表等富文本格式
+- 渲染策略
+  - assistant 角色消息通过 MarkdownMessage 渲染
+  - user 角色消息直接显示文本内容
+  - 自动处理 Markdown 解析和样式应用
+- 性能优化
+  - 按需渲染，只对AI消息进行富文本处理
+  - 缓存渲染结果，避免重复解析
+  - 限制最大渲染长度，防止内存溢出
+
+**章节来源**
+- [frontend/src/app/chat/page.tsx:479-483](file://frontend/src/app/chat/page.tsx#L479-L483)
+- [frontend/src/app/chat/page.tsx:14-20](file://frontend/src/app/chat/page.tsx#L14-L20)
 
 ## 依赖关系分析
 - 组件依赖
   - Button、Input、Card、Dialog、Form、Table、Tabs、Checkbox、Select、Alert 均依赖 cn 工具进行类名合并
   - 大多数组件依赖 Radix UI 原语以实现无障碍与状态同步
   - Form 组件依赖 react-hook-form 上下文
+- 富文本依赖
+  - MarkdownMessage 依赖 react-markdown、remark-gfm、rehype-highlight
+  - 代码高亮依赖 highlight.js
+  - 聊天界面依赖 MarkdownMessage 组件
 - 样式依赖
   - Tailwind v4 通过 PostCSS 插件启用，全局 CSS 变量驱动明/暗主题
   - 组件内部使用 Tailwind 实用类与自定义变量组合
+  - 富文本样式通过 prose 类和自定义渲染器实现
 
 ```mermaid
 graph LR
@@ -364,23 +454,21 @@ RDX --> TBZ
 RDX --> CHK
 RDX --> SEL
 RHF["react-hook-form"] --> FRM
+MM["MarkdownMessage"] --> RM["react-markdown"]
+MM --> RG["remark-gfm"]
+MM --> RH["rehype-highlight"]
+MM --> HL["highlight.js"]
+CHAT["ChatPage"] --> MM
 ```
 
-图表来源
+**图表来源**
 - [src/lib/utils.ts:1-7](file://src/lib/utils.ts#L1-L7)
-- [src/components/ui/button.tsx:1-63](file://src/components/ui/button.tsx#L1-L63)
-- [src/components/ui/input.tsx:1-22](file://src/components/ui/input.tsx#L1-L22)
-- [src/components/ui/card.tsx:1-93](file://src/components/ui/card.tsx#L1-L93)
-- [src/components/ui/dialog.tsx:1-144](file://src/components/ui/dialog.tsx#L1-L144)
-- [src/components/ui/form.tsx:1-168](file://src/components/ui/form.tsx#L1-L168)
-- [src/components/ui/table.tsx:1-117](file://src/components/ui/table.tsx#L1-L117)
-- [src/components/ui/tabs.tsx:1-67](file://src/components/ui/tabs.tsx#L1-L67)
-- [src/components/ui/checkbox.tsx:1-33](file://src/components/ui/checkbox.tsx#L1-L33)
-- [src/components/ui/select.tsx:1-191](file://src/components/ui/select.tsx#L1-L191)
-- [src/components/ui/alert.tsx:1-67](file://src/components/ui/alert.tsx#L1-L67)
+- [frontend/src/components/MarkdownMessage.tsx:1-73](file://frontend/src/components/MarkdownMessage.tsx#L1-L73)
+- [frontend/src/app/chat/page.tsx:4-4](file://frontend/src/app/chat/page.tsx#L4-L4)
 
-章节来源
+**章节来源**
 - [package.json:1-92](file://package.json#L1-L92)
+- [frontend/package.json:1-96](file://frontend/package.json#L1-L96)
 - [src/lib/utils.ts:1-7](file://src/lib/utils.ts#L1-L7)
 
 ## 性能与可访问性
@@ -388,34 +476,45 @@ RHF["react-hook-form"] --> FRM
   - 使用 cn 合并类名，减少重复与冲突，降低样式计算成本
   - 组件尽量无副作用，避免在渲染路径中执行昂贵逻辑
   - 表单与列表组件通过上下文传递状态，减少重复渲染
+  - 富文本渲染按需处理，避免不必要的解析
 - 可访问性
   - Dialog、Form、Tabs、Select、Checkbox 等组件均设置 role 与 aria-* 属性
   - 提供键盘导航与焦点管理，确保屏幕阅读器友好
+  - 富文本内容保持语义化结构，支持屏幕阅读器解析
 - 浏览器兼容性
   - Tailwind v4 与 PostCSS 插件已配置，Next.js 构建链路支持现代浏览器特性
+  - 富文本渲染依赖现代浏览器的 DOM API
   - 如需兼容旧版浏览器，可在 PostCSS 配置中添加 polyfill 插件
 
-[本节为通用指导，不直接分析具体文件]
+**更新** 新增富文本渲染系统的性能考虑和可访问性保障。
 
 ## 样式调试与维护指南
 - CSS 变量与主题
   - 明/暗主题通过 CSS 变量切换，可在 :root 与 .dark 中调整颜色值
   - 使用自定义变量如 --radius、--font-sans 等统一设计语言
+  - 富文本样式通过 prose 类和自定义渲染器实现主题适配
 - Tailwind 类名调试
   - 使用浏览器开发者工具查看元素 data-slot 与 data-* 属性，确认当前变体与尺寸
   - 通过覆盖 className 进行局部调试，避免全局污染
+  - 富文本组件可通过 prose 类进行样式微调
 - 组件样式覆盖
   - 优先使用变体与尺寸参数；必要时通过 className 覆盖，注意与 cn 的合并顺序
   - 避免使用 !important，优先利用 Tailwind 权重与变量
+  - 富文本样式建议通过自定义渲染器而非 !important 覆盖
 - 响应式与断点
   - 使用 sm/md 等断点进行移动端适配；复杂布局可结合容器查询
+  - 富文本表格支持响应式滚动，适应不同屏幕尺寸
 - 组件组合与复用
   - 将通用样式抽离为变体或尺寸参数，减少重复代码
   - 通过上下文与透传属性实现跨组件的状态共享
+  - 富文本组件可作为通用渲染器在多个场景中复用
 
-章节来源
-- [src/app/globals.css:1-138](file://src/app/globals.css#L1-L138)
+**更新** 新增富文本渲染系统的调试和维护指南。
+
+**章节来源**
+- [src/app/globals.css:1-69](file://src/app/globals.css#L1-L69)
 - [src/lib/utils.ts:1-7](file://src/lib/utils.ts#L1-L7)
+- [frontend/src/components/MarkdownMessage.tsx:14](file://frontend/src/components/MarkdownMessage.tsx#L14-L14)
 
 ## 故障排查
 - 组件未生效或样式错乱
@@ -431,11 +530,23 @@ RHF["react-hook-form"] --> FRM
   - 使用 useIsMobile 获取断点状态，结合 Tailwind 断点进行条件渲染
 - 主题切换无效
   - 检查 .dark 类是否正确挂载，CSS 变量是否更新
+- 富文本渲染问题
+  - 确认 react-markdown、remark-gfm、rehype-highlight 依赖已安装
+  - 检查 MarkdownMessage 组件的 props 传入是否正确
+  - 验证代码高亮样式文件是否正确加载
+  - 确认 Markdown 内容格式符合 GFM 语法规范
 
-章节来源
+**更新** 新增富文本渲染系统的故障排查指南。
+
+**章节来源**
 - [src/components/ui/dialog.tsx:1-144](file://src/components/ui/dialog.tsx#L1-L144)
 - [src/components/ui/form.tsx:1-168](file://src/components/ui/form.tsx#L1-L168)
 - [src/hooks/use-mobile.ts:1-20](file://src/hooks/use-mobile.ts#L1-L20)
+- [frontend/src/components/MarkdownMessage.tsx:1-73](file://frontend/src/components/MarkdownMessage.tsx#L1-L73)
 
 ## 结论
-本项目采用 Tailwind CSS v4 与 Shadcn/UI 风格的组件体系，结合 Radix UI 与 class-variance-authority，实现了高一致性的UI组件库与灵活的主题系统。通过 cn 工具与 CSS 变量，组件在样式覆盖、主题切换与响应式适配上具备良好可维护性。建议在实际开发中遵循组件变体与尺寸参数的约定，善用上下文与透传属性，确保可访问性与性能表现。
+本项目采用 Tailwind CSS v4 与 Shadcn/UI 风格的组件体系，结合 Radix UI 与 class-variance-authority，实现了高一致性的UI组件库与灵活的主题系统。通过 cn 工具与 CSS 变量，组件在样式覆盖、主题切换与响应式适配上具备良好可维护性。
+
+**更新** 新增的MarkdownMessage组件显著增强了AI助手的消息展示能力，支持富文本渲染、代码高亮和表格显示等功能。该组件基于react-markdown生态系统，提供了完整的GFM语法支持和现代化的代码高亮体验。富文本系统的集成不仅提升了用户体验，也为未来的功能扩展奠定了坚实基础。
+
+建议在实际开发中遵循组件变体与尺寸参数的约定，善用上下文与透传属性，确保可访问性与性能表现。对于富文本内容，建议保持内容结构的语义化，避免过度复杂的样式定制，确保良好的可访问性和维护性。

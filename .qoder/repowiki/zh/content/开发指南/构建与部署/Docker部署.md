@@ -22,8 +22,9 @@
 **所做变更**
 - 更新前端服务配置，现在使用Dockerfile.dev支持热重载和实时代码同步
 - 新增开发模式下的文件监听和代码挂载配置
-- 更新前端Dockerfile.dev的构建流程说明
+- 更新前端Dockerfile.dev的构建流程说明，强调单阶段开发构建和系统依赖安装
 - 增强开发环境的实时同步功能描述
+- 改进pnpm镜像源配置，支持国内网络环境
 
 ## 目录
 1. [简介](#简介)
@@ -123,7 +124,7 @@ MV --> MC
 ```mermaid
 graph TB
 subgraph "网络 campus-ai-network"
-FEDev["frontend:3000 (开发模式)"]
+FEDev["frontend:5000 (开发模式)"]
 FEProd["frontend:3000 (生产模式)"]
 BK["backend:8000"]
 PG["postgres:5432"]
@@ -217,10 +218,10 @@ MV --> MC
 ### 前端服务（Next.js + Nginx）
 - **开发模式**（Dockerfile.dev）：基于node:20-alpine，支持热重载和实时代码同步
   - 使用pnpm安装依赖并启动开发服务器
-  - 暴露3000端口，支持文件监听（WATCHPACK_POLLING=true）
+  - 暴露5000端口，支持文件监听（WATCHPACK_POLLING=true）
   - 挂载src、public、配置文件等目录实现代码同步
   - 通过/virtual-host访问容器内代码
-- **生产模式**（Dockerfile）：多阶段构建，第一阶段使用node:20-alpine安装pnpm与依赖并构建；第二阶段使用nginx:alpine复制dist与自定义nginx.conf
+- **生产模式**（Dockerfile）：单阶段构建，基于node:20-alpine，安装pnpm与依赖并构建；使用nginx:alpine复制dist与自定义nginx.conf
 - 运行：Nginx以daemon off方式启动
 - 端口：对外映射3000
 - 反向代理：/api前缀转发至backend:8000
@@ -255,7 +256,7 @@ MV --> MC
 ### 环境变量与端口映射
 - 后端关键变量：数据库连接、缓存连接、Milvus连接、AI模型密钥、教育系统地址、JWT密钥、CORS来源
 - 前端关键变量：NEXT_PUBLIC_API_URL（指向/api）、WATCHPACK_POLLING（支持文件监听）
-- 端口映射：3000（前端开发/生产模式）、8000（后端）、5432（数据库）、6379（缓存）、9000/9001（对象存储）、19530/9091（向量数据库）
+- 端口映射：5000（前端开发模式）、3000（前端生产模式）、8000（后端）、5432（数据库）、6379（缓存）、9000/9001（对象存储）、19530/9091（向量数据库）
 
 **更新** 新增WATCHPACK_POLLING环境变量支持开发模式的文件监听功能
 
@@ -347,7 +348,7 @@ FEProd["前端生产模式"] --> BK
 - 启动服务
   - 在项目根目录执行：docker compose up -d
 - 访问服务
-  - 前端开发模式：http://localhost:3000
+  - 前端开发模式：http://localhost:5000
   - 后端：http://localhost:8000/api
   - 数据库：本地5432端口
   - 缓存：本地6379端口
@@ -368,10 +369,10 @@ FEProd["前端生产模式"] --> BK
   - 基于node:20-alpine，支持热重载和实时代码同步
   - 安装pnpm并配置镜像源
   - 复制依赖文件并安装依赖
-  - 暴露3000端口，使用pnpm dev启动开发服务器
+  - 暴露5000端口，使用pnpm dev启动开发服务器
   - 挂载src、public、配置文件等目录实现代码同步
 - **前端Dockerfile（生产模式）**
-  - 多阶段构建：第一阶段安装pnpm与依赖并构建Next.js应用；第二阶段复制dist与nginx.conf，使用nginx:alpine提供静态资源与反向代理
+  - 单阶段构建：基于node:20-alpine，安装pnpm与依赖并构建Next.js应用；使用nginx:alpine提供静态资源与反向代理
 
 **更新** 新增Dockerfile.dev的详细构建流程，强调开发模式的热重载和代码同步特性
 
@@ -450,6 +451,8 @@ F-->>U : 返回响应
 - **实时代码同步**：通过volumes挂载实现宿主机与容器内的代码实时同步
 - **文件监听增强**：通过WATCHPACK_POLLING=true启用文件变化监听，提升开发体验
 - **开发工具集成**：支持React Dev Inspector等开发工具的集成使用
+- **系统依赖安装**：在Dockerfile.dev中添加libc6-compat依赖，确保兼容性
+- **pnpm镜像源优化**：配置国内镜像源，提升依赖安装速度
 
 **新增章节** 详细说明开发模式下前端容器的特殊配置和功能特性
 
