@@ -49,6 +49,7 @@ export default function ChatPage() {
   const [initialLoading, setInitialLoading] = useState(true); // 初始加载状态，防止空状态闪烁
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const activeHistoryReqRef = useRef(0);
 
   const API_BASE = "";  // 使用相对路径，通过 Nginx 反向代理
   const getConversationStorageKey = (uname: string) => `current_conversation_id_${uname}`;
@@ -79,12 +80,16 @@ export default function ChatPage() {
   // 获取对话历史
   const fetchHistory = async (conversationId: number, uname: string = username) => {
     if (!uname) return;
+    const reqId = ++activeHistoryReqRef.current;
     try {
       const res = await fetch(
         `${API_BASE}/api/chat/history/${conversationId}?username=${encodeURIComponent(uname)}`
       );
+      // 忽略过时请求，避免覆盖最新会话或正在发送中的消息
+      if (reqId !== activeHistoryReqRef.current) return;
       if (res.ok) {
         const data = await res.json();
+        if (reqId !== activeHistoryReqRef.current) return;
         if (data?.messages) {
           setMessages(data.messages.map((m: any) => ({
             id: m.id,
@@ -97,14 +102,19 @@ export default function ChatPage() {
         }
       }
       // 非200或数据异常时，清理无效会话
-      setCurrentConversationId(null);
-      localStorage.removeItem(getConversationStorageKey(uname));
-      setMessages([]);
+      // 仅当当前仍是该请求时才清理，避免误清空新状态
+      if (reqId === activeHistoryReqRef.current) {
+        setCurrentConversationId(null);
+        localStorage.removeItem(getConversationStorageKey(uname));
+        setMessages([]);
+      }
     } catch (error) {
       console.error("获取历史失败:", error);
-      setCurrentConversationId(null);
-      localStorage.removeItem(getConversationStorageKey(uname));
-      setMessages([]);
+      if (reqId === activeHistoryReqRef.current) {
+        setCurrentConversationId(null);
+        localStorage.removeItem(getConversationStorageKey(uname));
+        setMessages([]);
+      }
     }
   };
 
@@ -127,6 +137,9 @@ export default function ChatPage() {
     ]);
 
     try {
+      // 发送新消息时使所有未完成的历史加载请求失效，防止覆盖当前消息列表
+      activeHistoryReqRef.current++;
+
       const response = await fetch(`${API_BASE}/api/chat/send-stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -150,20 +163,23 @@ export default function ChatPage() {
       let aiContent = "";
       let conversationId = currentConversationId;
       let sseBuffer = "";
+      let receivedAnyChunk = false;
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         sseBuffer += decoder.decode(value, { stream: true });
-        const events = sseBuffer.split("\n\n");
-        sseBuffer = events.pop() || "";
+        // 兼容 \n\n 与 \r\n\r\n 两种 SSE 分隔
+        const parts = sseBuffer.split(/\r?\n\r?\n/);
+        sseBuffer = parts.pop() || "";
 
-        for (const event of events) {
+        for (const event of parts) {
           const dataLines = event
-            .split("\n")
-            .filter((line) => line.startsWith("data: "))
-            .map((line) => line.slice(6).trim());
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter((line) => line.startsWith("data:"))
+            .map((line) => line.replace(/^data:\s?/, "").trim());
 
           for (const dataLine of dataLines) {
             if (!dataLine) continue;
@@ -196,6 +212,7 @@ export default function ChatPage() {
 
               if (data.content) {
                 aiContent += data.content;
+                receivedAnyChunk = true;
                 // 使用函数式更新，精确更新目标消息，避免整列表重新渲染
                 const updatedContent = aiContent;
                 setMessages(prev => {
@@ -215,11 +232,13 @@ export default function ChatPage() {
       }
 
       // 如果网络切分导致最后一个事件没被 \n\n 结束，这里兜底处理一次
-      if (sseBuffer.trim().startsWith("data: ")) {
+      if (sseBuffer.trim().startsWith("data:")) {
         try {
-          const data = JSON.parse(sseBuffer.trim().slice(6).trim());
+          const tail = sseBuffer.trim().replace(/^data:\s?/, "").trim();
+          const data = JSON.parse(tail);
           if (data.content) {
             aiContent += data.content;
+            receivedAnyChunk = true;
             setMessages(prev => {
               const idx = prev.findIndex(msg => msg.id === assistantMsgId);
               if (idx === -1) return prev;
@@ -234,6 +253,17 @@ export default function ChatPage() {
         } catch {
           // ignore
         }
+      }
+
+      // 流接口返回成功但没有有效分片时，给出可见兜底信息
+      if (!receivedAnyChunk) {
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === assistantMsgId
+              ? { ...msg, content: "未收到流式分片，请重试。" }
+              : msg
+          )
+        );
       }
     } catch (error) {
       console.error("流式消息失败:", error);
@@ -269,6 +299,7 @@ export default function ChatPage() {
 
   // 选择对话
   const selectConversation = (id: number) => {
+    activeHistoryReqRef.current++;
     setCurrentConversationId(id);
     fetchHistory(id);
     setSidebarOpen(false);
@@ -312,9 +343,11 @@ export default function ChatPage() {
       if (!isNaN(convId)) {
         setCurrentConversationId(convId);
         // 直接异步加载历史，无需setTimeout
+        const reqId = ++activeHistoryReqRef.current;
         fetch(`${API_BASE}/api/chat/history/${convId}?username=${encodeURIComponent(savedUsername)}`)
           .then(res => res.ok ? res.json() : null)
           .then(data => {
+            if (reqId !== activeHistoryReqRef.current) return;
             if (data?.messages) {
               setMessages(data.messages.map((m: any) => ({
                 id: m.id,
