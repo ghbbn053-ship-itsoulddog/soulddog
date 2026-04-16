@@ -659,6 +659,7 @@ class JwxtScraper:
                                         break
 
                                 course_data = {
+                                    "学期": actual_semester or semester or "",
                                     "课程名称": course_name,
                                     "星期": days[i-1],
                                     "星期代码": i,
@@ -1491,18 +1492,29 @@ class JwxtScraper:
             if personal_info.get("success"):
                 all_data["个人信息"] = personal_info.get("data", {})
 
-            # 获取成绩
+            # 获取成绩（按学期分组）
             grades = self.get_all_grades()
             if grades.get("success"):
+                grade_list = grades.get("data", [])
+                # 按学期分组
+                grades_by_semester = {}
+                for g in grade_list:
+                    sem = g.get("开课学期", "未知学期")
+                    if sem not in grades_by_semester:
+                        grades_by_semester[sem] = []
+                    grades_by_semester[sem].append(g)
                 all_data["成绩信息"] = {
-                    "成绩列表": grades.get("data", []),
+                    "按学期": grades_by_semester,
                     "统计信息": grades.get("stats", {})
                 }
 
-            # 获取课表
+            # 获取课表（附带学期信息）
             schedule = self.get_schedule()
             if schedule.get("success"):
-                all_data["课表信息"] = schedule.get("data", [])
+                all_data["课表信息"] = {
+                    "学期": schedule.get("semester", ""),
+                    "课程列表": schedule.get("data", [])
+                }
 
             # 获取我的培养方案
             plan = self.get_my_training_plan()
@@ -1514,10 +1526,13 @@ class JwxtScraper:
             if progress.get("success"):
                 all_data["学业进度"] = progress.get("data", {})
 
-            # 获取考试安排
+            # 获取考试安排（附带学期信息）
             exams = self.get_exam_schedule()
             if exams.get("success"):
-                all_data["考试安排"] = exams.get("data", [])
+                all_data["考试安排"] = {
+                    "学期": exams.get("semester", ""),
+                    "考试列表": exams.get("data", [])
+                }
 
             logger.info("所有向量化数据获取完成")
 

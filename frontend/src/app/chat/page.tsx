@@ -46,6 +46,7 @@ export default function ChatPage() {
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [username, setUsername] = useState("");
+  const [initialLoading, setInitialLoading] = useState(true); // 初始加载状态，防止空状态闪烁
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -173,15 +174,14 @@ export default function ChatPage() {
               
               if (data.content) {
                 aiContent += data.content;
-                // 使用函数式更新，精确更新目标消息
-                const currentContent = aiContent;
+                // 使用函数式更新，精确更新目标消息，避免整列表重新渲染
+                const updatedContent = aiContent;
                 setMessages(prev => {
                   const idx = prev.findIndex(msg => msg.id === assistantMsgId);
                   if (idx === -1) return prev;
-                  // 仅在内容变化时创建新数组
-                  if (prev[idx].content === currentContent) return prev;
+                  if (prev[idx].content === updatedContent) return prev;
                   const next = [...prev];
-                  next[idx] = { ...next[idx], content: currentContent };
+                  next[idx] = { ...next[idx], content: updatedContent };
                   return next;
                 });
               }
@@ -245,22 +245,39 @@ export default function ChatPage() {
   // 页面加载时从 localStorage 读取用户名和当前会话
   useEffect(() => {
     const savedUsername = localStorage.getItem("username");
-    if (savedUsername) {
-      setUsername(savedUsername);
-      
-      // 恢复当前会话ID
-      const savedConversationId = localStorage.getItem("current_conversation_id");
-      if (savedConversationId) {
-        const convId = parseInt(savedConversationId);
-        if (!isNaN(convId)) {
-          setCurrentConversationId(convId);
-          // 延迟加载历史，等待username设置完成
-          setTimeout(() => fetchHistory(convId), 100);
-        }
+    if (!savedUsername) {
+      window.location.href = "/login";
+      return;
+    }
+    setUsername(savedUsername);
+
+    // 恢复当前会话ID并加载历史（不再用setTimeout）
+    const savedConversationId = localStorage.getItem("current_conversation_id");
+    if (savedConversationId) {
+      const convId = parseInt(savedConversationId);
+      if (!isNaN(convId)) {
+        setCurrentConversationId(convId);
+        // 直接异步加载历史，无需setTimeout
+        fetch(`${API_BASE}/api/chat/history/${convId}`)
+          .then(res => res.ok ? res.json() : null)
+          .then(data => {
+            if (data?.messages) {
+              setMessages(data.messages.map((m: any) => ({
+                id: m.id,
+                role: m.role,
+                content: m.content,
+                sources: m.meta?.sources || [],
+                timestamp: new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+              })));
+            }
+          })
+          .catch(err => console.error("加载历史失败:", err))
+          .finally(() => setInitialLoading(false));
+      } else {
+        setInitialLoading(false);
       }
     } else {
-      // 未登录，跳转到登录页
-      window.location.href = "/login";
+      setInitialLoading(false);
     }
   }, []);
 
@@ -426,7 +443,15 @@ export default function ChatPage() {
 
         {/* 消息列表 */}
         <div className="flex-1 overflow-y-auto">
-          {messages.length === 0 ? (
+          {initialLoading ? (
+            /* 初始加载中：显示加载指示器而非空状态，防止闪烁 */
+            <div className="flex items-center justify-center h-full">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-gray-400">加载中...</p>
+              </div>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
               <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-500/20 mb-6">
                 <Bot className="w-10 h-10 text-white" />

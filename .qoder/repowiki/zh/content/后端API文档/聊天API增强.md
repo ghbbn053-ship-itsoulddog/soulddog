@@ -17,6 +17,7 @@
 - [backend/requirements.txt](file://backend/requirements.txt)
 - [docker-compose.yml](file://docker-compose.yml)
 - [README-Windows.md](file://README-Windows.md)
+- [backend/app/mcp/tools.py](file://backend/app/mcp/tools.py)
 </cite>
 
 ## 更新摘要
@@ -27,6 +28,9 @@
 - 更新聊天API架构图，反映新增的流式处理机制
 - 新增流式错误处理和异常管理章节
 - 更新消息级联删除和数据完整性保护机制
+- 新增MCP工具集成章节，展示AI Agent工具调用能力
+- 新增自动工具检测和学术数据注入功能说明
+- 新增对话ID跟踪和状态管理机制
 
 ## 目录
 1. [项目概述](#项目概述)
@@ -35,12 +39,13 @@
 4. [架构概览](#架构概览)
 5. [详细组件分析](#详细组件分析)
 6. [Server-Sent Events流式聊天功能](#server-sent-events流式聊天功能)
-7. [用户认证和授权机制](#用户认证和授权机制)
-8. [消息级联删除和数据完整性](#消息级联删除和数据完整性)
-9. [依赖关系分析](#依赖关系分析)
-10. [性能考虑](#性能考虑)
-11. [故障排除指南](#故障排除指南)
-12. [结论](#结论)
+7. [MCP工具集成](#mcp工具集成)
+8. [用户认证和授权机制](#用户认证和授权机制)
+9. [消息级联删除和数据完整性](#消息级联删除和数据完整性)
+10. [依赖关系分析](#依赖关系分析)
+11. [性能考虑](#性能考虑)
+12. [故障排除指南](#故障排除指南)
+13. [结论](#结论)
 
 ## 项目概述
 
@@ -54,6 +59,10 @@
 - **用户认证授权**：完整的用户登录、会话管理和权限控制
 - **消息级联删除**：确保数据一致性的自动清理机制
 - **Server-Sent Events流式聊天**：支持实时增量响应的流式通信
+- **MCP工具集成**：支持AI Agent工具调用和自动化工作流
+- **自动工具检测**：AI模型自动判断何时调用爬虫工具
+- **学术数据注入**：将真实教务数据注入到AI对话中
+- **对话ID跟踪**：完整的对话状态管理和跟踪机制
 - **前后端分离架构**：React前端 + FastAPI后端 + Python爬虫
 
 ## 项目结构
@@ -65,6 +74,7 @@ FE[Next.js前端]
 ChatUI[聊天界面]
 LoginUI[登录界面]
 StreamUI[流式渲染]
+MCPUI[MCP工具界面]
 end
 subgraph "认证层"
 AuthAPI[认证API]
@@ -75,6 +85,7 @@ API[FastAPI后端]
 ChatAPI[聊天API]
 DataAPI[数据API]
 StreamAPI[流式API]
+MCPAPI[MCP API]
 end
 subgraph "服务层"
 Qwen[千问AI服务]
@@ -82,6 +93,7 @@ Vector[向量数据库]
 Scraper[爬虫服务]
 Processor[数据处理器]
 StreamSvc[流式服务]
+MCPTools[MCP工具]
 end
 subgraph "数据层"
 Postgres[PostgreSQL]
@@ -92,6 +104,7 @@ FE --> AuthAPI
 FE --> ChatUI
 FE --> LoginUI
 FE --> StreamUI
+FE --> MCPUI
 AuthAPI --> API
 ChatAPI --> Qwen
 ChatAPI --> Vector
@@ -99,6 +112,7 @@ ChatAPI --> Scraper
 ChatAPI --> Processor
 StreamAPI --> StreamSvc
 StreamAPI --> Qwen
+MCPAPI --> MCPTools
 Qwen --> Postgres
 Scraper --> Postgres
 Vector --> Milvus
@@ -123,21 +137,37 @@ Processor --> Postgres
 
 新增的流式聊天API服务，基于Server-Sent Events（SSE）实现实时增量响应，提供更好的用户体验。
 
-### 3. 用户认证系统
+### 3. MCP工具集成
+
+新增的MCP（Model Context Protocol）工具集成，支持AI Agent工具调用和自动化工作流。
+
+### 4. 用户认证系统
 
 实现了完整的用户认证和授权机制，包括验证码获取、用户登录、会话管理和权限控制。
 
-### 4. AI服务集成
+### 5. AI服务集成
 
 集成了阿里云千问大模型，支持Function Calling和RAG增强功能，以及流式对话模式。
 
-### 5. 数据处理管道
+### 6. 数据处理管道
 
 实现了从爬取数据到向量化的完整数据处理流程。
 
-### 6. 向量检索系统
+### 7. 向量检索系统
 
 基于Milvus的向量数据库，提供高效的相似性检索。
+
+### 8. 自动工具检测
+
+AI模型能够自动判断何时调用爬虫工具查询最新数据，无需人工干预。
+
+### 9. 学术数据注入
+
+将真实的教务系统数据注入到AI对话中，确保回答的准确性。
+
+### 10. 对话ID跟踪
+
+完整的对话状态管理和跟踪机制，支持跨会话的状态保持。
 
 **章节来源**
 - [backend/app/api/chat.py:46-179](file://backend/app/api/chat.py#L46-L179)
@@ -151,6 +181,7 @@ participant Client as 客户端
 participant Auth as 认证API
 participant API as 聊天API
 participant StreamAPI as 流式API
+participant MCP as MCP工具
 participant Qwen as 千问服务
 participant Vector as 向量库
 participant DB as 数据库
@@ -184,6 +215,10 @@ StreamAPI-->>Client : data : {"content" : "增量文本", "done" : false}
 end
 StreamAPI->>DB : 保存完整AI回复
 StreamAPI-->>Client : data : {"done" : true, "conversation_id" : ...}
+Client->>MCP : 调用MCP工具
+MCP->>Scraper : 执行教务查询
+Scraper-->>MCP : 返回查询结果
+MCP-->>Client : 返回工具执行结果
 ```
 
 **图表来源**
@@ -279,6 +314,42 @@ StreamAPI-->>Client : data : {"done" : true, "conversation_id" : ...}
 **章节来源**
 - [backend/app/api/chat.py:273-367](file://backend/app/api/chat.py#L273-L367)
 
+### MCP工具集成组件
+
+新增的MCP（Model Context Protocol）工具集成，支持AI Agent工具调用：
+
+#### 工具定义
+- `query_personal_info`: 查询个人信息
+- `query_grades`: 查询成绩
+- `query_schedule`: 查询课表
+- `query_exam_schedule`: 查询考试安排
+- `query_academic_progress`: 查询学业进度
+- `query_training_plan`: 查询培养方案
+
+#### 工具调用流程
+1. AI Agent请求MCP工具
+2. MCP服务验证用户会话
+3. 调用爬虫服务执行查询
+4. 返回格式化结果给AI Agent
+
+```mermaid
+flowchart TD
+MCPReq[AI Agent请求] --> MCPAuth[验证用户会话]
+MCPAuth --> |有效| MCPExec[执行MCP工具]
+MCPAuth --> |无效| MCPError[返回错误]
+MCPExec --> Scraper[调用爬虫服务]
+Scraper --> Formatted[格式化结果]
+Formatted --> MCPReturn[返回给AI Agent]
+MCPError --> End[结束]
+MCPReturn --> End
+```
+
+**图表来源**
+- [backend/app/mcp/tools.py:44-310](file://backend/app/mcp/tools.py#L44-L310)
+
+**章节来源**
+- [backend/app/mcp/tools.py:44-310](file://backend/app/mcp/tools.py#L44-L310)
+
 ### AI服务组件
 
 千问AI服务封装了阿里云千问大模型的调用逻辑，提供了多种对话模式：
@@ -289,6 +360,7 @@ StreamAPI-->>Client : data : {"done" : true, "conversation_id" : ...}
 - `query_schedule`: 查询课表
 - `query_exam_schedule`: 查询考试安排
 - `query_academic_progress`: 查询学业进度
+- `query_training_plan`: 查询培养方案
 - `refresh_all_data`: 刷新所有数据
 
 #### 对话模式
@@ -500,6 +572,62 @@ Save --> End[连接关闭]
 - [backend/app/api/chat.py:283-285](file://backend/app/api/chat.py#L283-L285)
 - [frontend/src/app/chat/page.tsx:186-195](file://frontend/src/app/chat/page.tsx#L186-L195)
 
+## MCP工具集成
+
+### MCP架构设计
+
+系统集成了MCP（Model Context Protocol）工具，支持AI Agent工具调用：
+
+#### MCP协议特点
+- 标准化的工具定义格式
+- 类型安全的参数传递
+- 结构化的返回值
+- 版本兼容性管理
+
+#### 工具注册和发现
+- 自动注册所有MCP工具
+- 提供工具Schema查询
+- 支持工具列表获取
+- 动态工具发现机制
+
+### 工具执行流程
+
+#### 工具调用序列
+1. AI Agent请求特定工具
+2. MCP服务验证用户会话
+3. 检查工具可用性和参数
+4. 调用对应的爬虫功能
+5. 格式化结果并返回
+
+#### 工具类型定义
+- 成绩查询工具
+- 课表查询工具
+- 学业进度工具
+- 培养方案工具
+- 考试安排工具
+- 个人信息工具
+
+```mermaid
+sequenceDiagram
+participant Agent as AI Agent
+participant MCP as MCP服务
+participant Tools as 工具集合
+participant Scraper as 爬虫服务
+Agent->>MCP : 调用工具请求
+MCP->>MCP : 验证用户会话
+MCP->>Tools : 查找对应工具
+Tools->>Scraper : 执行具体查询
+Scraper-->>Tools : 返回原始数据
+Tools-->>MCP : 格式化结果
+MCP-->>Agent : 返回工具执行结果
+```
+
+**图表来源**
+- [backend/app/mcp/tools.py:44-310](file://backend/app/mcp/tools.py#L44-L310)
+
+**章节来源**
+- [backend/app/mcp/tools.py:44-310](file://backend/app/mcp/tools.py#L44-L310)
+
 ## 用户认证和授权机制
 
 ### 登录流程
@@ -642,11 +770,13 @@ SQLAlchemy[SQLAlchemy 2.0.36]
 Requests[Requests 2.32.3]
 BeautifulSoup[BeautifulSoup4 4.12.3]
 AIOHTTP[AIOHTTP 3.11.11]
+MCP[MCP协议 1.0]
 end
 subgraph "内部模块"
 ChatAPI[聊天API]
 StreamAPI[流式API]
 AuthAPI[认证API]
+MCPAPI[MCP API]
 QwenService[千问服务]
 VectorStore[向量存储]
 DataProcessor[数据处理器]
@@ -661,6 +791,7 @@ ChatAPI --> Models
 StreamAPI --> QwenService
 StreamAPI --> Models
 AuthAPI --> Models
+MCPAPI --> Scraper
 QwenService --> DashScope
 VectorStore --> Milvus
 DataProcessor --> SQLAlchemy
@@ -710,6 +841,12 @@ Models --> SQLAlchemy
 - 连接复用：SSE连接复用
 - 内存管理：及时释放流式数据
 - 错误恢复：自动重连机制
+
+### 7. MCP工具性能优化
+- 工具缓存：避免重复初始化
+- 参数验证：提前验证工具参数
+- 错误隔离：单个工具失败不影响整体
+- 资源管理：合理管理爬虫会话
 
 ## 故障排除指南
 
@@ -763,6 +900,14 @@ Models --> SQLAlchemy
 - 确认服务器SSE配置正确
 - 检查防火墙和代理设置
 
+### 8. MCP工具调用失败
+**症状**：AI Agent无法调用MCP工具
+**解决方案**：
+- 检查MCP服务状态
+- 验证用户会话有效性
+- 确认工具定义正确
+- 检查爬虫服务可用性
+
 **章节来源**
 - [backend/app/services/qwen_service.py:23-28](file://backend/app/services/qwen_service.py#L23-L28)
 - [backend/app/services/vector_store.py:25-37](file://backend/app/services/vector_store.py#L25-L37)
@@ -778,6 +923,10 @@ Models --> SQLAlchemy
 - **完整的认证体系**：用户登录、会话管理和权限控制
 - **数据完整性保障**：级联删除和事务管理
 - **Server-Sent Events流式聊天**：支持实时增量响应
+- **MCP工具集成**：支持AI Agent工具调用
+- **自动工具检测**：AI模型自动判断何时调用工具
+- **学术数据注入**：将真实教务数据注入到对话中
+- **对话ID跟踪**：完整的对话状态管理
 - **完整的开发环境**：Docker容器化部署
 
 ### 应用价值
@@ -786,6 +935,8 @@ Models --> SQLAlchemy
 - 提供了可扩展的架构模式
 - 确保了用户数据的安全性和完整性
 - 提升了用户体验和交互效率
+- 支持AI Agent自动化工作流
+- 实现了真正的智能问答系统
 
 ### 未来发展方向
 - 支持更多AI模型
@@ -795,5 +946,8 @@ Models --> SQLAlchemy
 - 增强安全性和合规性
 - 支持WebSocket双向通信
 - 增加语音和图像识别功能
+- 集成更多第三方服务
+- 支持多模态输入输出
+- 实现个性化推荐功能
 
-这个项目为构建智能教育应用提供了完整的参考实现，展示了如何将传统教务系统与现代AI技术有机结合，同时确保了系统的安全性、可靠性和可维护性。新增的Server-Sent Events流式聊天功能显著提升了用户体验，使AI助手能够提供更加自然和流畅的对话体验。
+这个项目为构建智能教育应用提供了完整的参考实现，展示了如何将传统教务系统与现代AI技术有机结合，同时确保了系统的安全性、可靠性和可维护性。新增的Server-Sent Events流式聊天功能、MCP工具集成、自动工具检测和学术数据注入等功能显著提升了用户体验和系统智能化水平，使AI助手能够提供更加自然、流畅和准确的对话体验。

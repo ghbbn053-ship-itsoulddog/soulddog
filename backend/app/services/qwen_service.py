@@ -403,8 +403,16 @@ class QwenService:
                     kksj=args.get("semester", "")
                 )
                 if result.get("success"):
+                    grade_list = result.get("data", [])
+                    # 按学期分组
+                    grades_by_sem = {}
+                    for g in grade_list:
+                        sem = g.get("开课学期", "未知学期")
+                        if sem not in grades_by_sem:
+                            grades_by_sem[sem] = []
+                        grades_by_sem[sem].append(g)
                     return {
-                        "成绩列表": result.get("data", []),
+                        "成绩（按学期）": grades_by_sem,
                         "总数": result.get("count", 0),
                         "统计": result.get("stats", {})
                     }
@@ -416,6 +424,7 @@ class QwenService:
                 )
                 if result.get("success"):
                     return {
+                        "学期": result.get("semester", ""),
                         "课表": result.get("data", []),
                         "总数": result.get("count", 0)
                     }
@@ -427,6 +436,7 @@ class QwenService:
                 )
                 if result.get("success"):
                     return {
+                        "学期": result.get("semester", ""),
                         "考试安排": result.get("data", []),
                         "总数": result.get("count", 0)
                     }
