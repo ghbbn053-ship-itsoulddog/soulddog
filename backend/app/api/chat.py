@@ -45,6 +45,17 @@ class ConversationResponse(BaseModel):
     created_at: str
 
 
+def _enforce_username_isolation(http_request: Request, username: str):
+    """
+    基于登录阶段写入的 session_username cookie 做最小隔离：
+    - 有 cookie 时，必须与请求学号一致
+    - 无 cookie 时，保持兼容（允许）
+    """
+    cookie_username = http_request.cookies.get("session_username")
+    if cookie_username and cookie_username != username:
+        raise HTTPException(status_code=403, detail="学号与登录会话不一致")
+
+
 # ============ API 接口 ============
 
 @router.post("/send", response_model=ChatResponse)
@@ -58,6 +69,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
     3. 直接对话 — 无数据时纯 AI 对话
     """
     try:
+        _enforce_username_isolation(http_request, request.username)
         qwen_svc = get_qwen_service()
         vec_store = get_vector_store()
 
@@ -183,9 +195,10 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
 
 
 @router.get("/conversations/{username}", response_model=List[ConversationResponse])
-async def get_conversations(username: str, db: Session = Depends(get_db)):
+async def get_conversations(username: str, http_request: Request, db: Session = Depends(get_db)):
     """获取用户的所有对话"""
     try:
+        _enforce_username_isolation(http_request, username)
         user = db.query(User).filter(User.username == username).first()
         if not user:
             return []
@@ -202,17 +215,34 @@ async def get_conversations(username: str, db: Session = Depends(get_db)):
             )
             for c in conversations
         ]
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"获取对话列表失败: {str(e)}")
         raise HTTPException(status_code=500, detail="获取对话列表失败")
 
 
 @router.get("/history/{conversation_id}")
-async def get_chat_history(conversation_id: int, db: Session = Depends(get_db)):
-    """获取对话历史"""
+async def get_chat_history(conversation_id: int, username: str = None, http_request: Request = None, db: Session = Depends(get_db)):
+    """获取对话历史（按学号严格隔离）"""
     try:
+        if not username:
+            raise HTTPException(status_code=400, detail="缺少用户名参数")
+        _enforce_username_isolation(http_request, username)
+
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+
+        conversation = db.query(Conversation).filter(
+            Conversation.id == conversation_id,
+            Conversation.user_id == user.id
+        ).first()
+        if not conversation:
+            raise HTTPException(status_code=404, detail="对话不存在")
+
         messages = db.query(Message).filter(
-            Message.conversation_id == conversation_id
+            Message.conversation_id == conversation.id
         ).order_by(Message.created_at.asc()).all()
         
         return {
@@ -228,18 +258,21 @@ async def get_chat_history(conversation_id: int, db: Session = Depends(get_db)):
                 for m in messages
             ]
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"获取历史失败: {str(e)}")
         raise HTTPException(status_code=500, detail="获取历史失败")
 
 
 @router.delete("/conversations/{conversation_id}")
-async def delete_conversation(conversation_id: int, username: str = None, db: Session = Depends(get_db)):
+async def delete_conversation(conversation_id: int, username: str = None, http_request: Request = None, db: Session = Depends(get_db)):
     """删除对话及其所有消息"""
     try:
         # 1. 查找用户
         if not username:
             raise HTTPException(status_code=400, detail="缺少用户名参数")
+        _enforce_username_isolation(http_request, username)
         
         user = db.query(User).filter(User.username == username).first()
         if not user:
@@ -279,6 +312,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
     支持工具调用 + RAG + 纯流式对话
     """
     try:
+        _enforce_username_isolation(http_request, request.username)
         qwen_svc = get_qwen_service()
         
         if not qwen_svc.available:

@@ -13,6 +13,52 @@ logger = logging.getLogger(__name__)
 class DataProcessor:
     """教务数据处理器：负责 PostgreSQL 存储 + Milvus 向量化"""
 
+    def _normalize_grades(self, raw_data: Dict) -> Tuple[List[Dict], Dict]:
+        """统一成绩结构，兼容 `成绩列表` 与 `按学期` 两种格式。"""
+        grades_info = raw_data.get("成绩信息", {})
+        grade_list: List[Dict] = []
+        grade_stats: Dict = {}
+
+        if isinstance(grades_info, dict):
+            raw_stats = grades_info.get("统计信息", {})
+            if isinstance(raw_stats, dict):
+                grade_stats = raw_stats
+
+            if isinstance(grades_info.get("成绩列表"), list):
+                grade_list = grades_info.get("成绩列表", [])
+            elif isinstance(grades_info.get("按学期"), dict):
+                by_semester = grades_info.get("按学期", {})
+                for _, courses in by_semester.items():
+                    if isinstance(courses, list):
+                        grade_list.extend(courses)
+        elif isinstance(grades_info, list):
+            # 兼容早期结构：成绩信息直接就是列表
+            grade_list = grades_info
+
+        return grade_list, grade_stats
+
+    def _normalize_schedule(self, raw_data: Dict) -> List[Dict]:
+        """统一课表结构，兼容 `课表信息.课程列表` 与列表结构。"""
+        schedule_info = raw_data.get("课表信息", [])
+
+        if isinstance(schedule_info, dict):
+            courses = schedule_info.get("课程列表", [])
+            return courses if isinstance(courses, list) else []
+        if isinstance(schedule_info, list):
+            return schedule_info
+        return []
+
+    def _normalize_exam_schedule(self, raw_data: Dict) -> List[Dict]:
+        """统一考试安排结构，兼容 `考试安排.考试列表` 与列表结构。"""
+        exam_info = raw_data.get("考试安排", [])
+
+        if isinstance(exam_info, dict):
+            exams = exam_info.get("考试列表", [])
+            return exams if isinstance(exams, list) else []
+        if isinstance(exam_info, list):
+            return exam_info
+        return []
+
     def process_and_store(self, username: str, raw_data: Dict, db) -> bool:
         """
         将爬取的原始数据存入 PostgreSQL EducationData 表
@@ -62,28 +108,30 @@ class DataProcessor:
                 EducationData.user_id == user.id
             ).first()
 
-            grades_info = raw_data.get("成绩信息", {})
+            grade_list, grade_stats = self._normalize_grades(raw_data)
+            schedule_list = self._normalize_schedule(raw_data)
+            exam_list = self._normalize_exam_schedule(raw_data)
 
             if not edu_data:
                 edu_data = EducationData(
                     user_id=user.id,
                     personal_info=raw_data.get("个人信息", {}),
-                    grades=grades_info.get("成绩列表", []),
-                    grade_stats=grades_info.get("统计信息", {}),
-                    schedule=raw_data.get("课表信息", []),
+                    grades=grade_list,
+                    grade_stats=grade_stats,
+                    schedule=schedule_list,
                     training_plan=raw_data.get("培养方案", {}),
                     academic_progress=raw_data.get("学业进度", {}),
-                    exam_schedule=raw_data.get("考试安排", []),
+                    exam_schedule=exam_list,
                 )
                 db.add(edu_data)
             else:
                 edu_data.personal_info = raw_data.get("个人信息", {})
-                edu_data.grades = grades_info.get("成绩列表", [])
-                edu_data.grade_stats = grades_info.get("统计信息", {})
-                edu_data.schedule = raw_data.get("课表信息", [])
+                edu_data.grades = grade_list
+                edu_data.grade_stats = grade_stats
+                edu_data.schedule = schedule_list
                 edu_data.training_plan = raw_data.get("培养方案", {})
                 edu_data.academic_progress = raw_data.get("学业进度", {})
-                edu_data.exam_schedule = raw_data.get("考试安排", [])
+                edu_data.exam_schedule = exam_list
 
             db.commit()
             logger.info(f"【数据处理】用户 {username} 教务数据已保存到 PostgreSQL")
@@ -208,8 +256,7 @@ class DataProcessor:
             })
 
         # === 2. 成绩 — 每门课 1 chunk ===
-        grades_info = raw_data.get("成绩信息", {})
-        grades_list = grades_info.get("成绩列表", [])
+        grades_list, stats = self._normalize_grades(raw_data)
         for grade in grades_list:
             name = grade.get("课程名称", "")
             if not name:
@@ -230,7 +277,6 @@ class DataProcessor:
             })
 
         # 成绩统计
-        stats = grades_info.get("统计信息", {})
         if stats:
             # 构建清晰的成绩统计文本
             lines = ["成绩统计信息："]
@@ -260,8 +306,8 @@ class DataProcessor:
             })
 
         # === 3. 课表 — 按天分组 ===
-        schedule = raw_data.get("课表信息", [])
-        if isinstance(schedule, list) and schedule:
+        schedule = self._normalize_schedule(raw_data)
+        if schedule:
             # 按星期分组
             day_courses = {}
             for course in schedule:
@@ -382,23 +428,22 @@ class DataProcessor:
             })
 
         # === 6. 考试安排 — 每门考试 1 chunk ===
-        exams = raw_data.get("考试安排", [])
-        if isinstance(exams, list):
-            for exam in exams:
-                name = exam.get("课程名称", exam.get("course_name", ""))
-                if not name:
-                    continue
-                text = (
-                    f"考试安排：{name}，"
-                    f"时间{exam.get('考试时间', exam.get('exam_time', ''))}，"
-                    f"地点{exam.get('考试地点', exam.get('location', ''))}，"
-                    f"座位号{exam.get('座位号', exam.get('seat', ''))}"
-                )
-                chunks.append({
-                    "text": text,
-                    "source": "考试安排",
-                    "metadata": {"type": "exam", "course": name},
-                })
+        exams = self._normalize_exam_schedule(raw_data)
+        for exam in exams:
+            name = exam.get("课程名称", exam.get("course_name", ""))
+            if not name:
+                continue
+            text = (
+                f"考试安排：{name}，"
+                f"时间{exam.get('考试时间', exam.get('exam_time', ''))}，"
+                f"地点{exam.get('考试地点', exam.get('location', ''))}，"
+                f"座位号{exam.get('座位号', exam.get('seat', ''))}"
+            )
+            chunks.append({
+                "text": text,
+                "source": "考试安排",
+                "metadata": {"type": "exam", "course": name},
+            })
 
         logger.info(f"【分块】共生成 {len(chunks)} 个数据块")
         return chunks

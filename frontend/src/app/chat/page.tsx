@@ -51,6 +51,7 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const API_BASE = "";  // 使用相对路径，通过 Nginx 反向代理
+  const getConversationStorageKey = (uname: string) => `current_conversation_id_${uname}`;
 
   // 滚动到底部
   const scrollToBottom = () => {
@@ -76,21 +77,34 @@ export default function ChatPage() {
   };
 
   // 获取对话历史
-  const fetchHistory = async (conversationId: number) => {
+  const fetchHistory = async (conversationId: number, uname: string = username) => {
+    if (!uname) return;
     try {
-      const res = await fetch(`${API_BASE}/api/chat/history/${conversationId}`);
+      const res = await fetch(
+        `${API_BASE}/api/chat/history/${conversationId}?username=${encodeURIComponent(uname)}`
+      );
       if (res.ok) {
         const data = await res.json();
-        setMessages(data.messages.map((m: any) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          sources: m.meta?.sources || [],
-          timestamp: new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-        })));
+        if (data?.messages) {
+          setMessages(data.messages.map((m: any) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            sources: m.meta?.sources || [],
+            timestamp: new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+          })));
+          return;
+        }
       }
+      // 非200或数据异常时，清理无效会话
+      setCurrentConversationId(null);
+      localStorage.removeItem(getConversationStorageKey(uname));
+      setMessages([]);
     } catch (error) {
       console.error("获取历史失败:", error);
+      setCurrentConversationId(null);
+      localStorage.removeItem(getConversationStorageKey(uname));
+      setMessages([]);
     }
   };
 
@@ -135,19 +149,27 @@ export default function ChatPage() {
       const decoder = new TextDecoder();
       let aiContent = "";
       let conversationId = currentConversationId;
+      let sseBuffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const text = decoder.decode(value, { stream: true });
-        const lines = text.split('\n');
+        sseBuffer += decoder.decode(value, { stream: true });
+        const events = sseBuffer.split("\n\n");
+        sseBuffer = events.pop() || "";
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
+        for (const event of events) {
+          const dataLines = event
+            .split("\n")
+            .filter((line) => line.startsWith("data: "))
+            .map((line) => line.slice(6).trim());
+
+          for (const dataLine of dataLines) {
+            if (!dataLine) continue;
             try {
-              const data = JSON.parse(line.slice(6));
-              
+              const data = JSON.parse(dataLine);
+
               if (data.done) {
                 // 流式完成
                 if (data.conversation_id) {
@@ -165,13 +187,13 @@ export default function ChatPage() {
                     return next;
                   });
                 }
-                break;
+                continue;
               }
-              
+
               if (data.conversation_id && !conversationId) {
                 conversationId = data.conversation_id;
               }
-              
+
               if (data.content) {
                 aiContent += data.content;
                 // 使用函数式更新，精确更新目标消息，避免整列表重新渲染
@@ -186,9 +208,31 @@ export default function ChatPage() {
                 });
               }
             } catch (e) {
-              // 忽略解析错误
+              // 允许分片未完整时的解析失败，等待后续分片拼接
             }
           }
+        }
+      }
+
+      // 如果网络切分导致最后一个事件没被 \n\n 结束，这里兜底处理一次
+      if (sseBuffer.trim().startsWith("data: ")) {
+        try {
+          const data = JSON.parse(sseBuffer.trim().slice(6).trim());
+          if (data.content) {
+            aiContent += data.content;
+            setMessages(prev => {
+              const idx = prev.findIndex(msg => msg.id === assistantMsgId);
+              if (idx === -1) return prev;
+              const next = [...prev];
+              next[idx] = { ...next[idx], content: aiContent };
+              return next;
+            });
+          }
+          if (data.conversation_id && !conversationId) {
+            setCurrentConversationId(data.conversation_id);
+          }
+        } catch {
+          // ignore
         }
       }
     } catch (error) {
@@ -217,7 +261,9 @@ export default function ChatPage() {
   const newConversation = () => {
     setCurrentConversationId(null);
     setMessages([]);
-    localStorage.removeItem("current_conversation_id");
+    if (username) {
+      localStorage.removeItem(getConversationStorageKey(username));
+    }
     setSidebarOpen(false);
   };
 
@@ -251,14 +297,22 @@ export default function ChatPage() {
     }
     setUsername(savedUsername);
 
+    // 兼容旧key，迁移到按学号存储的key
+    const migratedKey = getConversationStorageKey(savedUsername);
+    const oldConversationId = localStorage.getItem("current_conversation_id");
+    if (oldConversationId && !localStorage.getItem(migratedKey)) {
+      localStorage.setItem(migratedKey, oldConversationId);
+      localStorage.removeItem("current_conversation_id");
+    }
+
     // 恢复当前会话ID并加载历史（不再用setTimeout）
-    const savedConversationId = localStorage.getItem("current_conversation_id");
+    const savedConversationId = localStorage.getItem(migratedKey);
     if (savedConversationId) {
       const convId = parseInt(savedConversationId);
       if (!isNaN(convId)) {
         setCurrentConversationId(convId);
         // 直接异步加载历史，无需setTimeout
-        fetch(`${API_BASE}/api/chat/history/${convId}`)
+        fetch(`${API_BASE}/api/chat/history/${convId}?username=${encodeURIComponent(savedUsername)}`)
           .then(res => res.ok ? res.json() : null)
           .then(data => {
             if (data?.messages) {
@@ -290,16 +344,22 @@ export default function ChatPage() {
   
   // 当 currentConversationId 变化时，保存到 localStorage
   useEffect(() => {
+    if (!username) return;
+    const key = getConversationStorageKey(username);
     if (currentConversationId !== null) {
-      localStorage.setItem("current_conversation_id", currentConversationId.toString());
+      localStorage.setItem(key, currentConversationId.toString());
     } else {
-      localStorage.removeItem("current_conversation_id");
+      localStorage.removeItem(key);
     }
-  }, [currentConversationId]);
+  }, [currentConversationId, username]);
 
   // 退出登录
   const handleLogout = () => {
     localStorage.removeItem("username");
+    if (username) {
+      localStorage.removeItem(getConversationStorageKey(username));
+    }
+    // 清理旧key
     localStorage.removeItem("current_conversation_id");
     // 清除cookie
     document.cookie = 'session_username=; path=/; max-age=0';

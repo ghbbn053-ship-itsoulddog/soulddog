@@ -84,6 +84,9 @@ class VectorStore:
         try:
             if not self.collection:
                 self.create_collection(dim=len(embeddings[0]))
+            if not self.collection:
+                logger.warning("⚠️ Collection 初始化失败，跳过添加文档")
+                return []
             
             # 确保 Collection 已加载
             self.collection.load()

@@ -304,7 +304,12 @@ class JwxtScraper:
                 # 方法2：查找包含成绩表头的表格
                 headers = table.find_all('th')
                 for th in headers:
-                    if '课程名称' in th.get_text() or '成绩' in th.get_text():
+                    header_text = th.get_text()
+                    if (
+                        '课程名称' in header_text
+                        or ('成绩' in header_text and '学分' in table.get_text())
+                        or ('开课学期' in table.get_text() and '课程编号' in table.get_text())
+                    ):
                         grade_table = table
                         logger.info(f"【成绩调试】通过表头找到表格")
                         break
@@ -336,26 +341,34 @@ class JwxtScraper:
                 cells = row.find_all('td')
                 logger.info(f"【成绩调试】第{row_idx}行有 {len(cells)} 个单元格")
                 
-                if cells and len(cells) >= 10:
+                if cells and len(cells) >= 9:
                     try:
+                        # 兼容列偏移：有些页面会多一列“实验成绩”，有些不会
+                        # 基准：序号,开课学期,课程编号,课程名称,平时,实验?,期末,成绩,学分,总学时...
+                        has_experiment_col = len(cells) >= 17
+                        final_col_idx = 6 if has_experiment_col else 5
+                        score_col_idx = 7 if has_experiment_col else 6
+                        credit_col_idx = 8 if has_experiment_col else 7
+                        hours_col_idx = 9 if has_experiment_col else 8
+
                         grade_data = {
                             "序号": cells[0].get_text(strip=True),
                             "开课学期": cells[1].get_text(strip=True),
                             "课程编号": cells[2].get_text(strip=True),
                             "课程名称": cells[3].get_text(strip=True),
                             "平时成绩": cells[4].get_text(strip=True),
-                            "实验成绩": cells[5].get_text(strip=True),
-                            "期末成绩": cells[6].get_text(strip=True),
-                            "成绩": cells[7].get_text(strip=True),
-                            "学分": cells[8].get_text(strip=True),
-                            "总学时": cells[9].get_text(strip=True),
-                            "考核方式": cells[10].get_text(strip=True) if len(cells) > 10 else "",
-                            "课程属性": cells[11].get_text(strip=True) if len(cells) > 11 else "",
-                            "课程性质": cells[12].get_text(strip=True) if len(cells) > 12 else "",
-                            "通选课分类": cells[13].get_text(strip=True) if len(cells) > 13 else "",
-                            "考试性质": cells[14].get_text(strip=True) if len(cells) > 14 else "",
-                            "成绩标识": cells[15].get_text(strip=True) if len(cells) > 15 else "",
-                            "备注": cells[16].get_text(strip=True) if len(cells) > 16 else ""
+                            "实验成绩": cells[5].get_text(strip=True) if has_experiment_col else "",
+                            "期末成绩": cells[final_col_idx].get_text(strip=True) if len(cells) > final_col_idx else "",
+                            "成绩": cells[score_col_idx].get_text(strip=True) if len(cells) > score_col_idx else "",
+                            "学分": cells[credit_col_idx].get_text(strip=True) if len(cells) > credit_col_idx else "",
+                            "总学时": cells[hours_col_idx].get_text(strip=True) if len(cells) > hours_col_idx else "",
+                            "考核方式": cells[hours_col_idx + 1].get_text(strip=True) if len(cells) > hours_col_idx + 1 else "",
+                            "课程属性": cells[hours_col_idx + 2].get_text(strip=True) if len(cells) > hours_col_idx + 2 else "",
+                            "课程性质": cells[hours_col_idx + 3].get_text(strip=True) if len(cells) > hours_col_idx + 3 else "",
+                            "通选课分类": cells[hours_col_idx + 4].get_text(strip=True) if len(cells) > hours_col_idx + 4 else "",
+                            "考试性质": cells[hours_col_idx + 5].get_text(strip=True) if len(cells) > hours_col_idx + 5 else "",
+                            "成绩标识": cells[hours_col_idx + 6].get_text(strip=True) if len(cells) > hours_col_idx + 6 else "",
+                            "备注": cells[hours_col_idx + 7].get_text(strip=True) if len(cells) > hours_col_idx + 7 else ""
                         }
                         grades.append(grade_data)
                         logger.info(f"【成绩调试】成功解析第{row_idx}行: {grade_data.get('课程名称', '未知')}")
@@ -363,7 +376,7 @@ class JwxtScraper:
                         logger.warning(f"【成绩调试】第{row_idx}行解析失败: {str(e)}")
                         continue
                 else:
-                    logger.info(f"【成绩调试】第{row_idx}行单元格不足10个({len(cells)}个)，跳过")
+                    logger.info(f"【成绩调试】第{row_idx}行单元格不足9个({len(cells)}个)，跳过")
 
             # 提取统计信息（传入grades用于计算）
             stats = self._extract_grade_stats(soup, grades)
