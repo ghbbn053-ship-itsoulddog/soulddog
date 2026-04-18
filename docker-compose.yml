@@ -102,7 +102,7 @@ services:
     depends_on:
       - backend
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=/api
       - WATCHPACK_POLLING=true  # 支持文件监听
     # 开发模式：挂载代码目录，改代码后自动刷新
     volumes:

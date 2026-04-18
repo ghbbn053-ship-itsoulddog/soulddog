@@ -51,8 +51,8 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeHistoryReqRef = useRef(0);
 
-  // 优先使用显式后端地址，避免 Next dev 代理对 SSE 造成缓冲
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  // 默认走同域 /api 反向代理，避免不同访问入口下的地址不一致问题
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const getConversationStorageKey = (uname: string) => `current_conversation_id_${uname}`;
 
   // 滚动到底部
