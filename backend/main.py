@@ -12,6 +12,7 @@ from typing import Optional
 import random
 import logging
 import time
+from app.services.session_store import SessionStore
 
 # 导入爬虫模块
 from scraper import JwxtScraper
@@ -88,15 +89,9 @@ SERVERS = [
     "http://172.19.13.109:80/jsxsd/",
 ]
 
-# Session 存储（生产环境应使用 Redis）
-# 结构: {username: {"session": requests.Session, "server_url": str}}
-SESSIONS = {}
-
-# 数据同步状态: {username: {"status": "syncing"/"completed"/"failed", "message": str, "timestamp": float}}
-SYNC_STATUS = {}
-
-# 将 SESSIONS 挂载到 app.state，供 Chat API 等路由模块访问
-app.state.sessions = SESSIONS
+# 统一会话存储（Redis优先，内存兜底）
+session_store = SessionStore()
+app.state.session_store = session_store
 
 # 注册 Chat API 路由（如果可用）
 if CHAT_API_AVAILABLE:
@@ -181,9 +176,6 @@ async def health():
     return {"status": "ok"}
 
 
-# 验证码 session 存储
-CAPTCHA_SESSIONS = {}
-
 @app.get("/api/captcha")
 async def get_captcha(username: str = None):
     """
@@ -241,7 +233,7 @@ async def get_captcha(username: str = None):
         import time
         timestamp = time.time()
         captcha_session_id = f"captcha_{timestamp}_{server_index}"
-        CAPTCHA_SESSIONS[captcha_session_id] = session
+        session_store.set_captcha_session(captcha_session_id, session)
         logger.info(f"【验证码】生成 session: {captcha_session_id}")
 
         return {
@@ -284,15 +276,16 @@ async def login(request: Request, background_tasks: BackgroundTasks):
                 except ValueError:
                     pass
         
-        if captcha_session_id and captcha_session_id in CAPTCHA_SESSIONS:
-            session = CAPTCHA_SESSIONS[captcha_session_id]
-            # 清理已使用的验证码 session
-            del CAPTCHA_SESSIONS[captcha_session_id]
+        if captcha_session_id:
+            session = session_store.pop_captcha_session(captcha_session_id)
+        else:
+            session = None
+        if session:
             logger.info(f"【登录】使用验证码 session: {captcha_session_id}")
         else:
             # 验证码 session 不存在或已过期
             logger.warning(f"【登录】验证码 session 不存在: {captcha_session_id}")
-            logger.warning(f"【登录】当前可用 sessions: {list(CAPTCHA_SESSIONS.keys())}")
+            logger.warning(f"【登录】当前可用 sessions: {session_store.list_captcha_ids()}")
             return {
                 "success": False,
                 "message": "验证码已过期，请刷新验证码后重试"
@@ -395,11 +388,8 @@ async def login(request: Request, background_tasks: BackgroundTasks):
                 final_server_url = server_url  # 降级使用原始URL
             
             # 保存 session 和 server_url
-            SESSIONS[username] = {
-                "session": session,
-                "server_url": final_server_url
-            }
-            logger.info(f"【登录】登录成功，session 已保存，当前 session 数量: {len(SESSIONS)}")
+            session_store.set_user_session(username, session, final_server_url)
+            logger.info(f"【登录】登录成功，session 已保存，当前 session 数量: {len(session_store.list_usernames())}")
             logger.info(f"【登录】服务器 URL: {final_server_url}")
 
             # 检查是否已有数据（避免重复爬取）
@@ -422,12 +412,12 @@ async def login(request: Request, background_tasks: BackgroundTasks):
                                 logger.info(f"【登录】用户 {username} 已有 {data_count} 条数据，跳过自动爬取")
                                 needs_sync = False
                                 # 标记为已完成（实际是旧数据）
-                                SYNC_STATUS[username] = {
+                                session_store.set_sync_status(username, {
                                     "status": "completed", 
                                     "message": f"使用已有数据（{data_count}条）", 
                                     "timestamp": time.time(),
                                     "cached": True  # 标记是缓存数据
-                                }
+                                })
                         else:
                             logger.info(f"【登录】用户 {username} 不存在，将创建并爬取数据")
                     finally:
@@ -473,7 +463,7 @@ def auto_crawl_and_store(username: str, session, server_url: str):
     2. 存入 PostgreSQL
     3. 向量化存入 Milvus
     """
-    SYNC_STATUS[username] = {"status": "syncing", "message": "正在爬取教务数据...", "timestamp": time.time()}
+    session_store.set_sync_status(username, {"status": "syncing", "message": "正在爬取教务数据...", "timestamp": time.time()})
     
     try:
         logger.info(f"【自动爬取】开始为用户 {username} 爬取数据")
@@ -483,14 +473,14 @@ def auto_crawl_and_store(username: str, session, server_url: str):
         result = scraper.get_all_data_for_vectorization()
         
         if not result.get("success"):
-            SYNC_STATUS[username] = {"status": "failed", "message": "爬取数据失败", "timestamp": time.time()}
+            session_store.set_sync_status(username, {"status": "failed", "message": "爬取数据失败", "timestamp": time.time()})
             logger.error(f"【自动爬取】用户 {username} 爬取失败")
             return
         
         raw_data = result["data"]
         logger.info(f"【自动爬取】用户 {username} 数据爬取完成")
         
-        SYNC_STATUS[username] = {"status": "syncing", "message": "正在存储数据...", "timestamp": time.time()}
+        session_store.set_sync_status(username, {"status": "syncing", "message": "正在存储数据...", "timestamp": time.time()})
         
         # 2. 存入 PostgreSQL
         if DB_AVAILABLE:
@@ -506,39 +496,41 @@ def auto_crawl_and_store(username: str, session, server_url: str):
             
             # 3. 向量化存入 Milvus
             if user_id:
-                SYNC_STATUS[username] = {"status": "syncing", "message": "正在向量化数据...", "timestamp": time.time()}
+                session_store.set_sync_status(username, {"status": "syncing", "message": "正在向量化数据...", "timestamp": time.time()})
                 data_processor.vectorize_and_store(user_id, username, raw_data)
         
-        SYNC_STATUS[username] = {"status": "completed", "message": "数据同步完成", "timestamp": time.time()}
+        session_store.set_sync_status(username, {"status": "completed", "message": "数据同步完成", "timestamp": time.time()})
         logger.info(f"【自动爬取】用户 {username} 全部完成")
         
     except Exception as e:
-        SYNC_STATUS[username] = {"status": "failed", "message": f"同步失败: {str(e)}", "timestamp": time.time()}
+        session_store.set_sync_status(username, {"status": "failed", "message": f"同步失败: {str(e)}", "timestamp": time.time()})
         logger.error(f"【自动爬取】用户 {username} 异常: {e}")
 
 
 @app.get("/api/sync-status")
 async def get_sync_status(username: str):
     """查询数据同步状态"""
-    if username not in SYNC_STATUS:
+    status = session_store.get_sync_status(username)
+    if not status:
         return {"status": "none", "message": "未开始同步"}
-    return SYNC_STATUS[username]
+    return status
 
 
 @app.post("/api/sync-data")
 async def sync_education_data(username: str, background_tasks: BackgroundTasks):
     """手动触发数据同步（更新数据）"""
-    if username not in SESSIONS:
+    user_data = session_store.get_user_session(username)
+    if not user_data:
         raise HTTPException(status_code=401, detail="未登录，请先登录")
     
     # 检查是否已在同步中
-    if username in SYNC_STATUS and SYNC_STATUS[username].get("status") == "syncing":
+    sync_status = session_store.get_sync_status(username)
+    if sync_status and sync_status.get("status") == "syncing":
         return {
             "success": False,
             "message": "数据同步中，请稍后重试"
         }
     
-    user_data = SESSIONS[username]
     session = user_data["session"]
     server_url = user_data["server_url"]
     
@@ -558,11 +550,11 @@ def get_user_session(username: str):
     获取用户的 session 和 server_url
     返回: (session, server_url) 或抛出 HTTPException
     """
-    if username not in SESSIONS:
+    user_data = session_store.get_user_session(username)
+    if not user_data:
         logger.warning(f"【Session】用户 {username} 未登录")
         raise HTTPException(status_code=401, detail="未登录，请先登录")
     
-    user_data = SESSIONS[username]
     session = user_data["session"]
     server_url = user_data["server_url"]
     logger.info(f"【Session】用户 {username} - 服务器: {server_url}")
@@ -575,8 +567,8 @@ async def get_user_info(username: str):
     """
     try:
         logger.info(f"【个人信息】收到请求，用户名: {username}")
-        logger.info(f"【个人信息】当前 session 数量: {len(SESSIONS)}")
-        logger.info(f"【个人信息】当前 session keys: {list(SESSIONS.keys())}")
+        logger.info(f"【个人信息】当前 session 数量: {len(session_store.list_usernames())}")
+        logger.info(f"【个人信息】当前 session keys: {session_store.list_usernames()}")
 
         session, server_url = get_user_session(username)
         logger.info(f"【个人信息】找到用户 {username} 的 session，开始爬取...")

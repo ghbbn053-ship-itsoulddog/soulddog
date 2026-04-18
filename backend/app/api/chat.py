@@ -115,9 +115,9 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
         for msg in reversed(history_messages):
             history.append({"role": msg.role, "content": msg.content})
         
-        # 5. 构建工具上下文（从 app.state.sessions 获取用户 session）
-        sessions = getattr(http_request.app.state, 'sessions', {})
-        user_session_data = sessions.get(request.username)
+        # 5. 构建工具上下文（从 SessionStore 获取用户 session）
+        session_store = getattr(http_request.app.state, 'session_store', None)
+        user_session_data = session_store.get_user_session(request.username) if session_store else None
         
         tools_context = None
         if user_session_data:
@@ -363,8 +363,8 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
             history.append({"role": msg.role, "content": msg.content})
         
         # 5. 获取工具上下文
-        sessions = getattr(http_request.app.state, 'sessions', {})
-        user_session_data = sessions.get(request.username)
+        session_store = getattr(http_request.app.state, 'session_store', None)
+        user_session_data = session_store.get_user_session(request.username) if session_store else None
         
         tools_context = None
         if user_session_data:

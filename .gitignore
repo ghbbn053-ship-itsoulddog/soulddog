@@ -98,3 +98,8 @@ Desktop.ini
 .turbo
 
 .coze-logs
+
+# Python cache
+__pycache__/
+*.py[cod]
+

@@ -21,19 +21,19 @@ mcp = FastMCP(
 def _get_scraper(username: str):
     """
     获取爬虫实例
-    从全局SESSIONS中获取用户的session和server_url
+    从 SessionStore 中获取用户的session和server_url
     """
     # 延迟导入，避免循环依赖
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).parent.parent.parent))
     
-    from main import SESSIONS
-    
-    if username not in SESSIONS:
+    from main import session_store
+
+    user_data = session_store.get_user_session(username)
+    if not user_data:
         raise ValueError(f"用户 {username} 未登录，请先在Web端登录")
-    
-    user_data = SESSIONS[username]
+
     session = user_data["session"]
     server_url = user_data["server_url"]
     
