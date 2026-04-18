@@ -51,7 +51,7 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeHistoryReqRef = useRef(0);
 
-  const API_BASE = "";  // 使用相对路径，通过 Nginx 反向代理
+  const API_BASE = "";  // 使用相对路径，通过 Nginx/Next 反向代理
   const getConversationStorageKey = (uname: string) => `current_conversation_id_${uname}`;
 
   // 滚动到底部
@@ -104,20 +104,15 @@ export default function ChatPage() {
           return;
         }
       }
-      // 非200或数据异常时，清理无效会话
-      // 仅当当前仍是该请求时才清理，避免误清空新状态
-      if (reqId === activeHistoryReqRef.current) {
+      // 仅在会话确实不存在(404)时清理，避免临时网络/权限抖动导致界面闪空
+      if (reqId === activeHistoryReqRef.current && res.status === 404) {
         setCurrentConversationId(null);
         localStorage.removeItem(getConversationStorageKey(uname));
         setMessages([]);
       }
     } catch (error) {
       console.error("获取历史失败:", error);
-      if (reqId === activeHistoryReqRef.current) {
-        setCurrentConversationId(null);
-        localStorage.removeItem(getConversationStorageKey(uname));
-        setMessages([]);
-      }
+      // 网络异常时保留当前消息，避免“闪一下全无”
     }
   };
 
@@ -194,26 +189,6 @@ export default function ChatPage() {
             try {
               const data = JSON.parse(dataLine);
 
-              if (data.done) {
-                // 流式完成
-                if (data.conversation_id) {
-                  conversationId = data.conversation_id;
-                  setCurrentConversationId(conversationId);
-                  fetchConversations();
-                }
-                // 处理工具调用标记
-                if (data.tool_calls && data.tool_calls.length > 0) {
-                  setMessages(prev => {
-                    const idx = prev.findIndex(msg => msg.id === assistantMsgId);
-                    if (idx === -1) return prev;
-                    const next = [...prev];
-                    next[idx] = { ...next[idx], tool_calls: data.tool_calls };
-                    return next;
-                  });
-                }
-                continue;
-              }
-
               if (data.conversation_id && !conversationId) {
                 conversationId = data.conversation_id;
               }
@@ -231,6 +206,25 @@ export default function ChatPage() {
                   next[idx] = { ...next[idx], content: updatedContent };
                   return next;
                 });
+              }
+
+              if (data.done) {
+                // 流式完成（注意：某些返回会把 content + done 放在同一帧，需先处理 content 再结束）
+                if (data.conversation_id) {
+                  conversationId = data.conversation_id;
+                  setCurrentConversationId(conversationId);
+                  fetchConversations();
+                }
+                if (data.tool_calls && data.tool_calls.length > 0) {
+                  setMessages(prev => {
+                    const idx = prev.findIndex(msg => msg.id === assistantMsgId);
+                    if (idx === -1) return prev;
+                    const next = [...prev];
+                    next[idx] = { ...next[idx], tool_calls: data.tool_calls };
+                    return next;
+                  });
+                }
+                continue;
               }
             } catch (e) {
               // 允许分片未完整时的解析失败，等待后续分片拼接
@@ -359,8 +353,15 @@ export default function ChatPage() {
         fetch(`${API_BASE}/api/chat/history/${convId}?username=${encodeURIComponent(savedUsername)}`, {
           credentials: "include",
         })
-          .then(res => res.ok ? res.json() : null)
-          .then(data => {
+          .then(async (res) => {
+            if (res.ok) return res.json();
+            if (res.status === 404) {
+              localStorage.removeItem(migratedKey);
+              setCurrentConversationId(null);
+            }
+            return null;
+          })
+          .then((data) => {
             if (reqId !== activeHistoryReqRef.current) return;
             if (data?.messages) {
               setMessages(data.messages.map((m: any) => ({

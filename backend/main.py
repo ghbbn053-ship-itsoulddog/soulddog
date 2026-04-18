@@ -58,9 +58,15 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="教务系统 AI 助手 API", version="1.0.0")
 
 # 配置 CORS
+# 注意：allow_credentials=True 时不能使用 "*"，否则浏览器会拦截带凭据请求。
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 开发环境允许所有来源，生产环境需要限制
+    allow_origins=[
+        "http://localhost:5000",
+        "http://127.0.0.1:5000",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
