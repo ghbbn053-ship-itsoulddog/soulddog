@@ -167,3 +167,16 @@ class SessionStore:
             return self._redis_get_json(f"sync_status:{username}")
         return self._sync_status.get(username)
 
+
+_session_store_singleton: Optional[SessionStore] = None
+
+
+def get_session_store() -> SessionStore:
+    """
+    返回进程级 SessionStore 单例。
+    用于避免 main/mcp/chat 之间互相导入导致的循环依赖。
+    """
+    global _session_store_singleton
+    if _session_store_singleton is None:
+        _session_store_singleton = SessionStore()
+    return _session_store_singleton

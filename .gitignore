@@ -102,4 +102,5 @@ Desktop.ini
 # Python cache
 __pycache__/
 *.py[cod]
+pytest-cache-files-*/
 

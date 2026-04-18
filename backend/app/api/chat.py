@@ -15,6 +15,7 @@ import threading
 from app.models import get_db, User, Conversation, Message, EducationData
 from app.services import get_qwen_service, get_vector_store
 from app.services.education_normalizer import build_payload_from_education_data_record
+from app.security import enforce_username_isolation
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["对话"])
@@ -46,17 +47,6 @@ class ConversationResponse(BaseModel):
     created_at: str
 
 
-def _enforce_username_isolation(http_request: Request, username: str):
-    """
-    基于登录阶段写入的 session_username cookie 做最小隔离：
-    - 有 cookie 时，必须与请求学号一致
-    - 无 cookie 时，保持兼容（允许）
-    """
-    cookie_username = http_request.cookies.get("session_username")
-    if cookie_username and cookie_username != username:
-        raise HTTPException(status_code=403, detail="学号与登录会话不一致")
-
-
 # ============ API 接口 ============
 
 @router.post("/send", response_model=ChatResponse)
@@ -70,7 +60,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
     3. 直接对话 — 无数据时纯 AI 对话
     """
     try:
-        _enforce_username_isolation(http_request, request.username)
+        enforce_username_isolation(http_request, request.username)
         qwen_svc = get_qwen_service()
         vec_store = get_vector_store()
 
@@ -199,7 +189,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
 async def get_conversations(username: str, http_request: Request, db: Session = Depends(get_db)):
     """获取用户的所有对话"""
     try:
-        _enforce_username_isolation(http_request, username)
+        enforce_username_isolation(http_request, username)
         user = db.query(User).filter(User.username == username).first()
         if not user:
             return []
@@ -229,7 +219,7 @@ async def get_chat_history(conversation_id: int, username: str = None, http_requ
     try:
         if not username:
             raise HTTPException(status_code=400, detail="缺少用户名参数")
-        _enforce_username_isolation(http_request, username)
+        enforce_username_isolation(http_request, username)
 
         user = db.query(User).filter(User.username == username).first()
         if not user:
@@ -273,7 +263,7 @@ async def delete_conversation(conversation_id: int, username: str = None, http_r
         # 1. 查找用户
         if not username:
             raise HTTPException(status_code=400, detail="缺少用户名参数")
-        _enforce_username_isolation(http_request, username)
+        enforce_username_isolation(http_request, username)
         
         user = db.query(User).filter(User.username == username).first()
         if not user:
@@ -313,7 +303,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
     支持工具调用 + RAG + 纯流式对话
     """
     try:
-        _enforce_username_isolation(http_request, request.username)
+        enforce_username_isolation(http_request, request.username)
         qwen_svc = get_qwen_service()
         
         if not qwen_svc.available:

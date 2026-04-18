@@ -12,7 +12,7 @@ from typing import Optional
 import random
 import logging
 import time
-from app.services.session_store import SessionStore
+from app.services.session_store import get_session_store
 
 # 导入爬虫模块
 from scraper import JwxtScraper
@@ -96,7 +96,7 @@ SERVERS = [
 ]
 
 # 统一会话存储（Redis优先，内存兜底）
-session_store = SessionStore()
+session_store = get_session_store()
 app.state.session_store = session_store
 
 # 注册 Chat API 路由（如果可用）
