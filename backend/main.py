@@ -23,6 +23,7 @@ app.add_middleware(
         "http://127.0.0.1:5000",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://frontend:5000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -109,4 +110,3 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
-

@@ -51,7 +51,8 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeHistoryReqRef = useRef(0);
 
-  const API_BASE = "";  // 使用相对路径，通过 Nginx/Next 反向代理
+  // 优先使用显式后端地址，避免 Next dev 代理对 SSE 造成缓冲
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const getConversationStorageKey = (uname: string) => `current_conversation_id_${uname}`;
 
   // 滚动到底部
@@ -142,9 +143,14 @@ export default function ChatPage() {
       const timeoutId = setTimeout(() => controller.abort(), 60000);
       const response = await fetch(`${API_BASE}/api/chat/send-stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "text/event-stream",
+          "Cache-Control": "no-cache",
+        },
         credentials: "include",
         signal: controller.signal,
+        cache: "no-store",
         body: JSON.stringify({
           username,
           message: userMessage,

@@ -16,7 +16,8 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [syncStatus, setSyncStatus] = useState<string | null>(null); // null | syncing | completed | failed
 
-  const API_BASE = "";  // 使用相对路径，通过 Nginx 反向代理
+  // 优先直连后端，避免开发代理影响流式接口表现
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   // 获取验证码
   const fetchCaptcha = async (currentUsername?: string) => {
