@@ -17,7 +17,8 @@ export default function LoginPage() {
   const [syncStatus, setSyncStatus] = useState<string | null>(null); // null | syncing | completed | failed
 
   // 默认走同域 /api 反向代理，避免不同访问入口下的地址不一致问题
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+  const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+  const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
 
   // 获取验证码
   const fetchCaptcha = async (currentUsername?: string) => {
