@@ -9,7 +9,8 @@ def enforce_username_isolation(http_request: Request, username: str):
     """
     # 新版：服务端会话强校验
     auth_session_id = http_request.cookies.get("auth_session_id")
-    session_store = getattr(http_request.app.state, "session_store", None)
+    app_obj = http_request.scope.get("app")
+    session_store = getattr(getattr(app_obj, "state", None), "session_store", None) if app_obj else None
     if auth_session_id and session_store:
         auth_payload = session_store.get_auth_session(auth_session_id)
         if not auth_payload:
