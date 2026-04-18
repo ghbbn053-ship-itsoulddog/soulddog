@@ -150,6 +150,48 @@ export default function ChatPage() {
       { id: assistantMsgId, role: "assistant", content: "", timestamp: now, streaming: true }
     ]);
 
+    const fallbackToNonStream = async (reason?: string) => {
+      try {
+        const res = await fetch(`${API_BASE}/api/chat/send`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            username,
+            message: userMessage,
+            conversation_id: currentConversationId
+          })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const detail = err?.detail || err?.message || `请求失败(${res.status})`;
+          throw new Error(String(detail));
+        }
+        const data = await res.json();
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === assistantMsgId
+              ? { ...msg, content: data?.message || "未获取到回答", streaming: false, tool_calls: data?.tool_calls || [] }
+              : msg
+          )
+        );
+        if (data?.conversation_id) {
+          setCurrentConversationId(data.conversation_id);
+          fetchConversations();
+        }
+      } catch (e) {
+        const hint = reason ? `（${reason}）` : "";
+        const errText = e instanceof Error ? e.message : "服务暂时不可用";
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === assistantMsgId
+              ? { ...msg, content: `请求失败${hint}：${errText}`, streaming: false }
+              : msg
+          )
+        );
+      }
+    };
+
     try {
       // 发送新消息时使所有未完成的历史加载请求失效，防止覆盖当前消息列表
       activeHistoryReqRef.current++;
@@ -175,7 +217,11 @@ export default function ChatPage() {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error("请求失败");
+        const err = await response.json().catch(() => ({}));
+        if (response.status === 403) {
+          throw new Error("登录账号与会话不一致，请退出后重新登录");
+        }
+        throw new Error(err?.detail || err?.message || `请求失败(${response.status})`);
       }
 
       const reader = response.body?.getReader();
@@ -284,13 +330,7 @@ export default function ChatPage() {
 
       // 流接口返回成功但没有有效分片时，给出可见兜底信息
       if (!receivedAnyChunk) {
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === assistantMsgId
-              ? { ...msg, content: "未收到流式分片，请重试。", streaming: false }
-              : msg
-          )
-        );
+        await fallbackToNonStream("流式无分片");
       }
     } catch (error) {
       console.error("流式消息失败:", error);
@@ -298,13 +338,7 @@ export default function ChatPage() {
         clearTimeout(streamFlushTimerRef.current);
         streamFlushTimerRef.current = null;
       }
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === assistantMsgId 
-            ? { ...msg, content: "抱歉，服务暂时不可用，请稍后再试。", streaming: false }
-            : msg
-        )
-      );
+      await fallbackToNonStream(error instanceof Error ? error.message : "流式失败");
     } finally {
       if (streamFlushTimerRef.current !== null) {
         clearTimeout(streamFlushTimerRef.current);
