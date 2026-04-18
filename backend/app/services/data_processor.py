@@ -6,6 +6,7 @@ import json
 import logging
 from typing import Dict, List, Tuple
 from datetime import datetime
+from app.services.education_normalizer import normalize_education_payload
 
 logger = logging.getLogger(__name__)
 
@@ -74,10 +75,12 @@ class DataProcessor:
         from app.models import User, EducationData
 
         try:
+            normalized = normalize_education_payload(raw_data)
+
             # 1. 查找或创建用户
             user = db.query(User).filter(User.username == username).first()
             if not user:
-                personal = raw_data.get("个人信息", {})
+                personal = normalized.get("个人信息", {})
                 user = User(
                     username=username,
                     name=personal.get("name", ""),
@@ -91,7 +94,7 @@ class DataProcessor:
                 logger.info(f"【数据处理】创建用户: {username}")
             else:
                 # 更新用户基本信息
-                personal = raw_data.get("个人信息", {})
+                personal = normalized.get("个人信息", {})
                 if personal.get("name"):
                     user.name = personal["name"]
                 if personal.get("department"):
@@ -108,29 +111,30 @@ class DataProcessor:
                 EducationData.user_id == user.id
             ).first()
 
-            grade_list, grade_stats = self._normalize_grades(raw_data)
-            schedule_list = self._normalize_schedule(raw_data)
-            exam_list = self._normalize_exam_schedule(raw_data)
+            grade_list = normalized["成绩信息"]["成绩列表"]
+            grade_stats = normalized["成绩信息"]["统计信息"]
+            schedule_list = normalized["课表信息"]["课程列表"]
+            exam_list = normalized["考试安排"]["考试列表"]
 
             if not edu_data:
                 edu_data = EducationData(
                     user_id=user.id,
-                    personal_info=raw_data.get("个人信息", {}),
+                    personal_info=normalized.get("个人信息", {}),
                     grades=grade_list,
                     grade_stats=grade_stats,
                     schedule=schedule_list,
-                    training_plan=raw_data.get("培养方案", {}),
-                    academic_progress=raw_data.get("学业进度", {}),
+                    training_plan=normalized.get("培养方案", {}),
+                    academic_progress=normalized.get("学业进度", {}),
                     exam_schedule=exam_list,
                 )
                 db.add(edu_data)
             else:
-                edu_data.personal_info = raw_data.get("个人信息", {})
+                edu_data.personal_info = normalized.get("个人信息", {})
                 edu_data.grades = grade_list
                 edu_data.grade_stats = grade_stats
                 edu_data.schedule = schedule_list
-                edu_data.training_plan = raw_data.get("培养方案", {})
-                edu_data.academic_progress = raw_data.get("学业进度", {})
+                edu_data.training_plan = normalized.get("培养方案", {})
+                edu_data.academic_progress = normalized.get("学业进度", {})
                 edu_data.exam_schedule = exam_list
 
             db.commit()
@@ -239,10 +243,11 @@ class DataProcessor:
         - 学业进度 → 1 chunk
         - 每门考试 → 1 chunk
         """
+        normalized = normalize_education_payload(raw_data)
         chunks = []
 
         # === 1. 个人信息 ===
-        personal = raw_data.get("个人信息", {})
+        personal = normalized.get("个人信息", {})
         if personal and any(personal.values()):
             text = f"学生个人信息：姓名{personal.get('name', '')}，" \
                    f"学号{personal.get('student_id', username)}，" \
@@ -256,7 +261,8 @@ class DataProcessor:
             })
 
         # === 2. 成绩 — 每门课 1 chunk ===
-        grades_list, stats = self._normalize_grades(raw_data)
+        grades_list = normalized["成绩信息"]["成绩列表"]
+        stats = normalized["成绩信息"]["统计信息"]
         for grade in grades_list:
             name = grade.get("课程名称", "")
             if not name:
@@ -306,7 +312,7 @@ class DataProcessor:
             })
 
         # === 3. 课表 — 按天分组 ===
-        schedule = self._normalize_schedule(raw_data)
+        schedule = normalized["课表信息"]["课程列表"]
         if schedule:
             # 按星期分组
             day_courses = {}
@@ -335,7 +341,7 @@ class DataProcessor:
                 })
 
         # === 4. 培养方案 — 按学期分组 ===
-        plan = raw_data.get("培养方案", {})
+        plan = normalized.get("培养方案", {})
         if isinstance(plan, dict):
             plan_courses = plan.get("课程列表", [])
             if plan_courses:
@@ -382,7 +388,7 @@ class DataProcessor:
                 })
 
         # === 5. 学业进度 ===
-        progress = raw_data.get("学业进度", {})
+        progress = normalized.get("学业进度", {})
         if isinstance(progress, dict) and progress:
             # 构建更清晰的学业进度文本
             lines = ["学业进度信息："]
@@ -428,7 +434,7 @@ class DataProcessor:
             })
 
         # === 6. 考试安排 — 每门考试 1 chunk ===
-        exams = self._normalize_exam_schedule(raw_data)
+        exams = normalized["考试安排"]["考试列表"]
         for exam in exams:
             name = exam.get("课程名称", exam.get("course_name", ""))
             if not name:

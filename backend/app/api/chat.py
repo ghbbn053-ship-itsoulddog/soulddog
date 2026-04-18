@@ -14,6 +14,7 @@ import threading
 
 from app.models import get_db, User, Conversation, Message, EducationData
 from app.services import get_qwen_service, get_vector_store
+from app.services.education_normalizer import build_payload_from_education_data_record
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["对话"])
@@ -418,48 +419,33 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
         try:
             edu_data = db.query(EducationData).filter(EducationData.user_id == user.id).first()
             if edu_data:
+                normalized = build_payload_from_education_data_record(edu_data)
                 context_parts = []
-                if edu_data.personal_info:
-                    context_parts.append(f"个人信息：{json.dumps(edu_data.personal_info, ensure_ascii=False)}")
-                if edu_data.grades:
-                    # 成绩按学期分组
-                    grades_data = edu_data.grades
-                    if isinstance(grades_data, list):
-                        grades_by_sem = {}
-                        for g in grades_data:
-                            sem = g.get("开课学期", "未知学期")
-                            if sem not in grades_by_sem:
-                                grades_by_sem[sem] = []
-                            grades_by_sem[sem].append(g)
-                        grades_context = {sem: [f"{c.get('课程名称','')}({c.get('成绩','')}/{c.get('学分','')}学分)" for c in courses[:10]] for sem, courses in grades_by_sem.items()}
-                        context_parts.append(f"成绩数据（按学期）：{json.dumps(grades_context, ensure_ascii=False)}")
-                    elif isinstance(grades_data, dict) and "按学期" in grades_data:
-                        context_parts.append(f"成绩数据（按学期）：{json.dumps(grades_data['按学期'], ensure_ascii=False)}")
-                if edu_data.grade_stats:
-                    context_parts.append(f"成绩统计：{json.dumps(edu_data.grade_stats, ensure_ascii=False)}")
-                if edu_data.schedule:
-                    # 课表按学期组织
-                    schedule_data = edu_data.schedule
-                    if isinstance(schedule_data, list):
-                        schedule_by_sem = {}
-                        for c in schedule_data:
-                            sem = c.get("学期", "未知学期")
-                            if sem not in schedule_by_sem:
-                                schedule_by_sem[sem] = []
-                            schedule_by_sem[sem].append(c)
-                        context_parts.append(f"课表数据（按学期）：{json.dumps(schedule_by_sem, ensure_ascii=False)}")
-                    elif isinstance(schedule_data, dict) and "课程列表" in schedule_data:
-                        sem_label = schedule_data.get("学期", "当前学期")
-                        context_parts.append(f"课表数据 [{sem_label}]：{json.dumps(schedule_data['课程列表'], ensure_ascii=False)}")
-                if edu_data.academic_progress:
-                    context_parts.append(f"学业进度：{json.dumps(edu_data.academic_progress, ensure_ascii=False)}")
-                if edu_data.exam_schedule:
-                    exam_data = edu_data.exam_schedule
-                    if isinstance(exam_data, list):
-                        context_parts.append(f"考试安排：{json.dumps(exam_data, ensure_ascii=False)}")
-                    elif isinstance(exam_data, dict) and "考试列表" in exam_data:
-                        sem_label = exam_data.get("学期", "当前学期")
-                        context_parts.append(f"考试安排 [{sem_label}]：{json.dumps(exam_data['考试列表'], ensure_ascii=False)}")
+                if normalized["个人信息"]:
+                    context_parts.append(f"个人信息：{json.dumps(normalized['个人信息'], ensure_ascii=False)}")
+
+                grades_by_sem = normalized["成绩信息"]["按学期"]
+                if grades_by_sem:
+                    grades_context = {
+                        sem: [f"{c.get('课程名称','')}({c.get('成绩','')}/{c.get('学分','')}学分)" for c in courses[:10]]
+                        for sem, courses in grades_by_sem.items()
+                    }
+                    context_parts.append(f"成绩数据（按学期）：{json.dumps(grades_context, ensure_ascii=False)}")
+                if normalized["成绩信息"]["统计信息"]:
+                    context_parts.append(f"成绩统计：{json.dumps(normalized['成绩信息']['统计信息'], ensure_ascii=False)}")
+
+                schedule_sem = normalized["课表信息"]["学期"] or "当前学期"
+                schedule_courses = normalized["课表信息"]["课程列表"]
+                if schedule_courses:
+                    context_parts.append(f"课表数据 [{schedule_sem}]：{json.dumps(schedule_courses, ensure_ascii=False)}")
+
+                if normalized["学业进度"]:
+                    context_parts.append(f"学业进度：{json.dumps(normalized['学业进度'], ensure_ascii=False)}")
+
+                exam_sem = normalized["考试安排"]["学期"] or "当前学期"
+                exam_list = normalized["考试安排"]["考试列表"]
+                if exam_list:
+                    context_parts.append(f"考试安排 [{exam_sem}]：{json.dumps(exam_list, ensure_ascii=False)}")
                 if context_parts:
                     edu_context = "\n".join(context_parts)
         except Exception as e:

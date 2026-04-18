@@ -8,6 +8,7 @@ import os
 import logging
 from typing import List, Dict, Optional
 import json
+from app.services.education_normalizer import summarize_education_payload
 
 logger = logging.getLogger(__name__)
 
@@ -472,39 +473,13 @@ class QwenService:
                 if result.get("success"):
                     # 同时更新数据库和向量库
                     self._update_stored_data(username, result["data"])
-
-                    # 兼容最新结构：成绩信息.按学期 / 课表信息.课程列表 / 考试安排.考试列表
-                    grades_info = result["data"].get("成绩信息", {})
-                    grades_count = 0
-                    if isinstance(grades_info, dict):
-                        if isinstance(grades_info.get("成绩列表"), list):
-                            grades_count = len(grades_info.get("成绩列表", []))
-                        elif isinstance(grades_info.get("按学期"), dict):
-                            grades_count = sum(
-                                len(v) for v in grades_info.get("按学期", {}).values() if isinstance(v, list)
-                            )
-
-                    schedule_info = result["data"].get("课表信息", [])
-                    if isinstance(schedule_info, dict):
-                        schedule_count = len(schedule_info.get("课程列表", [])) if isinstance(schedule_info.get("课程列表"), list) else 0
-                    elif isinstance(schedule_info, list):
-                        schedule_count = len(schedule_info)
-                    else:
-                        schedule_count = 0
-
-                    exam_info = result["data"].get("考试安排", [])
-                    if isinstance(exam_info, dict):
-                        exam_count = len(exam_info.get("考试列表", [])) if isinstance(exam_info.get("考试列表"), list) else 0
-                    elif isinstance(exam_info, list):
-                        exam_count = len(exam_info)
-                    else:
-                        exam_count = 0
+                    counts = summarize_education_payload(result["data"])
 
                     return {"状态": "数据已刷新", "数据概览": {
                         "个人信息": bool(result["data"].get("个人信息")),
-                        "成绩数量": grades_count,
-                        "课表数量": schedule_count,
-                        "考试数量": exam_count
+                        "成绩数量": counts["成绩数量"],
+                        "课表数量": counts["课表数量"],
+                        "考试数量": counts["考试数量"],
                     }}
                 return {"error": result.get("message", "刷新失败")}
             
