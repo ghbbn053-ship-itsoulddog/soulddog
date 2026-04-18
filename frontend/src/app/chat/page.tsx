@@ -59,10 +59,10 @@ export default function ChatPage() {
   const getDirectApiBase = () => {
     const explicit = process.env.NEXT_PUBLIC_BACKEND_URL;
     if (explicit) return explicit;
-    if (typeof window !== "undefined") {
+    if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
       return `${window.location.protocol}//${window.location.hostname}:8000`;
     }
-    return "http://localhost:8000";
+    return API_BASE;
   };
   const getConversationStorageKey = (uname: string) => `current_conversation_id_${uname}`;
 
