@@ -51,6 +51,7 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeHistoryReqRef = useRef(0);
+  const streamFlushTimerRef = useRef<number | null>(null);
 
   // 默认走同域 /api 反向代理，避免不同访问入口下的地址不一致问题
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
@@ -60,6 +61,18 @@ export default function ChatPage() {
   // 滚动到底部
   const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
     messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
+  const flushAssistantContent = (assistantMsgId: number, content: string) => {
+    setMessages(prev => {
+      const idx = prev.findIndex(msg => msg.id === assistantMsgId);
+      if (idx === -1) return prev;
+      if (prev[idx].content === content) return prev;
+      const next = [...prev];
+      next[idx] = { ...next[idx], content };
+      return next;
+    });
+    requestAnimationFrame(() => scrollToBottom("auto"));
   };
 
   useEffect(() => {
@@ -204,20 +217,21 @@ export default function ChatPage() {
               if (data.content) {
                 aiContent += data.content;
                 receivedAnyChunk = true;
-                // 使用函数式更新，精确更新目标消息，避免整列表重新渲染
-                const updatedContent = aiContent;
-                setMessages(prev => {
-                  const idx = prev.findIndex(msg => msg.id === assistantMsgId);
-                  if (idx === -1) return prev;
-                  if (prev[idx].content === updatedContent) return prev;
-                  const next = [...prev];
-                  next[idx] = { ...next[idx], content: updatedContent };
-                  return next;
-                });
-                requestAnimationFrame(() => scrollToBottom("auto"));
+                // 节流刷新：降低高频分片导致的整页重绘抖动
+                if (streamFlushTimerRef.current === null) {
+                  streamFlushTimerRef.current = window.setTimeout(() => {
+                    flushAssistantContent(assistantMsgId, aiContent);
+                    streamFlushTimerRef.current = null;
+                  }, 60);
+                }
               }
 
               if (data.done) {
+                if (streamFlushTimerRef.current !== null) {
+                  clearTimeout(streamFlushTimerRef.current);
+                  streamFlushTimerRef.current = null;
+                }
+                flushAssistantContent(assistantMsgId, aiContent);
                 // 流式完成（注意：某些返回会把 content + done 放在同一帧，需先处理 content 再结束）
                 if (data.conversation_id) {
                   conversationId = data.conversation_id;
@@ -258,14 +272,7 @@ export default function ChatPage() {
           if (data.content) {
             aiContent += data.content;
             receivedAnyChunk = true;
-            setMessages(prev => {
-              const idx = prev.findIndex(msg => msg.id === assistantMsgId);
-              if (idx === -1) return prev;
-              const next = [...prev];
-              next[idx] = { ...next[idx], content: aiContent };
-              return next;
-            });
-            requestAnimationFrame(() => scrollToBottom("auto"));
+            flushAssistantContent(assistantMsgId, aiContent);
           }
           if (data.conversation_id && !conversationId) {
             setCurrentConversationId(data.conversation_id);
@@ -287,6 +294,10 @@ export default function ChatPage() {
       }
     } catch (error) {
       console.error("流式消息失败:", error);
+      if (streamFlushTimerRef.current !== null) {
+        clearTimeout(streamFlushTimerRef.current);
+        streamFlushTimerRef.current = null;
+      }
       setMessages(prev => 
         prev.map(msg => 
           msg.id === assistantMsgId 
@@ -295,6 +306,10 @@ export default function ChatPage() {
         )
       );
     } finally {
+      if (streamFlushTimerRef.current !== null) {
+        clearTimeout(streamFlushTimerRef.current);
+        streamFlushTimerRef.current = null;
+      }
       setIsLoading(false);
     }
   };
