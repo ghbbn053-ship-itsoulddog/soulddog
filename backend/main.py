@@ -4,7 +4,7 @@
 
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, JSONResponse
 import requests
 import io
 import base64
@@ -433,14 +433,24 @@ async def login(request: Request, background_tasks: BackgroundTasks):
             else:
                 sync_message = "已加载历史数据"
 
-            return {
+            resp = JSONResponse(content={
                 "success": True,
                 "message": "登录成功",
                 "username": username,
                 "session_id": session.cookies.get("JSESSIONID", ""),
                 "sync_status": "completed" if not needs_sync else "syncing",
                 "sync_message": sync_message
-            }
+            })
+            # 由后端统一写入登录学号cookie，避免前端手写cookie导致的隔离校验不稳定
+            resp.set_cookie(
+                key="session_username",
+                value=username,
+                max_age=24 * 3600,
+                path="/",
+                samesite="lax",
+                httponly=False,
+            )
+            return resp
 
         # 默认返回失败
         return {

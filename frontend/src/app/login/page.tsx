@@ -99,6 +99,7 @@ export default function LoginPage() {
       const res = await fetch(`${API_BASE}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(requestBody)
       });
 
@@ -108,9 +109,6 @@ export default function LoginPage() {
       if (data.success) {
         // 保存用户名到 localStorage
         localStorage.setItem("username", username);
-        
-        // 设置cookie（供中间件验证）
-        document.cookie = `session_username=${username}; path=/; max-age=86400; SameSite=Lax`; // 24小时过期
         
         // 检查同步状态
         const syncStatus = data.sync_status;

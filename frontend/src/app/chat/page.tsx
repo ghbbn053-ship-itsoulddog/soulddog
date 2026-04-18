@@ -67,7 +67,9 @@ export default function ChatPage() {
   const fetchConversations = async () => {
     if (!username) return;
     try {
-      const res = await fetch(`${API_BASE}/api/chat/conversations/${username}`);
+      const res = await fetch(`${API_BASE}/api/chat/conversations/${username}`, {
+        credentials: "include",
+      });
       if (res.ok) {
         const data = await res.json();
         setConversations(data);
@@ -83,7 +85,8 @@ export default function ChatPage() {
     const reqId = ++activeHistoryReqRef.current;
     try {
       const res = await fetch(
-        `${API_BASE}/api/chat/history/${conversationId}?username=${encodeURIComponent(uname)}`
+        `${API_BASE}/api/chat/history/${conversationId}?username=${encodeURIComponent(uname)}`,
+        { credentials: "include" }
       );
       // 忽略过时请求，避免覆盖最新会话或正在发送中的消息
       if (reqId !== activeHistoryReqRef.current) return;
@@ -140,15 +143,20 @@ export default function ChatPage() {
       // 发送新消息时使所有未完成的历史加载请求失效，防止覆盖当前消息列表
       activeHistoryReqRef.current++;
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
       const response = await fetch(`${API_BASE}/api/chat/send-stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        signal: controller.signal,
         body: JSON.stringify({
           username,
           message: userMessage,
           conversation_id: currentConversationId
         })
       });
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error("请求失败");
@@ -299,6 +307,7 @@ export default function ChatPage() {
 
   // 选择对话
   const selectConversation = (id: number) => {
+    if (isLoading) return;
     activeHistoryReqRef.current++;
     setCurrentConversationId(id);
     fetchHistory(id);
@@ -309,7 +318,10 @@ export default function ChatPage() {
   const deleteConversation = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await fetch(`${API_BASE}/api/chat/conversations/${id}?username=${encodeURIComponent(username || '')}`, { method: "DELETE" });
+      await fetch(
+        `${API_BASE}/api/chat/conversations/${id}?username=${encodeURIComponent(username || '')}`,
+        { method: "DELETE", credentials: "include" }
+      );
       if (currentConversationId === id) {
         newConversation();
       }
@@ -344,7 +356,9 @@ export default function ChatPage() {
         setCurrentConversationId(convId);
         // 直接异步加载历史，无需setTimeout
         const reqId = ++activeHistoryReqRef.current;
-        fetch(`${API_BASE}/api/chat/history/${convId}?username=${encodeURIComponent(savedUsername)}`)
+        fetch(`${API_BASE}/api/chat/history/${convId}?username=${encodeURIComponent(savedUsername)}`, {
+          credentials: "include",
+        })
           .then(res => res.ok ? res.json() : null)
           .then(data => {
             if (reqId !== activeHistoryReqRef.current) return;
