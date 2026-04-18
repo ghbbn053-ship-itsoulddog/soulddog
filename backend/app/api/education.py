@@ -2,19 +2,21 @@
 教务系统数据查询 API。
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from app.core.config import JWXT_BASE_URL
 from app.services.education_sync import ensure_user_session
+from app.security import enforce_username_isolation
 from scraper import JwxtScraper
 
 router = APIRouter(tags=["教务查询"])
 
 
 @router.get("/api/user/info")
-async def get_user_info(username: str):
+async def get_user_info(username: str, http_request: Request):
     """获取用户个人信息"""
     try:
+        enforce_username_isolation(http_request, username)
         session, server_url = ensure_user_session(username)
         scraper = JwxtScraper(session, server_url)
         result = scraper.get_personal_info()
@@ -28,9 +30,10 @@ async def get_user_info(username: str):
 
 
 @router.get("/api/user/card")
-async def get_user_card(username: str):
+async def get_user_card(username: str, http_request: Request):
     """获取学籍卡片详细信息"""
     try:
+        enforce_username_isolation(http_request, username)
         session, server_url = ensure_user_session(username)
         scraper = JwxtScraper(session, server_url)
         result = scraper.get_student_card()
@@ -46,6 +49,7 @@ async def get_user_card(username: str):
 @router.get("/api/grades")
 async def get_grades(
     username: str,
+    http_request: Request,
     kksj: str = "",
     kcxz: str = "",
     kcmc: str = "",
@@ -54,6 +58,7 @@ async def get_grades(
 ):
     """获取成绩列表"""
     try:
+        enforce_username_isolation(http_request, username)
         session, server_url = ensure_user_session(username)
         scraper = JwxtScraper(session, server_url)
         result = scraper.get_grades(kksj=kksj, kcxz=kcxz, kcmc=kcmc, fxkc=fxkc, xsfs=xsfs)
@@ -67,15 +72,16 @@ async def get_grades(
 
 
 @router.get("/api/grades/all")
-async def get_all_grades(username: str):
+async def get_all_grades(username: str, http_request: Request):
     """获取所有成绩（快捷接口）"""
-    return await get_grades(username=username, kksj="", kcxz="", kcmc="", fxkc="0", xsfs="all")
+    return await get_grades(username=username, http_request=http_request, kksj="", kcxz="", kcmc="", fxkc="0", xsfs="all")
 
 
 @router.get("/api/schedule")
-async def get_schedule_api(username: str, semester: str = "", week: str = ""):
+async def get_schedule_api(username: str, http_request: Request, semester: str = "", week: str = ""):
     """获取学期课表"""
     try:
+        enforce_username_isolation(http_request, username)
         session, server_url = ensure_user_session(username)
         scraper = JwxtScraper(session, server_url)
         result = scraper.get_schedule(semester=semester, week=week)
@@ -96,9 +102,10 @@ async def get_schedule_api(username: str, semester: str = "", week: str = ""):
 
 
 @router.get("/api/training-plan/my")
-async def get_my_training_plan_api(username: str):
+async def get_my_training_plan_api(username: str, http_request: Request):
     """获取我的培养方案"""
     try:
+        enforce_username_isolation(http_request, username)
         session, server_url = ensure_user_session(username)
         scraper = JwxtScraper(session, server_url)
         result = scraper.get_my_training_plan()
@@ -112,9 +119,10 @@ async def get_my_training_plan_api(username: str):
 
 
 @router.get("/api/academic-progress")
-async def get_academic_progress_api(username: str, study_type: str = "0"):
+async def get_academic_progress_api(username: str, http_request: Request, study_type: str = "0"):
     """获取学业进度"""
     try:
+        enforce_username_isolation(http_request, username)
         session, server_url = ensure_user_session(username)
         scraper = JwxtScraper(session, server_url)
         result = scraper.get_academic_progress(study_type=study_type)
@@ -128,9 +136,10 @@ async def get_academic_progress_api(username: str, study_type: str = "0"):
 
 
 @router.get("/api/exam-schedule")
-async def get_exam_schedule_api(username: str, semester: str = ""):
+async def get_exam_schedule_api(username: str, http_request: Request, semester: str = ""):
     """获取考试安排"""
     try:
+        enforce_username_isolation(http_request, username)
         session, server_url = ensure_user_session(username)
         scraper = JwxtScraper(session, server_url)
         result = scraper.get_exam_schedule(semester=semester)
@@ -179,9 +188,10 @@ async def search_course_api(course_name: str = "", course_code: str = "", depart
 
 
 @router.get("/api/course-selection")
-async def get_course_selection_api(username: str):
+async def get_course_selection_api(username: str, http_request: Request):
     """获取选课信息"""
     try:
+        enforce_username_isolation(http_request, username)
         session, server_url = ensure_user_session(username)
         scraper = JwxtScraper(session, server_url)
         result = scraper.get_course_selection_info()
@@ -195,9 +205,10 @@ async def get_course_selection_api(username: str):
 
 
 @router.get("/api/execution-plan")
-async def get_execution_plan_api(username: str):
+async def get_execution_plan_api(username: str, http_request: Request):
     """获取执行计划"""
     try:
+        enforce_username_isolation(http_request, username)
         session, server_url = ensure_user_session(username)
         scraper = JwxtScraper(session, server_url)
         result = scraper.get_execution_plan()
@@ -211,9 +222,10 @@ async def get_execution_plan_api(username: str):
 
 
 @router.get("/api/all-data")
-async def get_all_data_api(username: str):
+async def get_all_data_api(username: str, http_request: Request):
     """获取所有数据（用于向量化/RAG）"""
     try:
+        enforce_username_isolation(http_request, username)
         session, server_url = ensure_user_session(username)
         scraper = JwxtScraper(session, server_url)
         result = scraper.get_all_data_for_vectorization()
@@ -224,4 +236,3 @@ async def get_all_data_api(username: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取数据失败: {str(e)}")
-

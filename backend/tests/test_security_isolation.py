@@ -40,3 +40,17 @@ def test_isolation_blocks_when_cookie_mismatch():
         return
     raise AssertionError("Expected HTTPException for username mismatch")
 
+
+def test_isolation_blocks_when_auth_session_cookie_exists_without_store():
+    class _DummyStore:
+        def get_auth_session(self, _sid):
+            return None
+
+    req = _build_request_with_cookie("auth_session_id=test_session")
+    req.scope["app"] = type("A", (), {"state": type("S", (), {"session_store": _DummyStore()})()})()
+    try:
+        enforce_username_isolation(req, "20230001")
+    except HTTPException as exc:
+        assert exc.status_code == 401
+        return
+    raise AssertionError("Expected HTTPException for invalid auth session")

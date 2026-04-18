@@ -31,6 +31,7 @@ class SessionStore:
         self._user_sessions: Dict[str, Dict[str, Any]] = {}
         self._captcha_sessions: Dict[str, Dict[str, Any]] = {}
         self._sync_status: Dict[str, Dict[str, Any]] = {}
+        self._auth_sessions: Dict[str, Dict[str, Any]] = {}
 
         self._connect_redis()
 
@@ -166,6 +167,23 @@ class SessionStore:
         if self.redis_available:
             return self._redis_get_json(f"sync_status:{username}")
         return self._sync_status.get(username)
+
+    # ===== Auth Session =====
+    def set_auth_session(self, auth_session_id: str, username: str, user_id: Optional[int] = None, ttl: int = 24 * 3600):
+        payload = {
+            "username": username,
+            "user_id": user_id,
+            "updated_at": time.time(),
+        }
+        if self.redis_available:
+            self._redis_set_json(f"auth_session:{auth_session_id}", payload, ttl)
+        else:
+            self._auth_sessions[auth_session_id] = payload
+
+    def get_auth_session(self, auth_session_id: str) -> Optional[Dict[str, Any]]:
+        if self.redis_available:
+            return self._redis_get_json(f"auth_session:{auth_session_id}")
+        return self._auth_sessions.get(auth_session_id)
 
 
 _session_store_singleton: Optional[SessionStore] = None

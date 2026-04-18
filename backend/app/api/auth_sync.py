@@ -5,6 +5,7 @@
 import base64
 import re
 import time
+import secrets
 
 import requests
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
@@ -13,6 +14,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import SERVERS
 from app.core.runtime import DB_AVAILABLE, EducationData, User, get_db, logger, session_store
 from app.services.education_sync import auto_crawl_and_store
+from app.security import enforce_username_isolation
 
 router = APIRouter(tags=["认证与同步"])
 
@@ -135,12 +137,14 @@ async def login(request: Request, background_tasks: BackgroundTasks):
             session_store.set_user_session(username, session, final_server_url)
 
             needs_sync = True
+            user_id = None
             if DB_AVAILABLE:
                 try:
                     db = next(get_db())
                     try:
                         user = db.query(User).filter(User.username == username).first()
                         if user:
+                            user_id = user.id
                             data_count = db.query(EducationData).filter(EducationData.user_id == user.id).count()
                             if data_count > 0:
                                 needs_sync = False
@@ -164,6 +168,10 @@ async def login(request: Request, background_tasks: BackgroundTasks):
             else:
                 sync_message = "已加载历史数据"
 
+            # 服务端登录会话（强绑定 username/user_id）
+            auth_session_id = secrets.token_urlsafe(32)
+            session_store.set_auth_session(auth_session_id, username=username, user_id=user_id)
+
             resp = JSONResponse(
                 content={
                     "success": True,
@@ -182,6 +190,14 @@ async def login(request: Request, background_tasks: BackgroundTasks):
                 samesite="lax",
                 httponly=False,
             )
+            resp.set_cookie(
+                key="auth_session_id",
+                value=auth_session_id,
+                max_age=24 * 3600,
+                path="/",
+                samesite="lax",
+                httponly=True,
+            )
             return resp
 
         return {"success": False, "message": "登录失败，请重试"}
@@ -192,8 +208,9 @@ async def login(request: Request, background_tasks: BackgroundTasks):
 
 
 @router.get("/api/sync-status")
-async def get_sync_status(username: str):
+async def get_sync_status(username: str, http_request: Request):
     """查询数据同步状态。"""
+    enforce_username_isolation(http_request, username)
     status = session_store.get_sync_status(username)
     if not status:
         return {"status": "none", "message": "未开始同步"}
@@ -201,8 +218,9 @@ async def get_sync_status(username: str):
 
 
 @router.post("/api/sync-data")
-async def sync_education_data(username: str, background_tasks: BackgroundTasks):
+async def sync_education_data(username: str, background_tasks: BackgroundTasks, http_request: Request):
     """手动触发数据同步。"""
+    enforce_username_isolation(http_request, username)
     user_data = session_store.get_user_session(username)
     if not user_data:
         raise HTTPException(status_code=401, detail="未登录，请先登录")
@@ -215,4 +233,3 @@ async def sync_education_data(username: str, background_tasks: BackgroundTasks):
     server_url = user_data["server_url"]
     background_tasks.add_task(auto_crawl_and_store, username, session, server_url)
     return {"success": True, "message": "已开始同步数据，可在后台查看进度"}
-
