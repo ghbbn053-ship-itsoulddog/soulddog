@@ -30,6 +30,7 @@ interface Message {
   sources?: string[];
   tool_calls?: ToolCall[];
   timestamp?: string;
+  streaming?: boolean;
 }
 
 interface Conversation {
@@ -57,13 +58,13 @@ export default function ChatPage() {
   const getConversationStorageKey = (uname: string) => `current_conversation_id_${uname}`;
 
   // 滚动到底部
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    scrollToBottom("smooth");
+  }, [messages.length]);
 
   // 获取对话列表
   const fetchConversations = async () => {
@@ -133,7 +134,7 @@ export default function ChatPage() {
     // 合并添加用户消息和空assistant消息，避免两次setState闪烁
     setMessages(prev => [...prev, 
       { id: userMsgId, role: "user", content: userMessage, timestamp: now },
-      { id: assistantMsgId, role: "assistant", content: "", timestamp: now }
+      { id: assistantMsgId, role: "assistant", content: "", timestamp: now, streaming: true }
     ]);
 
     try {
@@ -213,6 +214,7 @@ export default function ChatPage() {
                   next[idx] = { ...next[idx], content: updatedContent };
                   return next;
                 });
+                requestAnimationFrame(() => scrollToBottom("auto"));
               }
 
               if (data.done) {
@@ -227,7 +229,15 @@ export default function ChatPage() {
                     const idx = prev.findIndex(msg => msg.id === assistantMsgId);
                     if (idx === -1) return prev;
                     const next = [...prev];
-                    next[idx] = { ...next[idx], tool_calls: data.tool_calls };
+                    next[idx] = { ...next[idx], tool_calls: data.tool_calls, streaming: false };
+                    return next;
+                  });
+                } else {
+                  setMessages(prev => {
+                    const idx = prev.findIndex(msg => msg.id === assistantMsgId);
+                    if (idx === -1) return prev;
+                    const next = [...prev];
+                    next[idx] = { ...next[idx], streaming: false };
                     return next;
                   });
                 }
@@ -255,6 +265,7 @@ export default function ChatPage() {
               next[idx] = { ...next[idx], content: aiContent };
               return next;
             });
+            requestAnimationFrame(() => scrollToBottom("auto"));
           }
           if (data.conversation_id && !conversationId) {
             setCurrentConversationId(data.conversation_id);
@@ -269,7 +280,7 @@ export default function ChatPage() {
         setMessages(prev =>
           prev.map(msg =>
             msg.id === assistantMsgId
-              ? { ...msg, content: "未收到流式分片，请重试。" }
+              ? { ...msg, content: "未收到流式分片，请重试。", streaming: false }
               : msg
           )
         );
@@ -279,7 +290,7 @@ export default function ChatPage() {
       setMessages(prev => 
         prev.map(msg => 
           msg.id === assistantMsgId 
-            ? { ...msg, content: "抱歉，服务暂时不可用，请稍后再试。" }
+            ? { ...msg, content: "抱歉，服务暂时不可用，请稍后再试。", streaming: false }
             : msg
         )
       );
@@ -595,7 +606,7 @@ export default function ChatPage() {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto py-6 px-4 space-y-6">
-              {messages.map((msg, idx) => (
+              {messages.map((msg) => (
                 <div
                   key={msg.id}
                   className={`flex gap-4 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
@@ -624,8 +635,10 @@ export default function ChatPage() {
                         : "bg-white border border-gray-200 rounded-bl-md"
                       }
                     `}>
-                      {msg.role === 'assistant' ? (
+                      {msg.role === 'assistant' && !msg.streaming ? (
                         <MarkdownMessage content={msg.content || "✨ 正在思考..."} />
+                      ) : msg.role === 'assistant' ? (
+                        <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content || "✨ 正在思考..."}</p>
                       ) : (
                         <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                       )}
