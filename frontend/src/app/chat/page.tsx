@@ -272,6 +272,11 @@ export default function ChatPage() {
                 }
               }
 
+              if (data.ping) {
+                // 后端保活帧，忽略
+                continue;
+              }
+
               if (data.done) {
                 if (streamFlushTimerRef.current !== null) {
                   clearTimeout(streamFlushTimerRef.current);
@@ -331,6 +336,13 @@ export default function ChatPage() {
       // 流接口返回成功但没有有效分片时，给出可见兜底信息
       if (!receivedAnyChunk) {
         await fallbackToNonStream("流式无分片");
+      } else {
+        // 确保任何路径都能结束 streaming 状态
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === assistantMsgId ? { ...msg, streaming: false } : msg
+          )
+        );
       }
     } catch (error) {
       console.error("流式消息失败:", error);

@@ -401,47 +401,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                 "username": request.username
             }
         
-        # 6. 尝试工具调用（非流式）获取教务数据
-        tool_result = None
-        if tools_context:
-            try:
-                tool_result = qwen_svc.chat_with_tools(messages=history, tools_context=tools_context)
-                if tool_result and tool_result.get("success") and tool_result.get("tool_calls"):
-                    # 工具调用成功，模拟流式输出结果
-                    content = tool_result["content"]
-                    tool_calls_info = tool_result.get("tool_calls", [])
-                    
-                    async def tool_stream():
-                        yield f"data: {json.dumps({'conversation_id': conversation.id, 'done': False})}\n\n"
-                        
-                        # 分块发送内容（模拟流式）
-                        chunk_size = 4
-                        for i in range(0, len(content), chunk_size):
-                            chunk = content[i:i+chunk_size]
-                            yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
-                            await asyncio.sleep(0.02)
-                        
-                        # 保存AI回复
-                        ai_msg = Message(
-                            conversation_id=conversation.id,
-                            role="assistant",
-                            content=content,
-                            message_meta={"tool_calls": tool_calls_info}
-                        )
-                        db.add(ai_msg)
-                        db.commit()
-                        
-                        yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info})}\n\n"
-                    
-                    return StreamingResponse(
-                        tool_stream(),
-                        media_type="text/event-stream",
-                        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
-                    )
-            except Exception as e:
-                logger.warning(f"工具调用失败，降级为流式: {e}")
-        
-        # 7. 构建教务数据上下文（从数据库缓存，按学期组织）
+        # 6. 构建教务数据上下文（从数据库缓存，按学期组织）
         edu_context = ""
         try:
             edu_data = db.query(EducationData).filter(EducationData.user_id == user.id).first()
@@ -478,45 +438,121 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
         except Exception as e:
             logger.warning(f"加载教务数据缓存失败: {e}")
         
-        # 8. 流式生成AI回复（使用线程桥接同步生成器，避免阻塞事件循环）
+        # 7. 流式生成AI回复（先回包，再在流内执行工具调用/模型调用）
         async def generate():
             full_content = ""
-            loop = asyncio.get_event_loop()
+            done_sent = False
+            loop = asyncio.get_running_loop()
             chunk_queue: asyncio.Queue = asyncio.Queue()
-            
-            # 在后台线程中运行同步生成器，通过Queue桥接到async
-            def sync_producer():
+            tool_calls_info = []
+
+            try:
+                yield f"data: {json.dumps({'conversation_id': conversation.id, 'done': False})}\n\n"
+
+                # 7.1 优先工具调用（在流内执行，并发送 keepalive 防止连接空闲断开）
+                if tools_context:
+                    try:
+                        tool_task = asyncio.create_task(
+                            asyncio.to_thread(qwen_svc.chat_with_tools, history, tools_context)
+                        )
+                        while not tool_task.done():
+                            yield f"data: {json.dumps({'ping': True, 'stage': 'tool_call', 'done': False})}\n\n"
+                            await asyncio.sleep(2)
+
+                        tool_result = await tool_task
+                        if tool_result and tool_result.get("success"):
+                            tool_content = tool_result.get("content", "")
+                            tool_calls_info = tool_result.get("tool_calls", [])
+
+                            if tool_content:
+                                chunk_size = 8
+                                for i in range(0, len(tool_content), chunk_size):
+                                    chunk = tool_content[i:i + chunk_size]
+                                    full_content += chunk
+                                    yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
+                                    await asyncio.sleep(0.01)
+
+                                ai_msg = Message(
+                                    conversation_id=conversation.id,
+                                    role="assistant",
+                                    content=full_content,
+                                    message_meta={"tool_calls": tool_calls_info}
+                                )
+                                db.add(ai_msg)
+                                db.commit()
+
+                                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info})}\n\n"
+                                done_sent = True
+                                return
+                    except Exception as e:
+                        logger.warning(f"工具调用失败，降级为流式: {e}")
+
+                # 7.2 工具调用不可用/失败时：走 chat_stream
+                def sync_producer():
+                    try:
+                        for chunk in qwen_svc.chat_stream(history, education_context=edu_context):
+                            loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
+                    except Exception as e:
+                        loop.call_soon_threadsafe(chunk_queue.put_nowait, f"[错误: {str(e)}]")
+                    finally:
+                        loop.call_soon_threadsafe(chunk_queue.put_nowait, None)
+
+                producer_thread = threading.Thread(target=sync_producer, daemon=True)
+                producer_thread.start()
+
+                while True:
+                    try:
+                        chunk = await asyncio.wait_for(chunk_queue.get(), timeout=10)
+                    except asyncio.TimeoutError:
+                        yield f"data: {json.dumps({'ping': True, 'stage': 'model_stream', 'done': False})}\n\n"
+                        continue
+
+                    if chunk is None:
+                        break
+                    full_content += chunk
+                    yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
+
+                if not full_content.strip():
+                    full_content = "本次未获取到有效回复，请重试。"
+                    yield f"data: {json.dumps({'content': full_content, 'done': False})}\n\n"
+
+                ai_msg = Message(
+                    conversation_id=conversation.id,
+                    role="assistant",
+                    content=full_content,
+                    message_meta={"tool_calls": tool_calls_info} if tool_calls_info else None
+                )
+                db.add(ai_msg)
+                db.commit()
+
+                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id})}\n\n"
+                done_sent = True
+            except asyncio.CancelledError:
+                logger.warning(f"流式连接被客户端中断: conversation_id={conversation.id}")
+                raise
+            except Exception as e:
+                logger.exception(f"流式生成异常: {e}")
+                error_text = f"抱歉，本次请求处理失败：{str(e)}"
                 try:
-                    for chunk in qwen_svc.chat_stream(history, education_context=edu_context):
-                        loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
-                except Exception as e:
-                    loop.call_soon_threadsafe(chunk_queue.put_nowait, f"[错误: {str(e)}]")
-                finally:
-                    loop.call_soon_threadsafe(chunk_queue.put_nowait, None)  # 哨兵值，标记结束
-            
-            producer_thread = threading.Thread(target=sync_producer, daemon=True)
-            producer_thread.start()
-            
-            yield f"data: {json.dumps({'conversation_id': conversation.id, 'done': False})}\n\n"
-            
-            # 从Queue异步读取chunk并逐个推送
-            while True:
-                chunk = await chunk_queue.get()
-                if chunk is None:  # 哨兵值，生成器结束
-                    break
-                full_content += chunk
-                yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
-            
-            # 保存AI回复
-            ai_msg = Message(
-                conversation_id=conversation.id,
-                role="assistant",
-                content=full_content
-            )
-            db.add(ai_msg)
-            db.commit()
-            
-            yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id})}\n\n"
+                    db.rollback()
+                    ai_msg = Message(
+                        conversation_id=conversation.id,
+                        role="assistant",
+                        content=full_content or error_text
+                    )
+                    db.add(ai_msg)
+                    db.commit()
+                except Exception as save_err:
+                    db.rollback()
+                    logger.error(f"流式异常后保存消息失败: {save_err}")
+
+                yield f"data: {json.dumps({'content': error_text, 'done': False})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id})}\n\n"
+                done_sent = True
+            finally:
+                if not done_sent:
+                    # 确保前端能收到结束帧，避免一直转圈
+                    yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id})}\n\n"
         
         return StreamingResponse(
             generate(),

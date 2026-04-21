@@ -42,6 +42,6 @@ export const config = {
      * - favicon.ico
      * - 登录页本身
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|login|$).*)',
+    '/((?!api|_next/static|_next/image|_next/webpack-hmr|favicon.ico|login|$).*)',
   ],
 };

@@ -5,7 +5,12 @@ const nextConfig: NextConfig = {
   // 开发模式不使用静态导出，以支持 rewrites 反向代理
   // output: 'export',
   distDir: 'dist',
-  allowedDevOrigins: ['*.dev.coze.site'],
+  allowedDevOrigins: [
+    '*.dev.coze.site',
+    'http://localhost:5000',
+    'http://127.0.0.1:5000',
+    'http://192.168.88.100:5000',
+  ],
   images: {
     remotePatterns: [
       {
