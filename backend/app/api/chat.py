@@ -338,6 +338,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
     流式发送消息给 AI（SSE）
     支持工具调用 + RAG + 纯流式对话
     """
+    conversation = None
     try:
         enforce_username_isolation(http_request, request.username)
         qwen_svc = get_qwen_service()
@@ -531,4 +532,29 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
         raise
     except Exception as e:
         logger.error(f"流式聊天失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"流式聊天失败: {str(e)}")
+        error_text = f"抱歉，本次请求处理失败：{str(e)}"
+        try:
+            if conversation is not None:
+                ai_msg = Message(
+                    conversation_id=conversation.id,
+                    role="assistant",
+                    content=error_text
+                )
+                db.add(ai_msg)
+                db.commit()
+        except Exception as save_err:
+            db.rollback()
+            logger.error(f"流式失败后写入错误消息失败: {save_err}")
+
+        async def error_stream():
+            yield f"data: {json.dumps({'content': error_text, 'done': False})}\n\n"
+            if conversation is not None:
+                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id})}\n\n"
+            else:
+                yield f"data: {json.dumps({'done': True})}\n\n"
+
+        return StreamingResponse(
+            error_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        )
