@@ -1,0 +1,52 @@
+﻿[
+    {
+        "repo":  "langchain-ai/langgraph",
+        "stars":  29858,
+        "updated_at":  "2026-04-21T13:39:15Z",
+        "language":  "Python",
+        "license":  "MIT",
+        "clone_path":  "vendor\\langchain-ai__langgraph",
+        "status":  "ok",
+        "notes":  "agent_orchestration,tooling,streaming,stateful_runtime"
+    },
+    {
+        "repo":  "microsoft/autogen",
+        "stars":  57285,
+        "updated_at":  "2026-04-21T13:37:11Z",
+        "language":  "Python",
+        "license":  "CC-BY-4.0",
+        "clone_path":  "vendor\\microsoft__autogen",
+        "status":  "ok",
+        "notes":  "general"
+    },
+    {
+        "repo":  "crewAIInc/crewAI",
+        "stars":  49411,
+        "updated_at":  "2026-04-21T13:34:30Z",
+        "language":  "Python",
+        "license":  "MIT",
+        "clone_path":  "vendor\\crewAIInc__crewAI",
+        "status":  "ok",
+        "notes":  "general"
+    },
+    {
+        "repo":  "openai/openai-agents-python",
+        "stars":  24273,
+        "updated_at":  "2026-04-21T13:38:09Z",
+        "language":  "Python",
+        "license":  "MIT",
+        "clone_path":  "vendor\\openai__openai-agents-python",
+        "status":  "ok",
+        "notes":  "general"
+    },
+    {
+        "repo":  "langchain-ai/open_deep_research",
+        "stars":  11170,
+        "updated_at":  "2026-04-21T13:44:00Z",
+        "language":  "Python",
+        "license":  "MIT",
+        "clone_path":  "vendor\\langchain-ai__open_deep_research",
+        "status":  "ok",
+        "notes":  "general"
+    }
+]

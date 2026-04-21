@@ -1,0 +1,6 @@
+# owner/repo
+langchain-ai/langgraph
+microsoft/autogen
+crewAIInc/crewAI
+openai/openai-agents-python
+langchain-ai/open_deep_research

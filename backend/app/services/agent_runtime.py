@@ -47,10 +47,10 @@ class AgentRuntimeService:
             return self._fallback_chat(username, message, session_store, fw, result.get("message", ""))
 
         if fw == "langgraph":
-            result = self._run_langgraph_placeholder(message)
+            result = self._run_langgraph(message)
             if result.get("success"):
                 return result
-            logger.warning("langgraph 未启用实现，降级统一模型层: %s", result.get("message"))
+            logger.warning("langgraph 不可用或执行失败，降级统一模型层: %s", result.get("message"))
             return self._fallback_chat(username, message, session_store, fw, result.get("message", ""))
 
         return self._fallback_chat(username, message, session_store, fw, "未知 framework")
@@ -99,11 +99,52 @@ class AgentRuntimeService:
         except Exception as e:
             return {"success": False, "message": f"openai_agents 运行失败: {e}"}
 
-    def _run_langgraph_placeholder(self, message: str) -> Dict[str, Any]:
+    def _run_langgraph(self, message: str) -> Dict[str, Any]:
         if not self._has_langgraph():
             return {"success": False, "message": "langgraph 未安装"}
-        # 占位：当前先确认依赖可用并保留接入位，不破坏现有链路。
-        return {"success": False, "message": "langgraph 运行图尚未启用，已回退统一模型层"}
+        if not os.getenv("OPENAI_API_KEY"):
+            return {"success": False, "message": "OPENAI_API_KEY 未配置（langgraph 需要模型后端）"}
+        try:
+            from langgraph.graph import START, END, StateGraph  # type: ignore
+            from langchain_openai import ChatOpenAI  # type: ignore
+            from typing import TypedDict
+
+            class GraphState(TypedDict):
+                user_input: str
+                output: str
+
+            llm = ChatOpenAI(model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"), temperature=0.2)
+
+            def solve_node(state: GraphState) -> GraphState:
+                prompt = (
+                    "你是校园AI助手，回答简洁准确。"
+                    "如果问题涉及具体教务数据，明确提示需要调用本系统教务工具。\\n\\n"
+                    f"用户问题：{state.get('user_input', '')}"
+                )
+                ai_msg = llm.invoke(prompt)
+                content = getattr(ai_msg, "content", "") or ""
+                return {"user_input": state.get("user_input", ""), "output": str(content).strip()}
+
+            g = StateGraph(GraphState)
+            g.add_node("solve", solve_node)
+            g.add_edge(START, "solve")
+            g.add_edge("solve", END)
+            app = g.compile()
+
+            result = app.invoke({"user_input": message, "output": ""})
+            content = str(result.get("output", "")).strip() or "本轮 LangGraph 未返回有效内容。"
+            return {
+                "success": True,
+                "content": content,
+                "framework": "langgraph",
+                "usage": {},
+            }
+        except RuntimeError as e:
+            if "event loop" in str(e).lower():
+                return {"success": False, "message": f"langgraph 事件循环冲突: {e}"}
+            return {"success": False, "message": f"langgraph 运行失败: {e}"}
+        except Exception as e:
+            return {"success": False, "message": f"langgraph 运行失败: {e}"}
 
     @staticmethod
     def _fallback_chat(username: str, message: str, session_store, framework: str, reason: str) -> Dict[str, Any]:
