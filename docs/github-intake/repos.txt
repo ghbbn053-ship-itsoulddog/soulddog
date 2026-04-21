@@ -1,6 +1,21 @@
-# owner/repo
-langchain-ai/langgraph
-microsoft/autogen
-crewAIInc/crewAI
+# owner/repo (autopilot generated)
 openai/openai-agents-python
-langchain-ai/open_deep_research
+langchain-ai/langchain
+neuml/txtai
+microsoft/agent-framework
+langchain-ai/langgraph
+raga-ai-hub/RagaAI-Catalyst
+pathwaycom/pathway
+deepset-ai/haystack
+darrenhinde/OpenAgentsControl
+blazickjp/arxiv-mcp-server
+yzhao062/pyod
+utensils/mcp-nixos
+GongRzhe/Office-PowerPoint-MCP-Server
+cheshire-cat-ai/core
+ModelEngine-Group/fit-framework
+PySpur-Dev/pyspur
+joenorton/comfyui-mcp-server
+BlazeUp-AI/Observal
+InfinitiBit/graphbit
+oxwhirl/pymarl

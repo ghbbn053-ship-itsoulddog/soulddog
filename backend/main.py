@@ -15,6 +15,7 @@ from app.api.options import router as options_router
 from app.api.models import router as models_router
 from app.api.skills import router as skills_router
 from app.api.agents import router as agents_router
+from app.api.intake import router as intake_router
 
 app = FastAPI(title="教务系统 AI 助手 API", version="1.0.0")
 app.state.session_store = session_store
@@ -41,6 +42,7 @@ app.include_router(options_router)
 app.include_router(models_router)
 app.include_router(skills_router)
 app.include_router(agents_router)
+app.include_router(intake_router)
 app.include_router(chat.router)
 app.include_router(mcp_router.router)
 

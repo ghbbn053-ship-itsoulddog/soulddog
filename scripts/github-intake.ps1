@@ -1,7 +1,7 @@
 param(
   [string]$Config = "docs/github-intake/repos.txt",
   [string]$OutDir = "vendor",
-  [switch]$Clone = $true
+  [switch]$Clone
 )
 
 $ErrorActionPreference = "Stop"
