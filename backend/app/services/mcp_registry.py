@@ -21,9 +21,9 @@ import requests
 class MCPToolSpec:
     name: str
     description: str
+    parameters: Dict[str, Any]
     module_path: str = ""
     func_name: str = ""
-    parameters: Dict[str, Any]
     input_schema: Optional[Dict[str, Any]] = None
     kind: str = "python"  # python | http
     method: str = "POST"
