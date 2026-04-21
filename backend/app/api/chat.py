@@ -11,6 +11,7 @@ import logging
 import json
 import asyncio
 import threading
+import re
 
 from app.models import get_db, User, Conversation, Message, EducationData
 from app.services import get_qwen_service, get_vector_store
@@ -19,6 +20,34 @@ from app.security import enforce_username_isolation
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["对话"])
+
+
+def _infer_rag_filters(question: str) -> dict:
+    """
+    从问题文本中提取 RAG 过滤条件：
+    - data_types: 成绩/课表/考试/培养方案/学业进度/个人信息
+    - semester: 形如 2025-2026-2
+    """
+    q = (question or "").lower()
+    data_types = []
+    mapping = [
+        (["课表", "schedule"], "schedule"),
+        (["成绩", "grade", "绩点"], "grade"),
+        (["考试", "exam"], "exam"),
+        (["培养方案", "training"], "training_plan"),
+        (["学业进度", "进度"], "academic_progress"),
+        (["个人信息", "我是谁", "基本信息"], "personal_info"),
+    ]
+    for keywords, dt in mapping:
+        if any(k in q for k in keywords):
+            data_types.append(dt)
+
+    semester = ""
+    m = re.search(r"(20\d{2}-20\d{2}-[12])", question or "")
+    if m:
+        semester = m.group(1)
+
+    return {"data_types": data_types, "semester": semester}
 
 
 # ============ 数据模型 ============
@@ -135,7 +164,14 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
                 try:
                     query_embedding = qwen_svc.generate_embedding(request.message)
                     if query_embedding:
-                        context = vec_store.search(user.id, query_embedding, top_k=5)
+                        filters = _infer_rag_filters(request.message)
+                        context = vec_store.search(
+                            user.id,
+                            query_embedding,
+                            top_k=8,
+                            data_types=filters["data_types"],
+                            semester=filters["semester"],
+                        )
                 except Exception as e:
                     logger.warning(f"向量检索失败: {e}")
             

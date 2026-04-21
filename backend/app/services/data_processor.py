@@ -257,7 +257,7 @@ class DataProcessor:
             chunks.append({
                 "text": text,
                 "source": "个人信息",
-                "metadata": {"type": "personal_info"},
+                "metadata": {"type": "personal_info", "data_type": "personal_info"},
             })
 
         # === 2. 成绩 — 每门课 1 chunk ===
@@ -279,7 +279,12 @@ class DataProcessor:
             chunks.append({
                 "text": text,
                 "source": "成绩",
-                "metadata": {"type": "grade", "course": name},
+                "metadata": {
+                    "type": "grade",
+                    "data_type": "grade",
+                    "course": name,
+                    "semester": grade.get("开课学期", ""),
+                },
             })
 
         # 成绩统计
@@ -308,7 +313,7 @@ class DataProcessor:
             chunks.append({
                 "text": text,
                 "source": "成绩统计",
-                "metadata": {"type": "grade_stats"},
+                "metadata": {"type": "grade_stats", "data_type": "grade_stats"},
             })
 
         # === 3. 课表 — 按天分组 ===
@@ -337,7 +342,12 @@ class DataProcessor:
                 chunks.append({
                     "text": text,
                     "source": "课表",
-                    "metadata": {"type": "schedule", "day": day},
+                    "metadata": {
+                        "type": "schedule",
+                        "data_type": "schedule",
+                        "day": day,
+                        "semester": courses[0].get("学期", "") if courses else "",
+                    },
                 })
 
         # === 4. 培养方案 — 按学期分组 ===
@@ -370,7 +380,11 @@ class DataProcessor:
                     chunks.append({
                         "text": text,
                         "source": "培养方案",
-                        "metadata": {"type": "training_plan", "semester": semester},
+                        "metadata": {
+                            "type": "training_plan",
+                            "data_type": "training_plan",
+                            "semester": semester,
+                        },
                     })
 
             # 基本信息和学分统计
@@ -384,7 +398,7 @@ class DataProcessor:
                 chunks.append({
                     "text": text,
                     "source": "培养方案",
-                    "metadata": {"type": "training_plan_summary"},
+                    "metadata": {"type": "training_plan_summary", "data_type": "training_plan_summary"},
                 })
 
         # === 5. 学业进度 ===
@@ -430,7 +444,7 @@ class DataProcessor:
             chunks.append({
                 "text": text,
                 "source": "学业进度",
-                "metadata": {"type": "academic_progress"},
+                "metadata": {"type": "academic_progress", "data_type": "academic_progress"},
             })
 
         # === 6. 考试安排 — 每门考试 1 chunk ===
@@ -448,7 +462,12 @@ class DataProcessor:
             chunks.append({
                 "text": text,
                 "source": "考试安排",
-                "metadata": {"type": "exam", "course": name},
+                "metadata": {
+                    "type": "exam",
+                    "data_type": "exam",
+                    "course": name,
+                    "semester": exam.get("学期", exam.get("开课学期", "")),
+                },
             })
 
         logger.info(f"【分块】共生成 {len(chunks)} 个数据块")

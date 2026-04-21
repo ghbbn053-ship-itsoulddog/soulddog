@@ -146,7 +146,14 @@ class VectorStore:
             logger.error(f"❌ 插入文档失败: {str(e)}")
             raise
     
-    def search(self, user_id: int, query_embedding: List[float], top_k: int = 5) -> List[Dict]:
+    def search(
+        self,
+        user_id: int,
+        query_embedding: List[float],
+        top_k: int = 5,
+        data_types: Optional[List[str]] = None,
+        semester: str = "",
+    ) -> List[Dict]:
         """搜索相似文档"""
         if not self.available:
             logger.warning("⚠️ Milvus 不可用，跳过搜索")
@@ -177,11 +184,20 @@ class VectorStore:
             hits = []
             for result in results:
                 for hit in result:
+                    metadata = json.loads(hit.entity.get("metadata") or "{}")
+                    if data_types:
+                        hit_type = metadata.get("data_type") or metadata.get("type")
+                        if hit_type not in data_types:
+                            continue
+                    if semester:
+                        hit_sem = str(metadata.get("semester", "")).strip()
+                        if hit_sem and hit_sem != semester:
+                            continue
                     hits.append({
                         "id": hit.id,
                         "text": hit.entity.get("text"),
                         "source": hit.entity.get("source"),
-                        "metadata": json.loads(hit.entity.get("metadata") or "{}"),
+                        "metadata": metadata,
                         "score": hit.score
                     })
             
