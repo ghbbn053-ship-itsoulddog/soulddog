@@ -61,6 +61,20 @@
           "username"
         ]
       }
+    },
+    {
+      "name": "ext_demo_http_file_import",
+      "kind": "http",
+      "method": "POST",
+      "url": "https://httpbin.org/post",
+      "timeout": 8,
+      "parameters": {
+        "username": {
+          "type": "string",
+          "required": true,
+          "description": "??"
+        }
+      }
     }
   ]
 }

@@ -2,7 +2,7 @@
 Skill 管理 API
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from pydantic import BaseModel
 
 from app.security import enforce_username_isolation
@@ -53,6 +53,31 @@ async def upload_skill(payload: SkillUploadRequest, http_request: Request):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"上传失败: {e}")
+
+
+@router.post("/upload-file")
+async def upload_skill_file(
+    username: str = Form(...),
+    skill_file: UploadFile = File(...),
+    http_request: Request = None,
+):
+    """
+    通过文件上传安装 skill（支持 .yaml/.yml）。
+    """
+    enforce_username_isolation(http_request, username)
+    manager = get_skill_manager()
+    filename = (skill_file.filename or "").lower()
+    if not (filename.endswith(".yaml") or filename.endswith(".yml")):
+        raise HTTPException(status_code=400, detail="仅支持 .yaml/.yml 文件")
+    try:
+        content_bytes = await skill_file.read()
+        yaml_content = content_bytes.decode("utf-8", errors="ignore")
+        saved = manager.upload_skill(username, yaml_content)
+        return {"success": True, "skill": saved, "source": "file"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"文件安装失败: {e}")
 
 
 @router.post("/validate")
