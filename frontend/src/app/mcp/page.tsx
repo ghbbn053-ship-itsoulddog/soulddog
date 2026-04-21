@@ -51,6 +51,7 @@ export default function MCPPage() {
   const [history, setHistory] = useState<PipelineItem[]>([]);
   const [tasks, setTasks] = useState<PipelineTask[]>([]);
   const [state, setState] = useState<PipelineState | null>(null);
+  const [queueSize, setQueueSize] = useState(0);
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
@@ -71,6 +72,7 @@ export default function MCPPage() {
     const res = await fetch(`${API_BASE}/api/intake/pipeline/state`, { credentials: "include" });
     const data = res.ok ? await res.json() : null;
     setState(data?.state || null);
+    setQueueSize(Number(data?.queue_size || 0));
   };
 
   const refreshTasks = async () => {
@@ -216,8 +218,7 @@ export default function MCPPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `流水线失败(${res.status})`);
-      setMsg(`流水线完成：reload=${data?.steps?.reload_count ?? "-"}`);
-      await refresh();
+      setMsg(`已入队：${data?.run_id || "-"} · 队列=${data?.queue_size ?? "-"}`);
       await refreshHistory();
       await refreshState();
       await refreshTasks();
@@ -261,8 +262,7 @@ export default function MCPPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `重试失败(${res.status})`);
-      setMsg(`重试已完成：${data?.run_id || runId}`);
-      await refresh();
+      setMsg(`重试任务已入队：${data?.run_id || runId} · 队列=${data?.queue_size ?? "-"}`);
       await refreshHistory();
       await refreshState();
       await refreshTasks();
@@ -376,7 +376,7 @@ export default function MCPPage() {
             </button>
           </div>
           <div className="mt-3 text-xs text-gray-500">
-            状态：{state?.running ? "运行中" : "空闲"} · run_id: {state?.run_id || "-"} · status: {state?.status || "-"}
+            状态：{state?.running ? "运行中" : "空闲"} · run_id: {state?.run_id || "-"} · status: {state?.status || "-"} · 队列: {queueSize}
           </div>
           {msg && <div className="mt-3 text-sm text-gray-700">{msg}</div>}
         </div>

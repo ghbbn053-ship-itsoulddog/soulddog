@@ -52,6 +52,11 @@ python scripts/enrich_mcp_external_tools.py
 4. `probe_mcp_external_tools.py`
 5. 后端进程内 `reload_mcp_registry()`
 
+说明：
+- 该接口已升级为“异步入队”模式，调用后立即返回 `run_id` 与 `queue_size`
+- 后端 worker 串行消费队列，避免请求长时间阻塞
+- 运行状态通过 `GET /api/intake/pipeline/state` 与 `GET /api/intake/pipeline/tasks` 轮询
+
 ## 运行记录查询（API）
 - `GET /api/intake/pipeline/history?limit=20`
 - `GET /api/intake/pipeline/latest`

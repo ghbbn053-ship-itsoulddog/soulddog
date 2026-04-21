@@ -12,11 +12,16 @@ from datetime import datetime
 from time import perf_counter
 import os
 import shutil
+import threading
+import time
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/intake", tags=["GitHub Intake"])
+_TASK_LOCK = threading.Lock()
+_WORKER_LOCK = threading.Lock()
+_WORKER_THREAD: threading.Thread | None = None
 
 
 class IntakeRunRequest(BaseModel):
@@ -87,31 +92,56 @@ def _read_history(root: Path, limit: int = 20) -> list[dict]:
 
 
 def _read_tasks(root: Path) -> list[dict]:
-    tp = _tasks_path(root)
-    if not tp.exists():
-        return []
-    try:
-        data = json.loads(tp.read_text(encoding="utf-8"))
-        if isinstance(data, list):
-            return data
-        return []
-    except Exception:
-        return []
+    with _TASK_LOCK:
+        tp = _tasks_path(root)
+        if not tp.exists():
+            return []
+        try:
+            data = json.loads(tp.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                return data
+            return []
+        except Exception:
+            return []
 
 
 def _write_tasks(root: Path, items: list[dict]):
-    tp = _tasks_path(root)
-    tp.parent.mkdir(parents=True, exist_ok=True)
-    tp.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+    with _TASK_LOCK:
+        tp = _tasks_path(root)
+        tp.parent.mkdir(parents=True, exist_ok=True)
+        tp.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _upsert_task(root: Path, task: dict):
+    with _TASK_LOCK:
+        tp = _tasks_path(root)
+        tasks: list[dict] = []
+        if tp.exists():
+            try:
+                data = json.loads(tp.read_text(encoding="utf-8"))
+                if isinstance(data, list):
+                    tasks = data
+            except Exception:
+                tasks = []
+        by_id = {str(t.get("run_id", "")): t for t in tasks if isinstance(t, dict)}
+        by_id[str(task.get("run_id", ""))] = task
+        merged = [v for k, v in by_id.items() if k]
+        merged.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
+        tp.parent.mkdir(parents=True, exist_ok=True)
+        tp.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _next_queued_task(root: Path) -> dict | None:
     tasks = _read_tasks(root)
-    by_id = {str(t.get("run_id", "")): t for t in tasks if isinstance(t, dict)}
-    by_id[str(task.get("run_id", ""))] = task
-    merged = [v for k, v in by_id.items() if k]
-    merged.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
-    _write_tasks(root, merged)
+    queued = [t for t in tasks if str(t.get("status", "")) == "queued"]
+    if not queued:
+        return None
+    queued.sort(key=lambda x: str(x.get("created_at", "")))
+    return queued[0]
+
+
+def _queued_count(root: Path) -> int:
+    return sum(1 for t in _read_tasks(root) if str(t.get("status", "")) == "queued")
 
 
 def _get_task(root: Path, run_id: str) -> dict | None:
@@ -164,6 +194,125 @@ def _release_lock(root: Path, run_id: str, ok: bool, error: str = ""):
             "error": error,
         },
     )
+
+
+def _run_pipeline_task(root: Path, run_id: str):
+    task = _get_task(root, run_id)
+    if not task:
+        return
+    params = task.get("params") or {}
+    payload = IntakePipelineRequest(**params)
+    started_at = datetime.now().isoformat(timespec="seconds")
+    t0 = perf_counter()
+
+    _write_state(
+        root,
+        {
+            "running": True,
+            "run_id": run_id,
+            "started_at": started_at,
+            "status": "running",
+        },
+    )
+    _upsert_task(
+        root,
+        {
+            **task,
+            "status": "running",
+            "started_at": started_at,
+        },
+    )
+
+    try:
+        result = _execute_pipeline(root, payload, run_id, started_at)
+        _append_history(
+            root,
+            {
+                "run_id": run_id,
+                "started_at": started_at,
+                "duration_ms": result["duration_ms"],
+                "params": payload.model_dump(),
+                "reload_count": result["steps"]["reload_count"],
+                "timing_ms": result["steps"]["timing_ms"],
+                "success": True,
+            },
+        )
+        _upsert_task(
+            root,
+            {
+                **task,
+                "status": "success",
+                "started_at": started_at,
+                "finished_at": datetime.now().isoformat(timespec="seconds"),
+                "duration_ms": result["duration_ms"],
+                "reload_count": result["steps"]["reload_count"],
+                "error": "",
+            },
+        )
+        _release_lock(root, run_id=run_id, ok=True)
+    except Exception as e:
+        total_ms = int((perf_counter() - t0) * 1000)
+        _append_history(
+            root,
+            {
+                "run_id": run_id,
+                "started_at": started_at,
+                "duration_ms": total_ms,
+                "params": payload.model_dump(),
+                "success": False,
+                "error": str(e),
+            },
+        )
+        _upsert_task(
+            root,
+            {
+                **task,
+                "status": "failed",
+                "started_at": started_at,
+                "finished_at": datetime.now().isoformat(timespec="seconds"),
+                "duration_ms": total_ms,
+                "error": str(e),
+            },
+        )
+        _release_lock(root, run_id=run_id, ok=False, error=str(e))
+
+
+def _worker_loop(root: Path):
+    while True:
+        state = _read_state(root)
+        if state.get("running"):
+            time.sleep(0.8)
+            continue
+        task = _next_queued_task(root)
+        if not task:
+            break
+        run_id = str(task.get("run_id", "")).strip()
+        if not run_id:
+            _upsert_task(
+                root,
+                {
+                    **task,
+                    "status": "failed",
+                    "error": "invalid run_id",
+                    "finished_at": datetime.now().isoformat(timespec="seconds"),
+                },
+            )
+            continue
+        _run_pipeline_task(root, run_id)
+
+
+def _ensure_worker(root: Path):
+    global _WORKER_THREAD
+    with _WORKER_LOCK:
+        if _WORKER_THREAD and _WORKER_THREAD.is_alive():
+            return
+        _WORKER_THREAD = threading.Thread(
+            target=_worker_loop,
+            args=(root,),
+            daemon=True,
+            name="intake-pipeline-worker",
+        )
+        _WORKER_THREAD.start()
 
 
 def _run_script(root: Path, cmd: list[str], timeout: int, name: str) -> dict:
@@ -390,80 +539,32 @@ async def enrich_generated_mcp_tools():
 @router.post("/pipeline")
 async def run_pipeline(payload: IntakePipelineRequest):
     """
-    全自动接入流水线：
-    run -> generate -> enrich -> probe -> mcp reload
+    全自动接入流水线（异步）：
+    入队后由后台 worker 串行执行，避免接口长时间阻塞。
     """
     root = _repo_root()
-    t0 = perf_counter()
-    lock = _acquire_lock(root)
-    run_id = lock["run_id"]
-    started_at = datetime.now().isoformat(timespec="seconds")
+    run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{os.getpid()}_{int(time.time() * 1000) % 100000}"
+    created_at = datetime.now().isoformat(timespec="seconds")
     snapshot = _create_snapshot(root, run_id)
     _upsert_task(
         root,
         {
             "run_id": run_id,
-            "created_at": started_at,
-            "status": "running",
+            "created_at": created_at,
+            "status": "queued",
             "params": payload.model_dump(),
             "snapshot": str(snapshot),
         },
     )
-    try:
-        result = _execute_pipeline(root, payload, run_id, started_at)
-
-        _append_history(
-            root,
-            {
-                "run_id": run_id,
-                "started_at": started_at,
-                "duration_ms": result["duration_ms"],
-                "params": payload.model_dump(),
-                "reload_count": result["steps"]["reload_count"],
-                "timing_ms": result["steps"]["timing_ms"],
-                "success": True,
-            },
-        )
-        _upsert_task(
-            root,
-            {
-                "run_id": run_id,
-                "created_at": started_at,
-                "status": "success",
-                "params": payload.model_dump(),
-                "snapshot": str(snapshot),
-                "duration_ms": result["duration_ms"],
-                "reload_count": result["steps"]["reload_count"],
-            },
-        )
-        _release_lock(root, run_id=run_id, ok=True)
-        return result
-    except Exception as e:
-        total_ms = int((perf_counter() - t0) * 1000)
-        _append_history(
-            root,
-            {
-                "run_id": run_id,
-                "started_at": started_at,
-                "duration_ms": total_ms,
-                "params": payload.model_dump(),
-                "success": False,
-                "error": str(e),
-            },
-        )
-        _upsert_task(
-            root,
-            {
-                "run_id": run_id,
-                "created_at": started_at,
-                "status": "failed",
-                "params": payload.model_dump(),
-                "snapshot": str(snapshot),
-                "error": str(e),
-            },
-        )
-        _release_lock(root, run_id=run_id, ok=False, error=str(e))
-        raise
+    _ensure_worker(root)
+    return {
+        "success": True,
+        "queued": True,
+        "run_id": run_id,
+        "status": "queued",
+        "created_at": created_at,
+        "queue_size": _queued_count(root),
+    }
 
 
 @router.get("/pipeline/history")
@@ -485,7 +586,7 @@ async def get_pipeline_latest():
 @router.get("/pipeline/state")
 async def get_pipeline_state():
     root = _repo_root()
-    return {"success": True, "state": _read_state(root)}
+    return {"success": True, "state": _read_state(root), "queue_size": _queued_count(root)}
 
 
 @router.post("/pipeline/unlock")
