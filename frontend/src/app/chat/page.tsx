@@ -56,14 +56,6 @@ export default function ChatPage() {
   // 默认走同域 /api 反向代理，避免不同访问入口下的地址不一致问题
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
-  const getDirectApiBase = () => {
-    const explicit = process.env.NEXT_PUBLIC_BACKEND_URL;
-    if (explicit) return explicit;
-    if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
-      return `${window.location.protocol}//${window.location.hostname}:8000`;
-    }
-    return API_BASE;
-  };
   const getConversationStorageKey = (uname: string) => `current_conversation_id_${uname}`;
 
   // 滚动到底部
@@ -160,7 +152,7 @@ export default function ChatPage() {
 
     const fallbackToNonStream = async (reason?: string) => {
       try {
-        const res = await fetch(`${getDirectApiBase()}/api/chat/send`, {
+        const res = await fetch(`${API_BASE}/api/chat/send`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -205,8 +197,8 @@ export default function ChatPage() {
       activeHistoryReqRef.current++;
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000);
-      const response = await fetch(`${getDirectApiBase()}/api/chat/send-stream`, {
+      const timeoutId = setTimeout(() => controller.abort(), 180000);
+      const response = await fetch(`${API_BASE}/api/chat/send-stream`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
