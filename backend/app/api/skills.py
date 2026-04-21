@@ -16,6 +16,11 @@ class SkillUploadRequest(BaseModel):
     yaml_content: str
 
 
+class SkillValidateRequest(BaseModel):
+    username: str
+    yaml_content: str
+
+
 class SkillToggleRequest(BaseModel):
     username: str
     enabled: bool
@@ -48,6 +53,19 @@ async def upload_skill(payload: SkillUploadRequest, http_request: Request):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"上传失败: {e}")
+
+
+@router.post("/validate")
+async def validate_skill_yaml(payload: SkillValidateRequest, http_request: Request):
+    enforce_username_isolation(http_request, payload.username)
+    manager = get_skill_manager()
+    try:
+        result = manager.validate_skill_yaml(payload.yaml_content)
+        return {"success": True, "meta": result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"校验失败: {e}")
 
 
 @router.post("/import-url")

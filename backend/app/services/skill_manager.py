@@ -48,7 +48,7 @@ class SkillManager:
                 raise ValueError("每个 tool 必须是对象且包含 name")
 
     def upload_skill(self, owner: str, yaml_content: str) -> Dict[str, Any]:
-        config = yaml.safe_load(yaml_content) or {}
+        config = self._parse_and_validate(yaml_content)
         self._validate(config)
         config.setdefault("enabled", True)
         config.setdefault("created_at", int(time.time()))
@@ -58,6 +58,28 @@ class SkillManager:
         target = self._owner_dir(owner) / f"{skill_name}.yaml"
         target.write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding="utf-8")
         return {"owner": owner, "name": skill_name, "path": str(target)}
+
+    def _parse_and_validate(self, yaml_content: str) -> Dict[str, Any]:
+        if not (yaml_content or "").strip():
+            raise ValueError("YAML 内容不能为空")
+        try:
+            config = yaml.safe_load(yaml_content) or {}
+        except yaml.YAMLError as e:
+            raise ValueError(f"YAML 格式错误: {e}")
+        if not isinstance(config, dict):
+            raise ValueError("YAML 根节点必须是对象")
+        self._validate(config)
+        return config
+
+    def validate_skill_yaml(self, yaml_content: str) -> Dict[str, Any]:
+        config = self._parse_and_validate(yaml_content)
+        return {
+            "name": str(config.get("name", "")).strip(),
+            "version": str(config.get("version", "")).strip(),
+            "description": str(config.get("description", "")).strip(),
+            "tools_count": len(config.get("tools", [])),
+            "triggers": config.get("triggers", []),
+        }
 
     @staticmethod
     def _normalize_raw_url(url: str) -> str:

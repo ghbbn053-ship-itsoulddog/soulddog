@@ -16,7 +16,7 @@ import re
 from app.models import get_db, User, Conversation, Message, EducationData
 from app.services import get_model_provider_for_user, get_vector_store
 from app.services.education_normalizer import build_payload_from_education_data_record
-from app.services.skill_manager import get_skill_manager
+from app.services.skill_router import build_skill_prompt_hint
 from app.security import enforce_username_isolation
 
 logger = logging.getLogger(__name__)
@@ -49,47 +49,6 @@ def _infer_rag_filters(question: str) -> dict:
         semester = m.group(1)
 
     return {"data_types": data_types, "semester": semester}
-
-
-def _build_skill_context(username: str, question: str) -> str:
-    """
-    根据用户启用的 skills 与 triggers 生成路由提示上下文。
-    """
-    try:
-        manager = get_skill_manager()
-        skills = manager.list_skills(username)
-    except Exception as e:
-        logger.warning(f"加载技能失败: {e}")
-        return ""
-
-    q = (question or "").strip().lower()
-    if not q:
-        return ""
-
-    matched = []
-    for s in skills:
-        if not s.get("enabled", True):
-            continue
-        triggers = [str(t).strip() for t in (s.get("triggers") or []) if str(t).strip()]
-        if not triggers:
-            continue
-        if any(t.lower() in q for t in triggers):
-            matched.append(s)
-
-    if not matched:
-        return ""
-
-    lines = ["【技能路由提示】本轮问题命中以下已启用技能，请优先结合对应工具回答："]
-    for s in matched[:3]:
-        tools = ", ".join(
-            str(t.get("name", "")).strip()
-            for t in (s.get("tools") or [])
-            if isinstance(t, dict) and str(t.get("name", "")).strip()
-        ) or "无"
-        triggers = ", ".join(str(t) for t in (s.get("triggers") or [])[:5]) or "无"
-        desc = str(s.get("description", "")).strip() or "无描述"
-        lines.append(f"- {s.get('name', 'unknown')}: {desc}; triggers=[{triggers}]; tools=[{tools}]")
-    return "\n".join(lines)
 
 
 # ============ 数据模型 ============
@@ -187,7 +146,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
                 "server_url": user_session_data["server_url"],
                 "username": request.username
             }
-        skill_context = _build_skill_context(request.username, request.message)
+        skill_context = build_skill_prompt_hint(request.username, request.message)
         history_for_model = history
         if skill_context:
             history_for_model = [{"role": "system", "content": skill_context}] + history
@@ -446,7 +405,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                 "server_url": user_session_data["server_url"],
                 "username": request.username
             }
-        skill_context = _build_skill_context(request.username, request.message)
+        skill_context = build_skill_prompt_hint(request.username, request.message)
         history_for_model = history
         if skill_context:
             history_for_model = [{"role": "system", "content": skill_context}] + history

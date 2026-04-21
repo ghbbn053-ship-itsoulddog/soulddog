@@ -70,6 +70,17 @@ export default function SkillsPage() {
     setSaving(true);
     setMsg("");
     try {
+      const validateRes = await fetch(`${API_BASE}/api/skills/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username, yaml_content: yamlText }),
+      });
+      const validateData = await validateRes.json().catch(() => ({}));
+      if (!validateRes.ok || !validateData?.success) {
+        throw new Error(validateData?.detail || validateData?.message || `校验失败(${validateRes.status})`);
+      }
+
       const res = await fetch(`${API_BASE}/api/skills/upload`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
