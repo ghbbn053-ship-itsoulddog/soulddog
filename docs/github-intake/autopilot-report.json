@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-21 22:09:35",
+  "generated_at": "2026-04-21 22:30:58",
   "topics": [
     "rag",
     "skill_plugin",
@@ -15,11 +15,11 @@
       "html_url": "https://github.com/openai/openai-agents-python",
       "description": "A lightweight, powerful framework for multi-agent workflows",
       "language": "Python",
-      "stars": 24274,
+      "stars": 24276,
       "forks": 3725,
       "open_issues": 71,
       "size_kb": 27799,
-      "updated_at": "2026-04-21T13:54:33Z",
+      "updated_at": "2026-04-21T14:19:01Z",
       "pushed_at": "2026-04-21T13:55:40Z",
       "license": "MIT",
       "score": 1.0201
@@ -31,7 +31,7 @@
       "description": "The agent engineering platform",
       "language": "Python",
       "stars": 134349,
-      "forks": 22192,
+      "forks": 22193,
       "open_issues": 537,
       "size_kb": 537245,
       "updated_at": "2026-04-21T14:09:06Z",
@@ -60,11 +60,11 @@
       "html_url": "https://github.com/microsoft/agent-framework",
       "description": "A framework for building, orchestrating and deploying AI agents and multi-agent workflows with support for Python and .NET.",
       "language": "Python",
-      "stars": 9656,
+      "stars": 9658,
       "forks": 1586,
       "open_issues": 787,
       "size_kb": 90051,
-      "updated_at": "2026-04-21T12:34:14Z",
+      "updated_at": "2026-04-21T14:17:45Z",
       "pushed_at": "2026-04-21T10:17:27Z",
       "license": "MIT",
       "score": 0.9679
@@ -105,11 +105,11 @@
       "html_url": "https://github.com/pathwaycom/pathway",
       "description": "Python ETL framework for stream processing, real-time analytics, LLM pipelines, and RAG.",
       "language": "Python",
-      "stars": 63446,
+      "stars": 63445,
       "forks": 1624,
       "open_issues": 36,
       "size_kb": 141829,
-      "updated_at": "2026-04-21T13:41:13Z",
+      "updated_at": "2026-04-21T14:19:03Z",
       "pushed_at": "2026-04-21T05:29:38Z",
       "license": "NOASSERTION",
       "score": 0.9341
@@ -160,6 +160,21 @@
       "score": 0.8831
     },
     {
+      "topic": "multi_agent",
+      "full_name": "guy-hartstein/company-research-agent",
+      "html_url": "https://github.com/guy-hartstein/company-research-agent",
+      "description": "An agentic company research tool powered by LangGraph and Tavily that conducts deep diligence on companies using a multi-agent framework. It leverages Google's Gemini 2.5 Flash and OpenAI's GPT-5.1 on the backend for inference.",
+      "language": "Python",
+      "stars": 1684,
+      "forks": 255,
+      "open_issues": 4,
+      "size_kb": 32374,
+      "updated_at": "2026-04-21T07:02:43Z",
+      "pushed_at": "2026-04-17T01:17:17Z",
+      "license": "Apache-2.0",
+      "score": 0.8663
+    },
+    {
       "topic": "workflow",
       "full_name": "yzhao062/pyod",
       "html_url": "https://github.com/yzhao062/pyod",
@@ -173,6 +188,21 @@
       "pushed_at": "2026-04-16T21:59:36Z",
       "license": "BSD-2-Clause",
       "score": 0.8657
+    },
+    {
+      "topic": "rag",
+      "full_name": "cocoindex-io/cocoindex",
+      "html_url": "https://github.com/cocoindex-io/cocoindex",
+      "description": "Data transformation framework for AI. Ultra performant, with incremental processing.  🌟 Star if you like it!",
+      "language": "Rust",
+      "stars": 6924,
+      "forks": 502,
+      "open_issues": 52,
+      "size_kb": 109255,
+      "updated_at": "2026-04-21T12:59:57Z",
+      "pushed_at": "2026-04-21T07:33:19Z",
+      "license": "Apache-2.0",
+      "score": 0.8491
     },
     {
       "topic": "mcp",
@@ -251,6 +281,21 @@
     },
     {
       "topic": "mcp",
+      "full_name": "loonghao/photoshop-python-api-mcp-server",
+      "html_url": "https://github.com/loonghao/photoshop-python-api-mcp-server",
+      "description": "A Model Context Protocol (MCP) server that interfaces with Adobe Photoshop's Python API. Enables LLMs to execute image editing operations, automate workflows, and manage Photoshop tasks through structured commands and context-aware interactions.",
+      "language": "Python",
+      "stars": 206,
+      "forks": 24,
+      "open_issues": 23,
+      "size_kb": 1193,
+      "updated_at": "2026-04-21T07:56:03Z",
+      "pushed_at": "2026-04-15T20:22:10Z",
+      "license": "MIT",
+      "score": 0.7471
+    },
+    {
+      "topic": "mcp",
       "full_name": "joenorton/comfyui-mcp-server",
       "html_url": "https://github.com/joenorton/comfyui-mcp-server",
       "description": "lightweight Python-based MCP (Model Context Protocol) server for local ComfyUI",
@@ -272,12 +317,12 @@
       "language": "Python",
       "stars": 570,
       "forks": 56,
-      "open_issues": 42,
+      "open_issues": 40,
       "size_kb": 4567,
       "updated_at": "2026-04-21T12:35:16Z",
-      "pushed_at": "2026-04-21T12:43:48Z",
+      "pushed_at": "2026-04-21T14:19:52Z",
       "license": "NOASSERTION",
-      "score": 0.7083
+      "score": 0.7084
     },
     {
       "topic": "workflow",
@@ -293,6 +338,36 @@
       "pushed_at": "2026-04-15T13:32:52Z",
       "license": "Apache-2.0",
       "score": 0.7
+    },
+    {
+      "topic": "mcp",
+      "full_name": "dedalus-labs/dedalus-mcp-python",
+      "html_url": "https://github.com/dedalus-labs/dedalus-mcp-python",
+      "description": "A simple and performant Model Context Protocol framework for Python.",
+      "language": "Python",
+      "stars": 154,
+      "forks": 6,
+      "open_issues": 0,
+      "size_kb": 2118,
+      "updated_at": "2026-04-21T06:52:43Z",
+      "pushed_at": "2026-01-28T01:48:09Z",
+      "license": "MIT",
+      "score": 0.6775
+    },
+    {
+      "topic": "rag",
+      "full_name": "kreuzberg-dev/kreuzberg",
+      "html_url": "https://github.com/kreuzberg-dev/kreuzberg",
+      "description": "A polyglot document intelligence framework with a Rust core. Extract text, metadata, images, and structured information from PDFs, Office documents, images, and 97+ formats. Available for Rust, Python, Ruby, Java, Go, PHP, Elixir, C#, R, C, TypeScript (Node/Bun/Wasm/Deno)- or use via CLI, REST API, or MCP server.",
+      "language": "Rust",
+      "stars": 7616,
+      "forks": 380,
+      "open_issues": 25,
+      "size_kb": 627300,
+      "updated_at": "2026-04-21T14:15:53Z",
+      "pushed_at": "2026-04-21T14:15:51Z",
+      "license": "NOASSERTION",
+      "score": 0.6746
     },
     {
       "topic": "multi_agent",
@@ -355,6 +430,21 @@
       "score": 0.5592
     },
     {
+      "topic": "multi_agent",
+      "full_name": "Doriandarko/make-it-heavy",
+      "html_url": "https://github.com/Doriandarko/make-it-heavy",
+      "description": "A Python framework that emulates Grok Heavy functionality using intelligent multi-agent orchestration. Deploy 4 (or more) specialized AI agents in parallel to deliver comprehensive, multi-perspective analysis on any query.",
+      "language": "Python",
+      "stars": 1109,
+      "forks": 184,
+      "open_issues": 6,
+      "size_kb": 33,
+      "updated_at": "2026-04-17T18:28:53Z",
+      "pushed_at": "2025-07-16T15:18:33Z",
+      "license": "NOASSERTION",
+      "score": 0.5548
+    },
+    {
       "topic": "workflow",
       "full_name": "mx-Liu123/AgentCommander",
       "html_url": "https://github.com/mx-Liu123/AgentCommander",
@@ -400,6 +490,36 @@
       "score": 0.4521
     },
     {
+      "topic": "workflow",
+      "full_name": "reedxiao/langdag",
+      "html_url": "https://github.com/reedxiao/langdag",
+      "description": "LangDAG is a specialized orchestration framework for building LLM (Large Language Model) agent workflows using DAGs(Directed Acyclic Graphs), written in Python.",
+      "language": "Python",
+      "stars": 8,
+      "forks": 0,
+      "open_issues": 0,
+      "size_kb": 194,
+      "updated_at": "2026-01-23T05:39:10Z",
+      "pushed_at": "2025-10-02T14:36:16Z",
+      "license": "MIT",
+      "score": 0.4364
+    },
+    {
+      "topic": "evaluation",
+      "full_name": "razroo/iso",
+      "html_url": "https://github.com/razroo/iso",
+      "description": "Isomorphic agent tooling: author once, run on frontier or 7B. Build, lint, fan out, eval, and trace AI agent harnesses across Cursor, Claude Code, Codex, and OpenCode.",
+      "language": "TypeScript",
+      "stars": 2,
+      "forks": 0,
+      "open_issues": 0,
+      "size_kb": 573,
+      "updated_at": "2026-04-20T23:10:28Z",
+      "pushed_at": "2026-04-20T23:10:22Z",
+      "license": "",
+      "score": 0.4116
+    },
+    {
       "topic": "mcp",
       "full_name": "wshobson/mcp-trader",
       "html_url": "https://github.com/wshobson/mcp-trader",
@@ -443,6 +563,36 @@
       "pushed_at": "2026-03-21T13:58:05Z",
       "license": "",
       "score": 0.3691
+    },
+    {
+      "topic": "workflow",
+      "full_name": "dyneqtra/dyneqtra-dev",
+      "html_url": "https://github.com/dyneqtra/dyneqtra-dev",
+      "description": "Graph-Based Editor for LLM Workflows",
+      "language": "TypeScript",
+      "stars": 3,
+      "forks": 2,
+      "open_issues": 0,
+      "size_kb": 942,
+      "updated_at": "2025-10-08T19:18:14Z",
+      "pushed_at": "2025-01-21T17:50:19Z",
+      "license": "MIT",
+      "score": 0.2783
+    },
+    {
+      "topic": "evaluation",
+      "full_name": "Aftabbs/Evaluating-AI-Agents",
+      "html_url": "https://github.com/Aftabbs/Evaluating-AI-Agents",
+      "description": "Arize AI is an AI observability and LLM evaluation platform built to enable more successful AI in production.",
+      "language": "Jupyter Notebook",
+      "stars": 2,
+      "forks": 1,
+      "open_issues": 0,
+      "size_kb": 3189,
+      "updated_at": "2025-07-17T09:34:58Z",
+      "pushed_at": "2025-06-23T02:55:08Z",
+      "license": "MIT",
+      "score": 0.2049
     }
   ],
   "integration_recommendations": [
@@ -450,7 +600,7 @@
       "repo": "openai/openai-agents-python",
       "topic": "multi_agent",
       "score": 1.0201,
-      "why": "stars=24274, pushed=2026-04-21, lang=Python",
+      "why": "stars=24276, pushed=2026-04-21, lang=Python",
       "integrate_to": "接入 backend/app/services/agent_runtime.py，扩展 framework 分派与路由策略"
     },
     {
@@ -471,7 +621,7 @@
       "repo": "microsoft/agent-framework",
       "topic": "multi_agent",
       "score": 0.9679,
-      "why": "stars=9656, pushed=2026-04-21, lang=Python",
+      "why": "stars=9658, pushed=2026-04-21, lang=Python",
       "integrate_to": "接入 backend/app/services/agent_runtime.py，扩展 framework 分派与路由策略"
     },
     {
@@ -492,7 +642,7 @@
       "repo": "pathwaycom/pathway",
       "topic": "rag",
       "score": 0.9341,
-      "why": "stars=63446, pushed=2026-04-21, lang=Python",
+      "why": "stars=63445, pushed=2026-04-21, lang=Python",
       "integrate_to": "映射到 backend/app/services/vector_store.py 与检索过滤策略"
     },
     {
@@ -501,7 +651,37 @@
       "score": 0.9215,
       "why": "stars=24932, pushed=2026-04-21, lang=MDX",
       "integrate_to": "映射到 backend/app/services/vector_store.py 与检索过滤策略"
+    },
+    {
+      "repo": "darrenhinde/OpenAgentsControl",
+      "topic": "multi_agent",
+      "score": 0.8936,
+      "why": "stars=3612, pushed=2026-03-25, lang=TypeScript",
+      "integrate_to": "接入 backend/app/services/agent_runtime.py，扩展 framework 分派与路由策略"
+    },
+    {
+      "repo": "blazickjp/arxiv-mcp-server",
+      "topic": "mcp",
+      "score": 0.8831,
+      "why": "stars=2571, pushed=2026-04-06, lang=Python",
+      "integrate_to": "映射到 backend/app/services/mcp_registry.py，新增 registry adapter"
     }
   ],
-  "clone_status": {}
+  "clone_status": {
+    "openai/openai-agents-python": {
+      "status": "ok",
+      "note": "exists",
+      "path": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\vendor\\autopilot\\openai__openai-agents-python"
+    },
+    "langchain-ai/langchain": {
+      "status": "ok",
+      "note": "exists",
+      "path": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\vendor\\autopilot\\langchain-ai__langchain"
+    },
+    "neuml/txtai": {
+      "status": "fail",
+      "note": "Cloning into 'C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\vendor\\autopilot\\neuml__txtai'...\nerror: RPC failed; curl 18 transfer closed with outstanding read data remaining\nerror: 5481 bytes of body are still expected\nfetch-pack: unexpected disconnect while reading sideband packet\nfatal: early EOF\nfatal: fetch-pack: invalid index-pack output",
+      "path": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\vendor\\autopilot\\neuml__txtai"
+    }
+  }
 }

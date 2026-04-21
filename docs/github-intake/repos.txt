@@ -9,13 +9,13 @@ pathwaycom/pathway
 deepset-ai/haystack
 darrenhinde/OpenAgentsControl
 blazickjp/arxiv-mcp-server
+guy-hartstein/company-research-agent
 yzhao062/pyod
+cocoindex-io/cocoindex
 utensils/mcp-nixos
 GongRzhe/Office-PowerPoint-MCP-Server
 cheshire-cat-ai/core
 ModelEngine-Group/fit-framework
 PySpur-Dev/pyspur
+loonghao/photoshop-python-api-mcp-server
 joenorton/comfyui-mcp-server
-BlazeUp-AI/Observal
-InfinitiBit/graphbit
-oxwhirl/pymarl

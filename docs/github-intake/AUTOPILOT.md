@@ -41,3 +41,13 @@ python scripts/probe_mcp_external_tools.py --auto-enable
 ```bash
 python scripts/enrich_mcp_external_tools.py
 ```
+
+## 一键全自动流水线（API）
+`POST /api/intake/pipeline`
+
+执行顺序：
+1. `github_autopilot.py`
+2. `generate_mcp_external_tools.py`
+3. `enrich_mcp_external_tools.py`
+4. `probe_mcp_external_tools.py`
+5. 后端进程内 `reload_mcp_registry()`

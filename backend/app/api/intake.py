@@ -23,8 +23,36 @@ class IntakeRunRequest(BaseModel):
     update_repo_list: bool = True
 
 
+class IntakePipelineRequest(BaseModel):
+    per_topic: int = 6
+    clone_top: int = 2
+    integrate_top: int = 8
+    no_clone: bool = True
+    update_repo_list: bool = True
+    auto_enable: bool = False
+
+
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
+
+
+def _run_script(root: Path, cmd: list[str], timeout: int, name: str) -> dict:
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail=f"{name} 执行超时")
+    if proc.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=f"{name} 失败: {(proc.stderr or proc.stdout or '').strip()[:500]}",
+        )
+    return {"stdout": (proc.stdout or "").strip(), "stderr": (proc.stderr or "").strip()}
 
 
 @router.post("/run")
@@ -49,22 +77,13 @@ async def run_autopilot(payload: IntakeRunRequest):
     if payload.update_repo_list:
         cmd.append("--update-repo-list")
 
-    try:
-        proc = subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, timeout=180)
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="autopilot 执行超时")
-
-    if proc.returncode != 0:
-        raise HTTPException(
-            status_code=500,
-            detail=f"autopilot 失败: {(proc.stderr or proc.stdout or '').strip()[:500]}",
-        )
+    result = _run_script(root, cmd, timeout=180, name="autopilot")
 
     report_json = root / "docs" / "github-intake" / "autopilot-report.json"
     report_md = root / "docs" / "github-intake" / "autopilot-report.md"
     return {
         "success": True,
-        "stdout": proc.stdout.strip(),
+        "stdout": result["stdout"],
         "report_json": str(report_json),
         "report_md": str(report_md),
     }
@@ -89,27 +108,12 @@ async def generate_mcp_tools_from_report():
     script = root / "scripts" / "generate_mcp_external_tools.py"
     if not script.exists():
         raise HTTPException(status_code=404, detail="generate_mcp_external_tools 脚本不存在")
-    try:
-        proc = subprocess.run(
-            ["python", str(script)],
-            cwd=str(root),
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="generate_mcp_external_tools 执行超时")
-
-    if proc.returncode != 0:
-        raise HTTPException(
-            status_code=500,
-            detail=f"generate_mcp_external_tools 失败: {(proc.stderr or proc.stdout or '').strip()[:500]}",
-        )
+    result = _run_script(root, ["python", str(script)], timeout=120, name="generate_mcp_external_tools")
 
     generated = root / "backend" / "app" / "mcp" / "external_tools.generated.json"
     return {
         "success": True,
-        "stdout": proc.stdout.strip(),
+        "stdout": result["stdout"],
         "generated_file": str(generated),
     }
 
@@ -123,22 +127,8 @@ async def probe_generated_mcp_tools(auto_enable: bool = False):
     cmd = ["python", str(script)]
     if auto_enable:
         cmd.append("--auto-enable")
-    try:
-        proc = subprocess.run(
-            cmd,
-            cwd=str(root),
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="probe_mcp_external_tools 执行超时")
-    if proc.returncode != 0:
-        raise HTTPException(
-            status_code=500,
-            detail=f"probe_mcp_external_tools 失败: {(proc.stderr or proc.stdout or '').strip()[:500]}",
-        )
-    return {"success": True, "summary": (proc.stdout or "").strip()}
+    result = _run_script(root, cmd, timeout=120, name="probe_mcp_external_tools")
+    return {"success": True, "summary": result["stdout"]}
 
 
 @router.post("/enrich-mcp-tools")
@@ -147,19 +137,77 @@ async def enrich_generated_mcp_tools():
     script = root / "scripts" / "enrich_mcp_external_tools.py"
     if not script.exists():
         raise HTTPException(status_code=404, detail="enrich_mcp_external_tools 脚本不存在")
-    try:
-        proc = subprocess.run(
-            ["python", str(script)],
-            cwd=str(root),
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="enrich_mcp_external_tools 执行超时")
-    if proc.returncode != 0:
-        raise HTTPException(
-            status_code=500,
-            detail=f"enrich_mcp_external_tools 失败: {(proc.stderr or proc.stdout or '').strip()[:500]}",
-        )
-    return {"success": True, "summary": (proc.stdout or "").strip()}
+    result = _run_script(root, ["python", str(script)], timeout=120, name="enrich_mcp_external_tools")
+    return {"success": True, "summary": result["stdout"]}
+
+
+@router.post("/pipeline")
+async def run_pipeline(payload: IntakePipelineRequest):
+    """
+    全自动接入流水线：
+    run -> generate -> enrich -> probe -> mcp reload
+    """
+    root = _repo_root()
+
+    # 1) autopilot
+    autopilot_script = root / "scripts" / "github_autopilot.py"
+    if not autopilot_script.exists():
+        raise HTTPException(status_code=404, detail="github_autopilot 脚本不存在")
+    run_cmd = [
+        "python",
+        str(autopilot_script),
+        "--per-topic",
+        str(payload.per_topic),
+        "--clone-top",
+        str(payload.clone_top),
+        "--integrate-top",
+        str(payload.integrate_top),
+    ]
+    if payload.no_clone:
+        run_cmd.append("--no-clone")
+    if payload.update_repo_list:
+        run_cmd.append("--update-repo-list")
+    step_run = _run_script(root, run_cmd, timeout=240, name="autopilot")
+
+    # 2) generate
+    step_generate = _run_script(
+        root,
+        ["python", str(root / "scripts" / "generate_mcp_external_tools.py")],
+        timeout=120,
+        name="generate_mcp_external_tools",
+    )
+
+    # 3) enrich
+    step_enrich = _run_script(
+        root,
+        ["python", str(root / "scripts" / "enrich_mcp_external_tools.py")],
+        timeout=120,
+        name="enrich_mcp_external_tools",
+    )
+
+    # 4) probe
+    probe_cmd = ["python", str(root / "scripts" / "probe_mcp_external_tools.py")]
+    if payload.auto_enable:
+        probe_cmd.append("--auto-enable")
+    step_probe = _run_script(root, probe_cmd, timeout=120, name="probe_mcp_external_tools")
+
+    # 5) mcp reload（在本进程内执行，确保后端生效）
+    from app.services.mcp_registry import reload_mcp_registry
+
+    registry = reload_mcp_registry()
+    tools = registry.list_tools()
+
+    return {
+        "success": True,
+        "steps": {
+            "run": step_run["stdout"],
+            "generate": step_generate["stdout"],
+            "enrich": step_enrich["stdout"],
+            "probe": step_probe["stdout"],
+            "reload_count": len(tools),
+        },
+        "paths": {
+            "report_json": str(root / "docs" / "github-intake" / "autopilot-report.json"),
+            "generated_tools": str(root / "backend" / "app" / "mcp" / "external_tools.generated.json"),
+        },
+    }
