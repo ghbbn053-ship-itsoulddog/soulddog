@@ -44,6 +44,9 @@ class IntakePipelineRequest(BaseModel):
     auto_enable: bool = False
     timeout_sec: int = 600
     idempotency_key: str | None = None
+    priority: str = "normal"
+    max_retries: int = 2
+    retry_backoff_base_sec: int = 5
 
 
 class RetryRequest(BaseModel):
@@ -52,6 +55,11 @@ class RetryRequest(BaseModel):
 
 class PipelineCancelled(Exception):
     pass
+
+
+def _priority_value(priority: str) -> int:
+    p = (priority or "normal").strip().lower()
+    return {"high": 3, "normal": 2, "low": 1}.get(p, 2)
 
 
 def _repo_root() -> Path:
@@ -145,8 +153,29 @@ def _next_queued_task(root: Path) -> dict | None:
     queued = [t for t in tasks if str(t.get("status", "")) == "queued"]
     if not queued:
         return None
-    queued.sort(key=lambda x: str(x.get("created_at", "")))
-    return queued[0]
+    now = datetime.now().timestamp()
+    runnable: list[dict] = []
+    for t in queued:
+        next_run_at = str(t.get("next_run_at", "")).strip()
+        if not next_run_at:
+            runnable.append(t)
+            continue
+        try:
+            ts = datetime.fromisoformat(next_run_at).timestamp()
+        except Exception:
+            ts = now
+        if ts <= now:
+            runnable.append(t)
+    if not runnable:
+        return None
+    runnable.sort(
+        key=lambda x: (
+            -_priority_value(str(x.get("priority", "normal"))),
+            str(x.get("next_run_at", "") or x.get("created_at", "")),
+            str(x.get("created_at", "")),
+        )
+    )
+    return runnable[0]
 
 
 def _queued_count(root: Path) -> int:
@@ -177,7 +206,7 @@ def _find_recent_duplicate(root: Path, *, owner: str, idempotency_key: str | Non
         if str(t.get("owner", "")) != owner:
             continue
         status = str(t.get("status", ""))
-        if status not in {"queued", "running"}:
+        if status not in {"queued", "running", "retry_wait"}:
             continue
         created_at = str(t.get("created_at", ""))
         try:
@@ -249,6 +278,8 @@ def _run_pipeline_task(root: Path, run_id: str):
     task = _get_task(root, run_id)
     if not task:
         return
+    if str(task.get("status", "")) not in {"queued", "running"}:
+        return
     params = task.get("params") or {}
     payload = IntakePipelineRequest(**params)
     started_at = datetime.now().isoformat(timespec="seconds")
@@ -269,6 +300,7 @@ def _run_pipeline_task(root: Path, run_id: str):
             **task,
             "status": "running",
             "started_at": started_at,
+            "next_run_at": "",
             "cancelled_at": "",
             "cancel_requested": bool(task.get("cancel_requested", False)),
         },
@@ -329,6 +361,31 @@ def _run_pipeline_task(root: Path, run_id: str):
         _release_lock(root, run_id=run_id, ok=False, error="cancelled")
     except Exception as e:
         total_ms = int((perf_counter() - t0) * 1000)
+        retries = int(task.get("retries", 0))
+        max_retries = int(task.get("max_retries", 0))
+        backoff_base = int(task.get("retry_backoff_base_sec", 5))
+        can_retry = retries < max_retries
+        if can_retry:
+            next_retry = retries + 1
+            backoff_sec = max(1, backoff_base) * (2 ** retries)
+            next_run_at = datetime.fromtimestamp(time.time() + backoff_sec).isoformat(timespec="seconds")
+            _upsert_task(
+                root,
+                {
+                    **task,
+                    "status": "queued",
+                    "started_at": started_at,
+                    "duration_ms": total_ms,
+                    "error": str(e),
+                    "retries": next_retry,
+                    "last_error": str(e),
+                    "next_run_at": next_run_at,
+                    "last_failed_at": datetime.now().isoformat(timespec="seconds"),
+                },
+            )
+            _release_lock(root, run_id=run_id, ok=False, error=f"retry scheduled in {backoff_sec}s")
+            return
+
         _append_history(
             root,
             {
@@ -349,6 +406,7 @@ def _run_pipeline_task(root: Path, run_id: str):
                 "finished_at": datetime.now().isoformat(timespec="seconds"),
                 "duration_ms": total_ms,
                 "error": str(e),
+                "last_error": str(e),
             },
         )
         _release_lock(root, run_id=run_id, ok=False, error=str(e))
@@ -669,6 +727,9 @@ async def run_pipeline(payload: IntakePipelineRequest):
     """
     root = _repo_root()
     owner = "system"
+    priority = (payload.priority or "normal").strip().lower()
+    if priority not in {"high", "normal", "low"}:
+        priority = "normal"
     fingerprint = _payload_fingerprint(payload)
     duplicate = _find_recent_duplicate(
         root,
@@ -702,6 +763,10 @@ async def run_pipeline(payload: IntakePipelineRequest):
             "fingerprint": fingerprint,
             "idempotency_key": (payload.idempotency_key or "").strip(),
             "timeout_sec": int(payload.timeout_sec),
+            "priority": priority,
+            "max_retries": max(0, int(payload.max_retries)),
+            "retry_backoff_base_sec": max(1, int(payload.retry_backoff_base_sec)),
+            "retries": 0,
             "cancel_requested": False,
         },
     )
@@ -714,6 +779,7 @@ async def run_pipeline(payload: IntakePipelineRequest):
         "created_at": created_at,
         "queue_size": _queued_count(root),
         "running_count": _running_count(root),
+        "priority": priority,
     }
 
 

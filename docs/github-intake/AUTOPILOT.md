@@ -73,6 +73,8 @@ python scripts/enrich_mcp_external_tools.py
 可靠性增强：
 - `POST /api/intake/pipeline` 支持 `idempotency_key`，用于幂等去重
 - `POST /api/intake/pipeline` 支持 `timeout_sec`，用于任务总超时预算
+- `POST /api/intake/pipeline` 支持 `priority=high|normal|low`
+- `POST /api/intake/pipeline` 支持自动重试：`max_retries` + `retry_backoff_base_sec`
 - 对 `queued/running` 任务可请求取消；running 时会终止当前子进程
 
 记录文件：

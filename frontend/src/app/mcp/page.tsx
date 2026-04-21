@@ -37,6 +37,11 @@ type PipelineTask = {
   reload_count?: number;
   snapshot?: string;
   error?: string;
+  priority?: "high" | "normal" | "low" | string;
+  retries?: number;
+  max_retries?: number;
+  next_run_at?: string;
+  last_error?: string;
 };
 
 export default function MCPPage() {
@@ -53,6 +58,7 @@ export default function MCPPage() {
   const [state, setState] = useState<PipelineState | null>(null);
   const [queueSize, setQueueSize] = useState(0);
   const [runningCount, setRunningCount] = useState(0);
+  const [priority, setPriority] = useState<"high" | "normal" | "low">("normal");
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
@@ -218,6 +224,9 @@ export default function MCPPage() {
           auto_enable: false,
           timeout_sec: 600,
           idempotency_key: `mcp-ui-${Date.now()}`,
+          priority,
+          max_retries: 2,
+          retry_backoff_base_sec: 5,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -365,6 +374,15 @@ export default function MCPPage() {
             </button>
           </div>
           <div className="mt-3 flex gap-2">
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as "high" | "normal" | "low")}
+              className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm"
+            >
+              <option value="high">高优先级</option>
+              <option value="normal">普通优先级</option>
+              <option value="low">低优先级</option>
+            </select>
             <button
               onClick={reloadTools}
               disabled={saving}
@@ -435,9 +453,13 @@ export default function MCPPage() {
                   {t.run_id} · {t.status || "-"}
                 </div>
                 <div className="text-xs text-gray-500 mt-1">
-                  {t.created_at || "-"} · 耗时: {t.duration_ms ?? "-"} ms · reload: {t.reload_count ?? "-"}
+                  {t.created_at || "-"} · 优先级: {t.priority || "normal"} · 重试: {t.retries ?? 0}/{t.max_retries ?? 0}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  耗时: {t.duration_ms ?? "-"} ms · reload: {t.reload_count ?? "-"} · 下次执行: {t.next_run_at || "-"}
                 </div>
                 {t.error && <div className="text-xs text-red-600 mt-1 break-all">{t.error}</div>}
+                {t.last_error && <div className="text-xs text-red-500 mt-1 break-all">last_error: {t.last_error}</div>}
                 <div className="mt-2 flex gap-2">
                   <button
                     onClick={() => cancelTask(t.run_id)}
