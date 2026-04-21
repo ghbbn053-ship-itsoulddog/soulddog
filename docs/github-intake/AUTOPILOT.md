@@ -36,3 +36,8 @@ python scripts/probe_mcp_external_tools.py
 ```bash
 python scripts/probe_mcp_external_tools.py --auto-enable
 ```
+
+4. 从 `vendor/autopilot` 提取端点线索并回填 URL：
+```bash
+python scripts/enrich_mcp_external_tools.py
+```

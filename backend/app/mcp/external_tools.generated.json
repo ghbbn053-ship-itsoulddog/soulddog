@@ -41,6 +41,9 @@
         "required": [
           "username"
         ]
+      },
+      "health": {
+        "alive": false
       }
     },
     {
@@ -83,6 +86,9 @@
         "required": [
           "username"
         ]
+      },
+      "health": {
+        "alive": false
       }
     },
     {
@@ -125,6 +131,9 @@
         "required": [
           "username"
         ]
+      },
+      "health": {
+        "alive": false
       }
     },
     {
@@ -167,6 +176,9 @@
         "required": [
           "username"
         ]
+      },
+      "health": {
+        "alive": false
       }
     },
     {
@@ -209,6 +221,9 @@
         "required": [
           "username"
         ]
+      },
+      "health": {
+        "alive": false
       }
     },
     {
@@ -251,6 +266,9 @@
         "required": [
           "username"
         ]
+      },
+      "health": {
+        "alive": false
       }
     },
     {
@@ -293,6 +311,9 @@
         "required": [
           "username"
         ]
+      },
+      "health": {
+        "alive": false
       }
     },
     {
@@ -335,6 +356,9 @@
         "required": [
           "username"
         ]
+      },
+      "health": {
+        "alive": false
       }
     },
     {
@@ -377,6 +401,9 @@
         "required": [
           "username"
         ]
+      },
+      "health": {
+        "alive": false
       }
     },
     {
@@ -419,7 +446,14 @@
         "required": [
           "username"
         ]
+      },
+      "health": {
+        "alive": false
       }
     }
-  ]
+  ],
+  "probe_summary": {
+    "checked": 10,
+    "alive": 0
+  }
 }

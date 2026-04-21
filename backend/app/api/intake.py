@@ -139,3 +139,27 @@ async def probe_generated_mcp_tools(auto_enable: bool = False):
             detail=f"probe_mcp_external_tools 失败: {(proc.stderr or proc.stdout or '').strip()[:500]}",
         )
     return {"success": True, "summary": (proc.stdout or "").strip()}
+
+
+@router.post("/enrich-mcp-tools")
+async def enrich_generated_mcp_tools():
+    root = _repo_root()
+    script = root / "scripts" / "enrich_mcp_external_tools.py"
+    if not script.exists():
+        raise HTTPException(status_code=404, detail="enrich_mcp_external_tools 脚本不存在")
+    try:
+        proc = subprocess.run(
+            ["python", str(script)],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="enrich_mcp_external_tools 执行超时")
+    if proc.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=f"enrich_mcp_external_tools 失败: {(proc.stderr or proc.stdout or '').strip()[:500]}",
+        )
+    return {"success": True, "summary": (proc.stdout or "").strip()}
