@@ -66,8 +66,14 @@ python scripts/enrich_mcp_external_tools.py
 
 任务控制（API）：
 - `POST /api/intake/pipeline/tasks/{run_id}/retry`
+- `POST /api/intake/pipeline/tasks/{run_id}/cancel`
 - `POST /api/intake/pipeline/tasks/{run_id}/rollback`
 - `POST /api/intake/pipeline/unlock`
+
+可靠性增强：
+- `POST /api/intake/pipeline` 支持 `idempotency_key`，用于幂等去重
+- `POST /api/intake/pipeline` 支持 `timeout_sec`，用于任务总超时预算
+- 对 `queued/running` 任务可请求取消；running 时会终止当前子进程
 
 记录文件：
 - `docs/github-intake/pipeline-history.jsonl`

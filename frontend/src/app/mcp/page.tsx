@@ -52,6 +52,7 @@ export default function MCPPage() {
   const [tasks, setTasks] = useState<PipelineTask[]>([]);
   const [state, setState] = useState<PipelineState | null>(null);
   const [queueSize, setQueueSize] = useState(0);
+  const [runningCount, setRunningCount] = useState(0);
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
@@ -73,6 +74,7 @@ export default function MCPPage() {
     const data = res.ok ? await res.json() : null;
     setState(data?.state || null);
     setQueueSize(Number(data?.queue_size || 0));
+    setRunningCount(Number(data?.running_count || 0));
   };
 
   const refreshTasks = async () => {
@@ -214,11 +216,17 @@ export default function MCPPage() {
           no_clone: true,
           update_repo_list: true,
           auto_enable: false,
+          timeout_sec: 600,
+          idempotency_key: `mcp-ui-${Date.now()}`,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `流水线失败(${res.status})`);
-      setMsg(`已入队：${data?.run_id || "-"} · 队列=${data?.queue_size ?? "-"}`);
+      if (data?.deduplicated) {
+        setMsg(`命中去重：复用任务 ${data?.run_id || "-"} · 队列=${data?.queue_size ?? "-"}`);
+      } else {
+        setMsg(`已入队：${data?.run_id || "-"} · 队列=${data?.queue_size ?? "-"}`);
+      }
       await refreshHistory();
       await refreshState();
       await refreshTasks();
@@ -290,6 +298,27 @@ export default function MCPPage() {
       await refreshTasks();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "回滚失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelTask = async (runId: string) => {
+    if (!runId) return;
+    setSaving(true);
+    setMsg("");
+    try {
+      const res = await fetch(`${API_BASE}/api/intake/pipeline/tasks/${encodeURIComponent(runId)}/cancel`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `取消失败(${res.status})`);
+      setMsg(data?.message || "已请求取消");
+      await refreshState();
+      await refreshTasks();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "取消失败");
     } finally {
       setSaving(false);
     }
@@ -376,7 +405,7 @@ export default function MCPPage() {
             </button>
           </div>
           <div className="mt-3 text-xs text-gray-500">
-            状态：{state?.running ? "运行中" : "空闲"} · run_id: {state?.run_id || "-"} · status: {state?.status || "-"} · 队列: {queueSize}
+            状态：{state?.running ? "运行中" : "空闲"} · run_id: {state?.run_id || "-"} · status: {state?.status || "-"} · 运行中: {runningCount} · 队列: {queueSize}
           </div>
           {msg && <div className="mt-3 text-sm text-gray-700">{msg}</div>}
         </div>
@@ -410,6 +439,13 @@ export default function MCPPage() {
                 </div>
                 {t.error && <div className="text-xs text-red-600 mt-1 break-all">{t.error}</div>}
                 <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => cancelTask(t.run_id)}
+                    disabled={saving || !["queued", "running"].includes(String(t.status || ""))}
+                    className="px-3 py-1 rounded-lg border border-red-300 text-red-700 bg-white text-xs disabled:opacity-50"
+                  >
+                    取消
+                  </button>
                   <button
                     onClick={() => retryTask(t.run_id)}
                     disabled={saving || state?.running}

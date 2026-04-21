@@ -14,6 +14,7 @@ import os
 import shutil
 import threading
 import time
+import hashlib
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -22,6 +23,8 @@ router = APIRouter(prefix="/api/intake", tags=["GitHub Intake"])
 _TASK_LOCK = threading.Lock()
 _WORKER_LOCK = threading.Lock()
 _WORKER_THREAD: threading.Thread | None = None
+_RUN_PROCS: dict[str, subprocess.Popen] = {}
+_RUN_PROCS_LOCK = threading.Lock()
 
 
 class IntakeRunRequest(BaseModel):
@@ -39,10 +42,16 @@ class IntakePipelineRequest(BaseModel):
     no_clone: bool = True
     update_repo_list: bool = True
     auto_enable: bool = False
+    timeout_sec: int = 600
+    idempotency_key: str | None = None
 
 
 class RetryRequest(BaseModel):
     auto_start: bool = True
+
+
+class PipelineCancelled(Exception):
+    pass
 
 
 def _repo_root() -> Path:
@@ -144,11 +153,51 @@ def _queued_count(root: Path) -> int:
     return sum(1 for t in _read_tasks(root) if str(t.get("status", "")) == "queued")
 
 
+def _running_count(root: Path) -> int:
+    return sum(1 for t in _read_tasks(root) if str(t.get("status", "")) == "running")
+
+
 def _get_task(root: Path, run_id: str) -> dict | None:
     for t in _read_tasks(root):
         if str(t.get("run_id", "")) == run_id:
             return t
     return None
+
+
+def _payload_fingerprint(payload: IntakePipelineRequest) -> str:
+    data = payload.model_dump()
+    data.pop("idempotency_key", None)
+    text = json.dumps(data, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def _find_recent_duplicate(root: Path, *, owner: str, idempotency_key: str | None, fingerprint: str) -> dict | None:
+    now = datetime.now().timestamp()
+    for t in _read_tasks(root):
+        if str(t.get("owner", "")) != owner:
+            continue
+        status = str(t.get("status", ""))
+        if status not in {"queued", "running"}:
+            continue
+        created_at = str(t.get("created_at", ""))
+        try:
+            ts = datetime.fromisoformat(created_at).timestamp()
+        except Exception:
+            ts = now
+        if now - ts > 600:
+            continue
+        if idempotency_key and str(t.get("idempotency_key", "")) == idempotency_key:
+            return t
+        if str(t.get("fingerprint", "")) == fingerprint:
+            return t
+    return None
+
+
+def _is_cancelled(root: Path, run_id: str) -> bool:
+    task = _get_task(root, run_id)
+    if not task:
+        return True
+    return bool(task.get("cancel_requested"))
 
 
 def _read_state(root: Path) -> dict:
@@ -220,6 +269,8 @@ def _run_pipeline_task(root: Path, run_id: str):
             **task,
             "status": "running",
             "started_at": started_at,
+            "cancelled_at": "",
+            "cancel_requested": bool(task.get("cancel_requested", False)),
         },
     )
 
@@ -250,6 +301,32 @@ def _run_pipeline_task(root: Path, run_id: str):
             },
         )
         _release_lock(root, run_id=run_id, ok=True)
+    except PipelineCancelled:
+        total_ms = int((perf_counter() - t0) * 1000)
+        _append_history(
+            root,
+            {
+                "run_id": run_id,
+                "started_at": started_at,
+                "duration_ms": total_ms,
+                "params": payload.model_dump(),
+                "success": False,
+                "error": "cancelled",
+            },
+        )
+        _upsert_task(
+            root,
+            {
+                **task,
+                "status": "cancelled",
+                "started_at": started_at,
+                "finished_at": datetime.now().isoformat(timespec="seconds"),
+                "cancelled_at": datetime.now().isoformat(timespec="seconds"),
+                "duration_ms": total_ms,
+                "error": "cancelled",
+            },
+        )
+        _release_lock(root, run_id=run_id, ok=False, error="cancelled")
     except Exception as e:
         total_ms = int((perf_counter() - t0) * 1000)
         _append_history(
@@ -298,6 +375,18 @@ def _worker_loop(root: Path):
                 },
             )
             continue
+        if bool(task.get("cancel_requested")):
+            _upsert_task(
+                root,
+                {
+                    **task,
+                    "status": "cancelled",
+                    "cancelled_at": datetime.now().isoformat(timespec="seconds"),
+                    "finished_at": datetime.now().isoformat(timespec="seconds"),
+                    "error": "cancelled before start",
+                },
+            )
+            continue
         _run_pipeline_task(root, run_id)
 
 
@@ -315,26 +404,43 @@ def _ensure_worker(root: Path):
         _WORKER_THREAD.start()
 
 
-def _run_script(root: Path, cmd: list[str], timeout: int, name: str) -> dict:
+def _run_script(root: Path, cmd: list[str], timeout: int, name: str, *, run_id: str | None = None) -> dict:
     t0 = perf_counter()
+    proc: subprocess.Popen | None = None
+    stdout = ""
+    stderr = ""
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
             cwd=str(root),
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout,
         )
+        if run_id:
+            with _RUN_PROCS_LOCK:
+                _RUN_PROCS[run_id] = proc
+        stdout, stderr = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
+        if proc:
+            proc.kill()
         raise HTTPException(status_code=504, detail=f"{name} 执行超时")
-    if proc.returncode != 0:
+    finally:
+        if run_id:
+            with _RUN_PROCS_LOCK:
+                _RUN_PROCS.pop(run_id, None)
+
+    if run_id and _is_cancelled(root, run_id):
+        raise PipelineCancelled("任务已取消")
+
+    if not proc or proc.returncode != 0:
         raise HTTPException(
             status_code=500,
-            detail=f"{name} 失败: {(proc.stderr or proc.stdout or '').strip()[:500]}",
+            detail=f"{name} 失败: {(stderr or stdout or '').strip()[:500]}",
         )
     return {
-        "stdout": (proc.stdout or "").strip(),
-        "stderr": (proc.stderr or "").strip(),
+        "stdout": (stdout or "").strip(),
+        "stderr": (stderr or "").strip(),
         "elapsed_ms": int((perf_counter() - t0) * 1000),
     }
 
@@ -376,6 +482,19 @@ def _restore_snapshot(root: Path, run_id: str) -> dict:
 
 def _execute_pipeline(root: Path, payload: IntakePipelineRequest, run_id: str, started_at: str) -> dict:
     t_pipeline = perf_counter()
+    deadline = t_pipeline + max(60, int(payload.timeout_sec))
+
+    def step_timeout() -> int:
+        remain = int(deadline - perf_counter())
+        if remain <= 0:
+            raise HTTPException(status_code=504, detail="pipeline 任务总超时")
+        return remain
+
+    def ensure_not_cancelled():
+        if _is_cancelled(root, run_id):
+            raise PipelineCancelled("任务已取消")
+
+    ensure_not_cancelled()
     # 1) autopilot
     autopilot_script = root / "scripts" / "github_autopilot.py"
     if not autopilot_script.exists():
@@ -394,29 +513,35 @@ def _execute_pipeline(root: Path, payload: IntakePipelineRequest, run_id: str, s
         run_cmd.append("--no-clone")
     if payload.update_repo_list:
         run_cmd.append("--update-repo-list")
-    step_run = _run_script(root, run_cmd, timeout=240, name="autopilot")
+    step_run = _run_script(root, run_cmd, timeout=min(240, step_timeout()), name="autopilot", run_id=run_id)
+    ensure_not_cancelled()
 
     # 2) generate
     step_generate = _run_script(
         root,
         ["python", str(root / "scripts" / "generate_mcp_external_tools.py")],
-        timeout=120,
+        timeout=min(120, step_timeout()),
         name="generate_mcp_external_tools",
+        run_id=run_id,
     )
+    ensure_not_cancelled()
 
     # 3) enrich
     step_enrich = _run_script(
         root,
         ["python", str(root / "scripts" / "enrich_mcp_external_tools.py")],
-        timeout=120,
+        timeout=min(120, step_timeout()),
         name="enrich_mcp_external_tools",
+        run_id=run_id,
     )
+    ensure_not_cancelled()
 
     # 4) probe
     probe_cmd = ["python", str(root / "scripts" / "probe_mcp_external_tools.py")]
     if payload.auto_enable:
         probe_cmd.append("--auto-enable")
-    step_probe = _run_script(root, probe_cmd, timeout=120, name="probe_mcp_external_tools")
+    step_probe = _run_script(root, probe_cmd, timeout=min(120, step_timeout()), name="probe_mcp_external_tools", run_id=run_id)
+    ensure_not_cancelled()
 
     # 5) mcp reload（在本进程内执行，确保后端生效）
     from app.services.mcp_registry import reload_mcp_registry
@@ -543,6 +668,25 @@ async def run_pipeline(payload: IntakePipelineRequest):
     入队后由后台 worker 串行执行，避免接口长时间阻塞。
     """
     root = _repo_root()
+    owner = "system"
+    fingerprint = _payload_fingerprint(payload)
+    duplicate = _find_recent_duplicate(
+        root,
+        owner=owner,
+        idempotency_key=(payload.idempotency_key or "").strip() or None,
+        fingerprint=fingerprint,
+    )
+    if duplicate:
+        return {
+            "success": True,
+            "queued": True,
+            "deduplicated": True,
+            "run_id": duplicate.get("run_id"),
+            "status": duplicate.get("status"),
+            "queue_size": _queued_count(root),
+            "running_count": _running_count(root),
+        }
+
     run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{os.getpid()}_{int(time.time() * 1000) % 100000}"
     created_at = datetime.now().isoformat(timespec="seconds")
     snapshot = _create_snapshot(root, run_id)
@@ -554,6 +698,11 @@ async def run_pipeline(payload: IntakePipelineRequest):
             "status": "queued",
             "params": payload.model_dump(),
             "snapshot": str(snapshot),
+            "owner": owner,
+            "fingerprint": fingerprint,
+            "idempotency_key": (payload.idempotency_key or "").strip(),
+            "timeout_sec": int(payload.timeout_sec),
+            "cancel_requested": False,
         },
     )
     _ensure_worker(root)
@@ -564,6 +713,7 @@ async def run_pipeline(payload: IntakePipelineRequest):
         "status": "queued",
         "created_at": created_at,
         "queue_size": _queued_count(root),
+        "running_count": _running_count(root),
     }
 
 
@@ -586,7 +736,12 @@ async def get_pipeline_latest():
 @router.get("/pipeline/state")
 async def get_pipeline_state():
     root = _repo_root()
-    return {"success": True, "state": _read_state(root), "queue_size": _queued_count(root)}
+    return {
+        "success": True,
+        "state": _read_state(root),
+        "queue_size": _queued_count(root),
+        "running_count": _running_count(root),
+    }
 
 
 @router.post("/pipeline/unlock")
@@ -634,7 +789,34 @@ async def retry_pipeline_task(run_id: str, payload: RetryRequest):
     req = IntakePipelineRequest(**params)
     if not payload.auto_start:
         return {"success": True, "message": "retry 参数已校验", "params": req.model_dump()}
+    req.idempotency_key = f"retry-{run_id}-{int(time.time())}"
     return await run_pipeline(req)
+
+
+@router.post("/pipeline/tasks/{run_id}/cancel")
+async def cancel_pipeline_task(run_id: str):
+    root = _repo_root()
+    task = _get_task(root, run_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="task 不存在")
+    status = str(task.get("status", ""))
+    if status in {"success", "failed", "cancelled"}:
+        return {"success": True, "message": f"任务已结束：{status}", "item": task}
+
+    task["cancel_requested"] = True
+    task["cancel_requested_at"] = datetime.now().isoformat(timespec="seconds")
+    _upsert_task(root, task)
+
+    if status == "running":
+        with _RUN_PROCS_LOCK:
+            proc = _RUN_PROCS.get(run_id)
+        if proc and proc.poll() is None:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+
+    return {"success": True, "message": "已请求取消", "run_id": run_id}
 
 
 @router.post("/pipeline/tasks/{run_id}/rollback")
