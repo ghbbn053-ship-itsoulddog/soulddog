@@ -81,3 +81,34 @@ async def get_autopilot_report():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"读取报告失败: {e}")
     return {"success": True, "report": data}
+
+
+@router.post("/generate-mcp-tools")
+async def generate_mcp_tools_from_report():
+    root = _repo_root()
+    script = root / "scripts" / "generate_mcp_external_tools.py"
+    if not script.exists():
+        raise HTTPException(status_code=404, detail="generate_mcp_external_tools 脚本不存在")
+    try:
+        proc = subprocess.run(
+            ["python", str(script)],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="generate_mcp_external_tools 执行超时")
+
+    if proc.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=f"generate_mcp_external_tools 失败: {(proc.stderr or proc.stdout or '').strip()[:500]}",
+        )
+
+    generated = root / "backend" / "app" / "mcp" / "external_tools.generated.json"
+    return {
+        "success": True,
+        "stdout": proc.stdout.strip(),
+        "generated_file": str(generated),
+    }

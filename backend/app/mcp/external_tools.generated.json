@@ -1,0 +1,425 @@
+{
+  "generated_from": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\docs\\github-intake\\autopilot-report.json",
+  "tools": [
+    {
+      "name": "ext_openai_openai_agents_python_1",
+      "description": "Generated MCP external tool stub for openai/openai-agents-python",
+      "kind": "http",
+      "method": "POST",
+      "url": "http://localhost:8787/mcp/call",
+      "timeout": 12,
+      "enabled": false,
+      "metadata": {
+        "source_repo": "openai/openai-agents-python",
+        "topic": "multi_agent",
+        "note": "请替换为真实外部服务地址后启用"
+      },
+      "parameters": {
+        "username": {
+          "type": "string",
+          "required": true,
+          "description": "学号"
+        },
+        "payload": {
+          "type": "object",
+          "required": false,
+          "description": "透传参数"
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "学号"
+          },
+          "payload": {
+            "type": "object",
+            "description": "透传参数"
+          }
+        },
+        "required": [
+          "username"
+        ]
+      }
+    },
+    {
+      "name": "ext_langchain_ai_langchain_2",
+      "description": "Generated MCP external tool stub for langchain-ai/langchain",
+      "kind": "http",
+      "method": "POST",
+      "url": "http://localhost:8787/mcp/call",
+      "timeout": 12,
+      "enabled": false,
+      "metadata": {
+        "source_repo": "langchain-ai/langchain",
+        "topic": "rag",
+        "note": "请替换为真实外部服务地址后启用"
+      },
+      "parameters": {
+        "username": {
+          "type": "string",
+          "required": true,
+          "description": "学号"
+        },
+        "payload": {
+          "type": "object",
+          "required": false,
+          "description": "透传参数"
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "学号"
+          },
+          "payload": {
+            "type": "object",
+            "description": "透传参数"
+          }
+        },
+        "required": [
+          "username"
+        ]
+      }
+    },
+    {
+      "name": "ext_neuml_txtai_3",
+      "description": "Generated MCP external tool stub for neuml/txtai",
+      "kind": "http",
+      "method": "POST",
+      "url": "http://localhost:8787/mcp/call",
+      "timeout": 12,
+      "enabled": false,
+      "metadata": {
+        "source_repo": "neuml/txtai",
+        "topic": "rag",
+        "note": "请替换为真实外部服务地址后启用"
+      },
+      "parameters": {
+        "username": {
+          "type": "string",
+          "required": true,
+          "description": "学号"
+        },
+        "payload": {
+          "type": "object",
+          "required": false,
+          "description": "透传参数"
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "学号"
+          },
+          "payload": {
+            "type": "object",
+            "description": "透传参数"
+          }
+        },
+        "required": [
+          "username"
+        ]
+      }
+    },
+    {
+      "name": "ext_microsoft_agent_framework_4",
+      "description": "Generated MCP external tool stub for microsoft/agent-framework",
+      "kind": "http",
+      "method": "POST",
+      "url": "http://localhost:8787/mcp/call",
+      "timeout": 12,
+      "enabled": false,
+      "metadata": {
+        "source_repo": "microsoft/agent-framework",
+        "topic": "multi_agent",
+        "note": "请替换为真实外部服务地址后启用"
+      },
+      "parameters": {
+        "username": {
+          "type": "string",
+          "required": true,
+          "description": "学号"
+        },
+        "payload": {
+          "type": "object",
+          "required": false,
+          "description": "透传参数"
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "学号"
+          },
+          "payload": {
+            "type": "object",
+            "description": "透传参数"
+          }
+        },
+        "required": [
+          "username"
+        ]
+      }
+    },
+    {
+      "name": "ext_langchain_ai_langgraph_5",
+      "description": "Generated MCP external tool stub for langchain-ai/langgraph",
+      "kind": "http",
+      "method": "POST",
+      "url": "http://localhost:8787/mcp/call",
+      "timeout": 12,
+      "enabled": false,
+      "metadata": {
+        "source_repo": "langchain-ai/langgraph",
+        "topic": "rag",
+        "note": "请替换为真实外部服务地址后启用"
+      },
+      "parameters": {
+        "username": {
+          "type": "string",
+          "required": true,
+          "description": "学号"
+        },
+        "payload": {
+          "type": "object",
+          "required": false,
+          "description": "透传参数"
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "学号"
+          },
+          "payload": {
+            "type": "object",
+            "description": "透传参数"
+          }
+        },
+        "required": [
+          "username"
+        ]
+      }
+    },
+    {
+      "name": "ext_raga_ai_hub_ragaai_catalyst_6",
+      "description": "Generated MCP external tool stub for raga-ai-hub/RagaAI-Catalyst",
+      "kind": "http",
+      "method": "POST",
+      "url": "http://localhost:8787/mcp/call",
+      "timeout": 12,
+      "enabled": false,
+      "metadata": {
+        "source_repo": "raga-ai-hub/RagaAI-Catalyst",
+        "topic": "rag",
+        "note": "请替换为真实外部服务地址后启用"
+      },
+      "parameters": {
+        "username": {
+          "type": "string",
+          "required": true,
+          "description": "学号"
+        },
+        "payload": {
+          "type": "object",
+          "required": false,
+          "description": "透传参数"
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "学号"
+          },
+          "payload": {
+            "type": "object",
+            "description": "透传参数"
+          }
+        },
+        "required": [
+          "username"
+        ]
+      }
+    },
+    {
+      "name": "ext_pathwaycom_pathway_7",
+      "description": "Generated MCP external tool stub for pathwaycom/pathway",
+      "kind": "http",
+      "method": "POST",
+      "url": "http://localhost:8787/mcp/call",
+      "timeout": 12,
+      "enabled": false,
+      "metadata": {
+        "source_repo": "pathwaycom/pathway",
+        "topic": "rag",
+        "note": "请替换为真实外部服务地址后启用"
+      },
+      "parameters": {
+        "username": {
+          "type": "string",
+          "required": true,
+          "description": "学号"
+        },
+        "payload": {
+          "type": "object",
+          "required": false,
+          "description": "透传参数"
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "学号"
+          },
+          "payload": {
+            "type": "object",
+            "description": "透传参数"
+          }
+        },
+        "required": [
+          "username"
+        ]
+      }
+    },
+    {
+      "name": "ext_deepset_ai_haystack_8",
+      "description": "Generated MCP external tool stub for deepset-ai/haystack",
+      "kind": "http",
+      "method": "POST",
+      "url": "http://localhost:8787/mcp/call",
+      "timeout": 12,
+      "enabled": false,
+      "metadata": {
+        "source_repo": "deepset-ai/haystack",
+        "topic": "rag",
+        "note": "请替换为真实外部服务地址后启用"
+      },
+      "parameters": {
+        "username": {
+          "type": "string",
+          "required": true,
+          "description": "学号"
+        },
+        "payload": {
+          "type": "object",
+          "required": false,
+          "description": "透传参数"
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "学号"
+          },
+          "payload": {
+            "type": "object",
+            "description": "透传参数"
+          }
+        },
+        "required": [
+          "username"
+        ]
+      }
+    },
+    {
+      "name": "ext_darrenhinde_openagentscontrol_9",
+      "description": "Generated MCP external tool stub for darrenhinde/OpenAgentsControl",
+      "kind": "http",
+      "method": "POST",
+      "url": "http://localhost:8787/mcp/call",
+      "timeout": 12,
+      "enabled": false,
+      "metadata": {
+        "source_repo": "darrenhinde/OpenAgentsControl",
+        "topic": "multi_agent",
+        "note": "请替换为真实外部服务地址后启用"
+      },
+      "parameters": {
+        "username": {
+          "type": "string",
+          "required": true,
+          "description": "学号"
+        },
+        "payload": {
+          "type": "object",
+          "required": false,
+          "description": "透传参数"
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "学号"
+          },
+          "payload": {
+            "type": "object",
+            "description": "透传参数"
+          }
+        },
+        "required": [
+          "username"
+        ]
+      }
+    },
+    {
+      "name": "ext_blazickjp_arxiv_mcp_server_10",
+      "description": "Generated MCP external tool stub for blazickjp/arxiv-mcp-server",
+      "kind": "http",
+      "method": "POST",
+      "url": "http://localhost:8787/mcp/call",
+      "timeout": 12,
+      "enabled": false,
+      "metadata": {
+        "source_repo": "blazickjp/arxiv-mcp-server",
+        "topic": "mcp",
+        "note": "请替换为真实外部服务地址后启用"
+      },
+      "parameters": {
+        "username": {
+          "type": "string",
+          "required": true,
+          "description": "学号"
+        },
+        "payload": {
+          "type": "object",
+          "required": false,
+          "description": "透传参数"
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "学号"
+          },
+          "payload": {
+            "type": "object",
+            "description": "透传参数"
+          }
+        },
+        "required": [
+          "username"
+        ]
+      }
+    }
+  ]
+}

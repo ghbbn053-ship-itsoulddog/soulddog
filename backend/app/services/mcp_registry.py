@@ -125,40 +125,45 @@ class MCPRegistry:
         """
         从声明式配置加载外部工具（拿来主义接入位）：
         - backend/app/mcp/external_tools.json
+        - backend/app/mcp/external_tools.generated.json
         """
-        config_path = Path(__file__).resolve().parents[1] / "mcp" / "external_tools.json"
-        if not config_path.exists():
-            return
-        try:
-            payload = json.loads(config_path.read_text(encoding="utf-8"))
-            items = payload.get("tools") or []
-            for it in items:
-                name = str(it.get("name", "")).strip()
-                kind = str(it.get("kind", "python")).strip().lower() or "python"
-                module_path = str(it.get("module_path", "")).strip()
-                func_name = str(it.get("func_name", "")).strip()
-                if not name:
-                    continue
-                if kind == "python" and (not module_path or not func_name):
-                    continue
-                if kind == "http" and not str(it.get("url", "")).strip():
-                    continue
-                spec = MCPToolSpec(
-                    name=name,
-                    description=str(it.get("description", "")).strip() or f"External tool: {name}",
-                    module_path=module_path,
-                    func_name=func_name,
-                    parameters=it.get("parameters") or {},
-                    input_schema=it.get("input_schema"),
-                    kind=kind,
-                    method=str(it.get("method", "POST")).strip().upper() or "POST",
-                    url=str(it.get("url", "")).strip(),
-                    timeout=int(it.get("timeout", 12) or 12),
-                )
-                self.register(spec)
-        except Exception:
-            # 外部配置失败不影响内置工具可用性
-            return
+        base = Path(__file__).resolve().parents[1] / "mcp"
+        for filename in ["external_tools.json", "external_tools.generated.json"]:
+            config_path = base / filename
+            if not config_path.exists():
+                continue
+            try:
+                payload = json.loads(config_path.read_text(encoding="utf-8"))
+                items = payload.get("tools") or []
+                for it in items:
+                    if it.get("enabled", True) is False:
+                        continue
+                    name = str(it.get("name", "")).strip()
+                    kind = str(it.get("kind", "python")).strip().lower() or "python"
+                    module_path = str(it.get("module_path", "")).strip()
+                    func_name = str(it.get("func_name", "")).strip()
+                    if not name:
+                        continue
+                    if kind == "python" and (not module_path or not func_name):
+                        continue
+                    if kind == "http" and not str(it.get("url", "")).strip():
+                        continue
+                    spec = MCPToolSpec(
+                        name=name,
+                        description=str(it.get("description", "")).strip() or f"External tool: {name}",
+                        module_path=module_path,
+                        func_name=func_name,
+                        parameters=it.get("parameters") or {},
+                        input_schema=it.get("input_schema"),
+                        kind=kind,
+                        method=str(it.get("method", "POST")).strip().upper() or "POST",
+                        url=str(it.get("url", "")).strip(),
+                        timeout=int(it.get("timeout", 12) or 12),
+                    )
+                    self.register(spec)
+            except Exception:
+                # 外部配置失败不影响内置工具可用性
+                continue
 
     def list_tools(self) -> List[Dict[str, Any]]:
         tools = []
