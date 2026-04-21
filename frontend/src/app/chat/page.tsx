@@ -408,7 +408,7 @@ export default function ChatPage() {
   useEffect(() => {
     const savedUsername = localStorage.getItem("username");
     if (!savedUsername) {
-      window.location.href = "/login";
+      setInitialLoading(false);
       return;
     }
     setUsername(savedUsername);
@@ -637,6 +637,20 @@ export default function ChatPage() {
                 <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
                 <p className="text-sm text-gray-400">加载中...</p>
               </div>
+            </div>
+          ) : !username ? (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
+              <div className="w-20 h-20 bg-gradient-to-br from-gray-400 to-gray-500 rounded-2xl flex items-center justify-center shadow-2xl shadow-gray-400/20 mb-6">
+                <User className="w-10 h-10 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">未登录</h2>
+              <p className="text-gray-500 mb-6 text-center max-w-md">请先登录后再开始对话</p>
+              <button
+                onClick={() => { window.location.href = "/login"; }}
+                className="px-5 py-2.5 rounded-xl bg-gray-900 text-white hover:bg-gray-800 transition"
+              >
+                前往登录
+              </button>
             </div>
           ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
