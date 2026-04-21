@@ -10,6 +10,7 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 from time import perf_counter
+import os
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -42,6 +43,10 @@ def _history_path(root: Path) -> Path:
     return root / "docs" / "github-intake" / "pipeline-history.jsonl"
 
 
+def _state_path(root: Path) -> Path:
+    return root / "docs" / "github-intake" / "pipeline-state.json"
+
+
 def _append_history(root: Path, record: dict):
     hp = _history_path(root)
     hp.parent.mkdir(parents=True, exist_ok=True)
@@ -66,6 +71,51 @@ def _read_history(root: Path, limit: int = 20) -> list[dict]:
         if len(rows) >= max(1, limit):
             break
     return rows
+
+
+def _read_state(root: Path) -> dict:
+    sp = _state_path(root)
+    if not sp.exists():
+        return {"running": False}
+    try:
+        return json.loads(sp.read_text(encoding="utf-8"))
+    except Exception:
+        return {"running": False}
+
+
+def _write_state(root: Path, state: dict):
+    sp = _state_path(root)
+    sp.parent.mkdir(parents=True, exist_ok=True)
+    sp.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _acquire_lock(root: Path) -> dict:
+    state = _read_state(root)
+    if state.get("running"):
+        raise HTTPException(status_code=409, detail="pipeline 正在运行中")
+    run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{os.getpid()}"
+    new_state = {
+        "running": True,
+        "run_id": run_id,
+        "started_at": datetime.now().isoformat(timespec="seconds"),
+        "status": "running",
+    }
+    _write_state(root, new_state)
+    return new_state
+
+
+def _release_lock(root: Path, run_id: str, ok: bool, error: str = ""):
+    now = datetime.now().isoformat(timespec="seconds")
+    _write_state(
+        root,
+        {
+            "running": False,
+            "run_id": run_id,
+            "finished_at": now,
+            "status": "success" if ok else "failed",
+            "error": error,
+        },
+    )
 
 
 def _run_script(root: Path, cmd: list[str], timeout: int, name: str) -> dict:
@@ -185,94 +235,113 @@ async def run_pipeline(payload: IntakePipelineRequest):
     run -> generate -> enrich -> probe -> mcp reload
     """
     root = _repo_root()
+    lock = _acquire_lock(root)
+    run_id = lock["run_id"]
     started_at = datetime.now().isoformat(timespec="seconds")
     t_pipeline = perf_counter()
+    try:
+        # 1) autopilot
+        autopilot_script = root / "scripts" / "github_autopilot.py"
+        if not autopilot_script.exists():
+            raise HTTPException(status_code=404, detail="github_autopilot 脚本不存在")
+        run_cmd = [
+            "python",
+            str(autopilot_script),
+            "--per-topic",
+            str(payload.per_topic),
+            "--clone-top",
+            str(payload.clone_top),
+            "--integrate-top",
+            str(payload.integrate_top),
+        ]
+        if payload.no_clone:
+            run_cmd.append("--no-clone")
+        if payload.update_repo_list:
+            run_cmd.append("--update-repo-list")
+        step_run = _run_script(root, run_cmd, timeout=240, name="autopilot")
 
-    # 1) autopilot
-    autopilot_script = root / "scripts" / "github_autopilot.py"
-    if not autopilot_script.exists():
-        raise HTTPException(status_code=404, detail="github_autopilot 脚本不存在")
-    run_cmd = [
-        "python",
-        str(autopilot_script),
-        "--per-topic",
-        str(payload.per_topic),
-        "--clone-top",
-        str(payload.clone_top),
-        "--integrate-top",
-        str(payload.integrate_top),
-    ]
-    if payload.no_clone:
-        run_cmd.append("--no-clone")
-    if payload.update_repo_list:
-        run_cmd.append("--update-repo-list")
-    step_run = _run_script(root, run_cmd, timeout=240, name="autopilot")
+        # 2) generate
+        step_generate = _run_script(
+            root,
+            ["python", str(root / "scripts" / "generate_mcp_external_tools.py")],
+            timeout=120,
+            name="generate_mcp_external_tools",
+        )
 
-    # 2) generate
-    step_generate = _run_script(
-        root,
-        ["python", str(root / "scripts" / "generate_mcp_external_tools.py")],
-        timeout=120,
-        name="generate_mcp_external_tools",
-    )
+        # 3) enrich
+        step_enrich = _run_script(
+            root,
+            ["python", str(root / "scripts" / "enrich_mcp_external_tools.py")],
+            timeout=120,
+            name="enrich_mcp_external_tools",
+        )
 
-    # 3) enrich
-    step_enrich = _run_script(
-        root,
-        ["python", str(root / "scripts" / "enrich_mcp_external_tools.py")],
-        timeout=120,
-        name="enrich_mcp_external_tools",
-    )
+        # 4) probe
+        probe_cmd = ["python", str(root / "scripts" / "probe_mcp_external_tools.py")]
+        if payload.auto_enable:
+            probe_cmd.append("--auto-enable")
+        step_probe = _run_script(root, probe_cmd, timeout=120, name="probe_mcp_external_tools")
 
-    # 4) probe
-    probe_cmd = ["python", str(root / "scripts" / "probe_mcp_external_tools.py")]
-    if payload.auto_enable:
-        probe_cmd.append("--auto-enable")
-    step_probe = _run_script(root, probe_cmd, timeout=120, name="probe_mcp_external_tools")
+        # 5) mcp reload（在本进程内执行，确保后端生效）
+        from app.services.mcp_registry import reload_mcp_registry
 
-    # 5) mcp reload（在本进程内执行，确保后端生效）
-    from app.services.mcp_registry import reload_mcp_registry
+        registry = reload_mcp_registry()
+        tools = registry.list_tools()
+        total_ms = int((perf_counter() - t_pipeline) * 1000)
 
-    registry = reload_mcp_registry()
-    tools = registry.list_tools()
-    total_ms = int((perf_counter() - t_pipeline) * 1000)
-
-    result = {
-        "success": True,
-        "started_at": started_at,
-        "duration_ms": total_ms,
-        "steps": {
-            "run": step_run["stdout"],
-            "generate": step_generate["stdout"],
-            "enrich": step_enrich["stdout"],
-            "probe": step_probe["stdout"],
-            "reload_count": len(tools),
-            "timing_ms": {
-                "run": step_run["elapsed_ms"],
-                "generate": step_generate["elapsed_ms"],
-                "enrich": step_enrich["elapsed_ms"],
-                "probe": step_probe["elapsed_ms"],
-            },
-        },
-        "paths": {
-            "report_json": str(root / "docs" / "github-intake" / "autopilot-report.json"),
-            "generated_tools": str(root / "backend" / "app" / "mcp" / "external_tools.generated.json"),
-        },
-    }
-
-    _append_history(
-        root,
-        {
+        result = {
+            "success": True,
+            "run_id": run_id,
             "started_at": started_at,
             "duration_ms": total_ms,
-            "params": payload.model_dump(),
-            "reload_count": len(tools),
-            "timing_ms": result["steps"]["timing_ms"],
-            "success": True,
-        },
-    )
+            "steps": {
+                "run": step_run["stdout"],
+                "generate": step_generate["stdout"],
+                "enrich": step_enrich["stdout"],
+                "probe": step_probe["stdout"],
+                "reload_count": len(tools),
+                "timing_ms": {
+                    "run": step_run["elapsed_ms"],
+                    "generate": step_generate["elapsed_ms"],
+                    "enrich": step_enrich["elapsed_ms"],
+                    "probe": step_probe["elapsed_ms"],
+                },
+            },
+            "paths": {
+                "report_json": str(root / "docs" / "github-intake" / "autopilot-report.json"),
+                "generated_tools": str(root / "backend" / "app" / "mcp" / "external_tools.generated.json"),
+            },
+        }
 
-    return result
+        _append_history(
+            root,
+            {
+                "run_id": run_id,
+                "started_at": started_at,
+                "duration_ms": total_ms,
+                "params": payload.model_dump(),
+                "reload_count": len(tools),
+                "timing_ms": result["steps"]["timing_ms"],
+                "success": True,
+            },
+        )
+        _release_lock(root, run_id=run_id, ok=True)
+        return result
+    except Exception as e:
+        total_ms = int((perf_counter() - t_pipeline) * 1000)
+        _append_history(
+            root,
+            {
+                "run_id": run_id,
+                "started_at": started_at,
+                "duration_ms": total_ms,
+                "params": payload.model_dump(),
+                "success": False,
+                "error": str(e),
+            },
+        )
+        _release_lock(root, run_id=run_id, ok=False, error=str(e))
+        raise
 
 
 @router.get("/pipeline/history")
@@ -289,3 +358,28 @@ async def get_pipeline_latest():
     if not rows:
         raise HTTPException(status_code=404, detail="暂无 pipeline 运行记录")
     return {"success": True, "item": rows[0]}
+
+
+@router.get("/pipeline/state")
+async def get_pipeline_state():
+    root = _repo_root()
+    return {"success": True, "state": _read_state(root)}
+
+
+@router.post("/pipeline/unlock")
+async def force_unlock_pipeline():
+    root = _repo_root()
+    state = _read_state(root)
+    if not state.get("running"):
+        return {"success": True, "message": "pipeline 未锁定", "state": state}
+    _write_state(
+        root,
+        {
+            "running": False,
+            "run_id": state.get("run_id", ""),
+            "finished_at": datetime.now().isoformat(timespec="seconds"),
+            "status": "force_unlocked",
+            "error": "manual unlock",
+        },
+    )
+    return {"success": True, "message": "pipeline 已强制解锁", "state": _read_state(root)}

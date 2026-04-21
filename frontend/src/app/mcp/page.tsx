@@ -18,6 +18,15 @@ type PipelineItem = {
   timing_ms?: Record<string, number>;
 };
 
+type PipelineState = {
+  running?: boolean;
+  run_id?: string;
+  started_at?: string;
+  status?: string;
+  finished_at?: string;
+  error?: string;
+};
+
 export default function MCPPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -28,6 +37,7 @@ export default function MCPPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [importUrl, setImportUrl] = useState("");
   const [history, setHistory] = useState<PipelineItem[]>([]);
+  const [state, setState] = useState<PipelineState | null>(null);
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
@@ -44,6 +54,12 @@ export default function MCPPage() {
     setHistory(data?.items || []);
   };
 
+  const refreshState = async () => {
+    const res = await fetch(`${API_BASE}/api/intake/pipeline/state`, { credentials: "include" });
+    const data = res.ok ? await res.json() : null;
+    setState(data?.state || null);
+  };
+
   useEffect(() => {
     const run = async () => {
       try {
@@ -56,6 +72,7 @@ export default function MCPPage() {
         setUsername(String(me.username));
         await refresh();
         await refreshHistory();
+        await refreshState();
       } catch {
         router.replace("/chat");
       } finally {
@@ -173,8 +190,28 @@ export default function MCPPage() {
       setMsg(`流水线完成：reload=${data?.steps?.reload_count ?? "-"}`);
       await refresh();
       await refreshHistory();
+      await refreshState();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "流水线失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const forceUnlock = async () => {
+    setSaving(true);
+    setMsg("");
+    try {
+      const res = await fetch(`${API_BASE}/api/intake/pipeline/unlock`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `解锁失败(${res.status})`);
+      setMsg(data?.message || "已解锁");
+      await refreshState();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "解锁失败");
     } finally {
       setSaving(false);
     }
@@ -249,9 +286,19 @@ export default function MCPPage() {
             >
               一键流水线
             </button>
+            <button
+              onClick={forceUnlock}
+              disabled={saving}
+              className="px-4 py-2 rounded-lg border border-red-300 text-red-600 bg-white disabled:opacity-50"
+            >
+              强制解锁
+            </button>
             <button onClick={() => router.push("/chat")} className="px-4 py-2 rounded-lg border border-gray-300 bg-white">
               返回聊天
             </button>
+          </div>
+          <div className="mt-3 text-xs text-gray-500">
+            状态：{state?.running ? "运行中" : "空闲"} · run_id: {state?.run_id || "-"} · status: {state?.status || "-"}
           </div>
           {msg && <div className="mt-3 text-sm text-gray-700">{msg}</div>}
         </div>
