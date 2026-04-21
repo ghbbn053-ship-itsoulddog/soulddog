@@ -126,7 +126,7 @@ class MCPRegistry:
         从声明式配置加载外部工具（拿来主义接入位）：
         - backend/app/mcp/external_tools.json
         """
-        config_path = Path("backend/app/mcp/external_tools.json")
+        config_path = Path(__file__).resolve().parents[1] / "mcp" / "external_tools.json"
         if not config_path.exists():
             return
         try:
