@@ -113,3 +113,11 @@
 - 当前支持策略：
   - 主路径：`openai_agents`（OpenAI Agents SDK）
   - 兼容位：`langgraph`（先暴露能力位，后续接工作流图）
+
+## 10. 新增落地（2026-04-21 深夜）
+- 向量层新增可切换后端：
+  - 默认：Milvus（现网）
+  - 可选：`VECTOR_BACKEND=txtai`（轻量本地文件存储）
+- 目标：
+  - 降低开发环境对 Milvus 强依赖
+  - 保持 `get_vector_store()` 与调用接口不变，平滑切换

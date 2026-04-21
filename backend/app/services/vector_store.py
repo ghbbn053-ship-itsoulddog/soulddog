@@ -6,7 +6,9 @@ from pymilvus import connections, Collection, FieldSchema, CollectionSchema, Dat
 import os
 import json
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
+from pathlib import Path
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +243,137 @@ class VectorStore:
         logger.info("✅ Milvus 连接已关闭")
 
 
+class TxtaiVectorStore:
+    """
+    轻量向量存储后端（txtai 风格，文件持久化）。
+    说明：
+    - 使用现有外部 embedding（保持与当前模型层兼容）
+    - 无需 Milvus，适合本地开发/低资源部署
+    """
+
+    def __init__(self):
+        self.data_path = Path(os.getenv("TXTAI_DATA_PATH", "backend/data/txtai_vectors.json"))
+        self.available = True
+        self._rows: List[Dict[str, Any]] = []
+        self._next_id = 1
+        self._load()
+
+    def _load(self):
+        try:
+            if self.data_path.exists():
+                payload = json.loads(self.data_path.read_text(encoding="utf-8"))
+                self._rows = payload.get("rows", []) or []
+                self._next_id = int(payload.get("next_id", len(self._rows) + 1))
+        except Exception as e:
+            logger.warning(f"⚠️ TxtaiStore 加载失败，使用空存储: {e}")
+            self._rows = []
+            self._next_id = 1
+
+    def _save(self):
+        try:
+            self.data_path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {"next_id": self._next_id, "rows": self._rows}
+            self.data_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        except Exception as e:
+            logger.warning(f"⚠️ TxtaiStore 持久化失败: {e}")
+
+    @staticmethod
+    def _cosine(a: List[float], b: List[float]) -> float:
+        if not a or not b or len(a) != len(b):
+            return -1.0
+        dot = 0.0
+        na = 0.0
+        nb = 0.0
+        for x, y in zip(a, b):
+            dot += x * y
+            na += x * x
+            nb += y * y
+        if na <= 0 or nb <= 0:
+            return -1.0
+        return dot / (math.sqrt(na) * math.sqrt(nb))
+
+    def create_collection(self, dim: int = 1536):
+        # 兼容接口，无需显式建库
+        return
+
+    def add_documents(
+        self,
+        user_id: int,
+        texts: List[str],
+        embeddings: List[List[float]],
+        sources: List[str],
+        metadatas: Optional[List[Dict]] = None,
+    ) -> List[int]:
+        ids: List[int] = []
+        existing = {(r.get("user_id"), r.get("text")) for r in self._rows}
+        for i, text in enumerate(texts):
+            if (user_id, text) in existing:
+                continue
+            rid = self._next_id
+            self._next_id += 1
+            row = {
+                "id": rid,
+                "user_id": user_id,
+                "text": text,
+                "embedding": embeddings[i],
+                "source": sources[i] if i < len(sources) else "",
+                "metadata": metadatas[i] if metadatas and i < len(metadatas) else {},
+            }
+            self._rows.append(row)
+            ids.append(rid)
+        self._save()
+        logger.info(f"✅ TxtaiStore 插入 {len(ids)} 条文档")
+        return ids
+
+    def search(
+        self,
+        user_id: int,
+        query_embedding: List[float],
+        top_k: int = 5,
+        data_types: Optional[List[str]] = None,
+        semester: str = "",
+    ) -> List[Dict]:
+        candidates: List[Dict[str, Any]] = []
+        for r in self._rows:
+            if int(r.get("user_id", -1)) != int(user_id):
+                continue
+            meta = r.get("metadata") or {}
+            if data_types:
+                hit_type = meta.get("data_type") or meta.get("type")
+                if hit_type not in data_types:
+                    continue
+            if semester:
+                hit_sem = str(meta.get("semester", "")).strip()
+                if hit_sem and hit_sem != semester:
+                    continue
+            score = self._cosine(query_embedding, r.get("embedding") or [])
+            if score < 0:
+                continue
+            candidates.append(
+                {
+                    "id": r.get("id"),
+                    "text": r.get("text"),
+                    "source": r.get("source"),
+                    "metadata": meta,
+                    "score": float(score),
+                }
+            )
+        candidates.sort(key=lambda x: x["score"], reverse=True)
+        hits = candidates[: max(1, top_k)]
+        logger.info(f"✅ TxtaiStore 搜索完成，找到 {len(hits)} 条相关文档")
+        return hits
+
+    def delete_user_data(self, user_id: int):
+        before = len(self._rows)
+        self._rows = [r for r in self._rows if int(r.get("user_id", -1)) != int(user_id)]
+        removed = before - len(self._rows)
+        self._save()
+        logger.info(f"✅ TxtaiStore 删除用户 {user_id} 向量数据: {removed} 条")
+
+    def close(self):
+        self._save()
+
+
 # 全局实例（懒加载）
 _vector_store = None
 
@@ -248,5 +381,10 @@ def get_vector_store() -> VectorStore:
     """获取向量库实例（懒加载）"""
     global _vector_store
     if _vector_store is None:
-        _vector_store = VectorStore()
+        backend = (os.getenv("VECTOR_BACKEND", "milvus") or "milvus").strip().lower()
+        if backend == "txtai":
+            _vector_store = TxtaiVectorStore()
+            logger.info("✅ 向量后端已切换: txtai(轻量本地)")
+        else:
+            _vector_store = VectorStore()
     return _vector_store
