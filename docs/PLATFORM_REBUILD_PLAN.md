@@ -121,3 +121,11 @@
 - 目标：
   - 降低开发环境对 Milvus 强依赖
   - 保持 `get_vector_store()` 与调用接口不变，平滑切换
+
+## 11. 新增落地（2026-04-21 持续迭代）
+- MCP Registry 增加外部声明式加载：
+  - 配置文件：`backend/app/mcp/external_tools.json`
+  - 启动自动加载外部工具并统一纳入 `/api/mcp/tools`
+- 价值：
+  - 为“社区 MCP 项目接入”提供低成本入口
+  - 不改现有 API 协议，兼容旧工具链

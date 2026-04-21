@@ -10,6 +10,8 @@ MCP 工具注册中心（最小可用版）。
 from __future__ import annotations
 
 import importlib
+import json
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
 
@@ -28,6 +30,7 @@ class MCPRegistry:
     def __init__(self):
         self._tools: Dict[str, MCPToolSpec] = {}
         self._register_builtin_tools()
+        self._load_external_tools()
 
     def _register_builtin_tools(self):
         self.register(
@@ -113,6 +116,36 @@ class MCPRegistry:
     def register(self, spec: MCPToolSpec):
         self._tools[spec.name] = spec
 
+    def _load_external_tools(self):
+        """
+        从声明式配置加载外部工具（拿来主义接入位）：
+        - backend/app/mcp/external_tools.json
+        """
+        config_path = Path("backend/app/mcp/external_tools.json")
+        if not config_path.exists():
+            return
+        try:
+            payload = json.loads(config_path.read_text(encoding="utf-8"))
+            items = payload.get("tools") or []
+            for it in items:
+                name = str(it.get("name", "")).strip()
+                module_path = str(it.get("module_path", "")).strip()
+                func_name = str(it.get("func_name", "")).strip()
+                if not name or not module_path or not func_name:
+                    continue
+                spec = MCPToolSpec(
+                    name=name,
+                    description=str(it.get("description", "")).strip() or f"External tool: {name}",
+                    module_path=module_path,
+                    func_name=func_name,
+                    parameters=it.get("parameters") or {},
+                    input_schema=it.get("input_schema"),
+                )
+                self.register(spec)
+        except Exception:
+            # 外部配置失败不影响内置工具可用性
+            return
+
     def list_tools(self) -> List[Dict[str, Any]]:
         tools = []
         for spec in self._tools.values():
@@ -172,4 +205,3 @@ def get_mcp_registry() -> MCPRegistry:
     if _mcp_registry_singleton is None:
         _mcp_registry_singleton = MCPRegistry()
     return _mcp_registry_singleton
-

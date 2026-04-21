@@ -1,0 +1,29 @@
+{
+  "tools": [
+    {
+      "name": "ext_query_personal_info",
+      "description": "External alias for personal info tool (community-configurable)",
+      "module_path": "app.mcp.tools",
+      "func_name": "query_personal_info",
+      "parameters": {
+        "username": {
+          "type": "string",
+          "required": true,
+          "description": "学号"
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "学号"
+          }
+        },
+        "required": [
+          "username"
+        ]
+      }
+    }
+  ]
+}
