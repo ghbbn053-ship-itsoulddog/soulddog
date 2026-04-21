@@ -7,9 +7,13 @@ const nextConfig: NextConfig = {
   distDir: 'dist',
   allowedDevOrigins: [
     '*.dev.coze.site',
+    '*',
     'localhost',
+    'localhost:5000',
     '127.0.0.1',
+    '127.0.0.1:5000',
     '192.168.88.100',
+    '192.168.88.100:5000',
   ],
   images: {
     remotePatterns: [
