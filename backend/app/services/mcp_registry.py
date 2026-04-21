@@ -134,9 +134,14 @@ class MCPRegistry:
             items = payload.get("tools") or []
             for it in items:
                 name = str(it.get("name", "")).strip()
+                kind = str(it.get("kind", "python")).strip().lower() or "python"
                 module_path = str(it.get("module_path", "")).strip()
                 func_name = str(it.get("func_name", "")).strip()
-                if not name or not module_path or not func_name:
+                if not name:
+                    continue
+                if kind == "python" and (not module_path or not func_name):
+                    continue
+                if kind == "http" and not str(it.get("url", "")).strip():
                     continue
                 spec = MCPToolSpec(
                     name=name,
@@ -145,7 +150,7 @@ class MCPRegistry:
                     func_name=func_name,
                     parameters=it.get("parameters") or {},
                     input_schema=it.get("input_schema"),
-                    kind=str(it.get("kind", "python")).strip().lower() or "python",
+                    kind=kind,
                     method=str(it.get("method", "POST")).strip().upper() or "POST",
                     url=str(it.get("url", "")).strip(),
                     timeout=int(it.get("timeout", 12) or 12),
