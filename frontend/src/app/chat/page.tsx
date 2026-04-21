@@ -586,6 +586,13 @@ export default function ChatPage() {
               <Blocks className="w-4 h-4" />
               Skills
             </button>
+            <button
+              onClick={() => router.push("/mcp")}
+              className="col-span-2 flex items-center justify-center gap-1.5 py-2 px-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition text-sm text-gray-700"
+            >
+              <Wrench className="w-4 h-4" />
+              MCP 工具
+            </button>
           </div>
         </div>
 

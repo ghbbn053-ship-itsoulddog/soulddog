@@ -34,6 +34,7 @@ export default function SkillsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
@@ -121,6 +122,31 @@ export default function SkillsPage() {
     }
   };
 
+  const uploadFromFile = async () => {
+    if (!username || !uploadFile) return;
+    setSaving(true);
+    setMsg("");
+    try {
+      const formData = new FormData();
+      formData.append("username", username);
+      formData.append("skill_file", uploadFile);
+      const res = await fetch(`${API_BASE}/api/skills/upload-file`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `文件安装失败(${res.status})`);
+      setMsg("Skill 文件安装成功");
+      setUploadFile(null);
+      await refresh(username);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "文件安装失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const toggle = async (name: string, enabled: boolean) => {
     if (!username) return;
     await fetch(`${API_BASE}/api/skills/${encodeURIComponent(name)}/enable`, {
@@ -171,6 +197,21 @@ export default function SkillsPage() {
               className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50"
             >
               URL 导入
+            </button>
+          </div>
+          <div className="mt-3 flex gap-2 items-center">
+            <input
+              type="file"
+              accept=".yaml,.yml"
+              onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+            />
+            <button
+              onClick={uploadFromFile}
+              disabled={saving || !uploadFile}
+              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50"
+            >
+              文件安装
             </button>
           </div>
           <div className="mt-3 flex gap-2">
