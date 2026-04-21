@@ -12,6 +12,8 @@ from app.api import mcp as mcp_router
 from app.api.auth_sync import router as auth_sync_router
 from app.api.education import router as education_router
 from app.api.options import router as options_router
+from app.api.models import router as models_router
+from app.api.skills import router as skills_router
 
 app = FastAPI(title="教务系统 AI 助手 API", version="1.0.0")
 app.state.session_store = session_store
@@ -35,6 +37,8 @@ app.add_middleware(
 app.include_router(auth_sync_router)
 app.include_router(education_router)
 app.include_router(options_router)
+app.include_router(models_router)
+app.include_router(skills_router)
 app.include_router(chat.router)
 app.include_router(mcp_router.router)
 

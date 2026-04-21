@@ -17,7 +17,9 @@ import {
   ChevronLeft,
   Sparkles,
   Wrench,
-  LogOut
+  LogOut,
+  Settings,
+  Blocks
 } from "lucide-react";
 
 interface ToolCall {
@@ -562,13 +564,29 @@ export default function ChatPage() {
               <ChevronLeft className="w-5 h-5" />
             </button>
           </div>
-          <button
-            onClick={newConversation}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition shadow-lg shadow-gray-900/20"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="font-medium">新建对话</span>
-          </button>
+            <button
+              onClick={newConversation}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition shadow-lg shadow-gray-900/20"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="font-medium">新建对话</span>
+            </button>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              onClick={() => router.push("/settings/models")}
+              className="flex items-center justify-center gap-1.5 py-2 px-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition text-sm text-gray-700"
+            >
+              <Settings className="w-4 h-4" />
+              模型
+            </button>
+            <button
+              onClick={() => router.push("/skills")}
+              className="flex items-center justify-center gap-1.5 py-2 px-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition text-sm text-gray-700"
+            >
+              <Blocks className="w-4 h-4" />
+              Skills
+            </button>
+          </div>
         </div>
 
         {/* 对话列表 */}

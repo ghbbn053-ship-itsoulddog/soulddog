@@ -49,10 +49,12 @@ class BaseProvider:
 class QwenProvider(BaseProvider):
     """Qwen 适配器（兼容现有实现）。"""
 
-    def __init__(self):
+    def __init__(self, model: Optional[str] = None):
         from app.services.qwen_service import get_qwen_service
 
         self._svc = get_qwen_service()
+        if model:
+            setattr(self._svc, "model", model)
         self.available = bool(getattr(self._svc, "available", False))
 
     def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7) -> Dict[str, Any]:
@@ -91,8 +93,8 @@ class LiteLLMProvider(BaseProvider):
     工具调用与RAG暂通过统一层回退到 QwenProvider。
     """
 
-    def __init__(self):
-        self.model = os.getenv("LITELLM_MODEL", os.getenv("QWEN_MODEL", "qwen-plus"))
+    def __init__(self, model: Optional[str] = None):
+        self.model = model or os.getenv("LITELLM_MODEL", os.getenv("QWEN_MODEL", "qwen-plus"))
         self.api_key = os.getenv("LITELLM_API_KEY") or os.getenv("QWEN_API_KEY")
         self.api_base = os.getenv("LITELLM_API_BASE")
         self._completion = None
@@ -191,14 +193,14 @@ class UnifiedModelProvider(BaseProvider):
     - 主 Provider 失败时自动回退 QwenProvider（保证可用性）
     """
 
-    def __init__(self):
-        provider_name = os.getenv("MODEL_PROVIDER", "qwen").strip().lower()
+    def __init__(self, provider_name: Optional[str] = None, model: Optional[str] = None):
+        provider_name = (provider_name or os.getenv("MODEL_PROVIDER", "qwen")).strip().lower()
         self.provider_name = provider_name
         self.primary: BaseProvider
-        self.fallback: BaseProvider = QwenProvider()
+        self.fallback: BaseProvider = QwenProvider(model=model if provider_name == "qwen" else None)
 
         if provider_name == "litellm":
-            self.primary = LiteLLMProvider()
+            self.primary = LiteLLMProvider(model=model)
         else:
             self.primary = self.fallback
 
@@ -278,3 +280,19 @@ def get_model_provider() -> UnifiedModelProvider:
         _model_provider_singleton = UnifiedModelProvider()
     return _model_provider_singleton
 
+
+def reset_model_provider():
+    global _model_provider_singleton
+    _model_provider_singleton = None
+
+
+def get_model_provider_for_user(username: str, session_store) -> UnifiedModelProvider:
+    """
+    按用户偏好创建 provider（避免全局环境变量污染）。
+    """
+    pref = session_store.get_user_model_preference(username) if session_store else None
+    if not pref:
+        return get_model_provider()
+    provider = (pref.get("provider") or "qwen").strip().lower()
+    model = (pref.get("model") or "").strip() or None
+    return UnifiedModelProvider(provider_name=provider, model=model)

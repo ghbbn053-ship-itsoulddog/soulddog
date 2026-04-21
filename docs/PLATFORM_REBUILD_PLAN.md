@@ -87,3 +87,18 @@
 ## 7. 本周执行目标（启动批次）
 - 完成 Phase A 的 A1+A2：模型层抽象与现网兼容接入
 - 产出对应测试与迁移文档
+
+## 8. 已完成落地（2026-04-21）
+- 统一模型层已接入主链路：
+  - `MODEL_PROVIDER=qwen|litellm`（默认 qwen）
+  - `chat/send/send-stream` 已改为统一 provider 调用
+- MCP 注册中心已接入：
+  - `/api/mcp/tools`
+  - `/api/mcp/tools/{tool}`
+  - `/api/mcp/tools/{tool}/schema`
+- 平台管理接口已上线：
+  - 模型管理：`/api/models/available`、`/api/models/preference/*`
+  - Skill 管理：`/api/skills/*`
+- 前端页面已上线：
+  - `/settings/models` 模型切换
+  - `/skills` Skill 上传与启停

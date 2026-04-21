@@ -32,6 +32,7 @@ class SessionStore:
         self._captcha_sessions: Dict[str, Dict[str, Any]] = {}
         self._sync_status: Dict[str, Dict[str, Any]] = {}
         self._auth_sessions: Dict[str, Dict[str, Any]] = {}
+        self._model_preferences: Dict[str, Dict[str, Any]] = {}
 
         self._connect_redis()
 
@@ -190,6 +191,23 @@ class SessionStore:
             self._redis_del(f"auth_session:{auth_session_id}")
             return
         self._auth_sessions.pop(auth_session_id, None)
+
+    # ===== Model Preferences =====
+    def set_user_model_preference(self, username: str, preference: Dict[str, Any], ttl: int = 30 * 24 * 3600):
+        payload = {
+            "provider": preference.get("provider", "qwen"),
+            "model": preference.get("model", ""),
+            "updated_at": time.time(),
+        }
+        if self.redis_available:
+            self._redis_set_json(f"model_pref:{username}", payload, ttl)
+        else:
+            self._model_preferences[username] = payload
+
+    def get_user_model_preference(self, username: str) -> Optional[Dict[str, Any]]:
+        if self.redis_available:
+            return self._redis_get_json(f"model_pref:{username}")
+        return self._model_preferences.get(username)
 
 
 _session_store_singleton: Optional[SessionStore] = None

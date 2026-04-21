@@ -44,12 +44,15 @@ except Exception:
         return _dummy_qwen_service
 
 try:
-    from app.services.model_provider import UnifiedModelProvider, get_model_provider
+    from app.services.model_provider import UnifiedModelProvider, get_model_provider, get_model_provider_for_user
 except Exception:
     UnifiedModelProvider = None
 
     def get_model_provider():
         # 回退到 qwen 旧服务，保持兼容
+        return get_qwen_service()
+
+    def get_model_provider_for_user(_username, _session_store):
         return get_qwen_service()
 
 try:
@@ -76,6 +79,7 @@ __all__ = [
     "get_qwen_service",
     "UnifiedModelProvider",
     "get_model_provider",
+    "get_model_provider_for_user",
     "MCPRegistry",
     "get_mcp_registry",
 ]

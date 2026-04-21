@@ -43,6 +43,15 @@
   - `python -m py_compile` 全通过
   - 核心测试通过
 
+## 当前进度（2026-04-21）
+- [x] A1 完成：`model_provider.py` + `LiteLLM` 兼容入口
+- [x] A2 完成：`chat.py` 切换到统一模型层
+- [x] A3 完成：`mcp_registry.py` + `mcp.py` 改造
+- [x] 补充：模型管理 API（`/api/models/*`）
+- [x] 补充：Skill 管理 API（`/api/skills/*`）
+- [x] 补充：前端模型设置页 + Skills 管理页
+- [ ] 后续：按 Phase B 增强 Skill 安全策略与市场能力
+
 ## Linux 验证命令
 ```bash
 git pull origin main

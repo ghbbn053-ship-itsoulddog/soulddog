@@ -14,7 +14,7 @@ import threading
 import re
 
 from app.models import get_db, User, Conversation, Message, EducationData
-from app.services import get_model_provider, get_vector_store
+from app.services import get_model_provider_for_user, get_vector_store
 from app.services.education_normalizer import build_payload_from_education_data_record
 from app.security import enforce_username_isolation
 
@@ -90,7 +90,8 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
     """
     try:
         enforce_username_isolation(http_request, request.username)
-        model_svc = get_model_provider()
+        session_store = getattr(http_request.app.state, 'session_store', None)
+        model_svc = get_model_provider_for_user(request.username, session_store)
         vec_store = get_vector_store()
 
         # 1. 查找或创建用户
@@ -135,7 +136,6 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
             history.append({"role": msg.role, "content": msg.content})
         
         # 5. 构建工具上下文（从 SessionStore 获取用户 session）
-        session_store = getattr(http_request.app.state, 'session_store', None)
         user_session_data = session_store.get_user_session(request.username) if session_store else None
         
         tools_context = None
@@ -341,7 +341,8 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
     conversation = None
     try:
         enforce_username_isolation(http_request, request.username)
-        model_svc = get_model_provider()
+        session_store = getattr(http_request.app.state, 'session_store', None)
+        model_svc = get_model_provider_for_user(request.username, session_store)
         
         if not getattr(model_svc, "available", False):
             async def error_stream():
@@ -390,7 +391,6 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
             history.append({"role": msg.role, "content": msg.content})
         
         # 5. 获取工具上下文
-        session_store = getattr(http_request.app.state, 'session_store', None)
         user_session_data = session_store.get_user_session(request.username) if session_store else None
         
         tools_context = None
