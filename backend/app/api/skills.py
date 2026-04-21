@@ -25,6 +25,11 @@ class SkillDeleteRequest(BaseModel):
     username: str
 
 
+class SkillImportUrlRequest(BaseModel):
+    username: str
+    url: str
+
+
 @router.get("/{username}")
 async def list_skills(username: str, http_request: Request):
     enforce_username_isolation(http_request, username)
@@ -43,6 +48,19 @@ async def upload_skill(payload: SkillUploadRequest, http_request: Request):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"上传失败: {e}")
+
+
+@router.post("/import-url")
+async def import_skill_from_url(payload: SkillImportUrlRequest, http_request: Request):
+    enforce_username_isolation(http_request, payload.username)
+    manager = get_skill_manager()
+    try:
+        saved = manager.import_skill_from_url(payload.username, payload.url)
+        return {"success": True, "skill": saved}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"导入失败: {e}")
 
 
 @router.post("/{skill_name}/enable")
@@ -66,4 +84,3 @@ async def delete_skill(skill_name: str, payload: SkillDeleteRequest, http_reques
     if not ok:
         raise HTTPException(status_code=404, detail="Skill 不存在")
     return {"success": True}
-

@@ -30,6 +30,7 @@ export default function SkillsPage() {
   const [username, setUsername] = useState("");
   const [skills, setSkills] = useState<SkillItem[]>([]);
   const [yamlText, setYamlText] = useState(DEFAULT_SKILL_YAML);
+  const [importUrl, setImportUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -86,6 +87,29 @@ export default function SkillsPage() {
     }
   };
 
+  const importFromUrl = async () => {
+    if (!username || !importUrl.trim()) return;
+    setSaving(true);
+    setMsg("");
+    try {
+      const res = await fetch(`${API_BASE}/api/skills/import-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username, url: importUrl.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `导入失败(${res.status})`);
+      setMsg("Skill 导入成功");
+      setImportUrl("");
+      await refresh(username);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "导入失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const toggle = async (name: string, enabled: boolean) => {
     if (!username) return;
     await fetch(`${API_BASE}/api/skills/${encodeURIComponent(name)}/enable`, {
@@ -123,6 +147,21 @@ export default function SkillsPage() {
             onChange={(e) => setYamlText(e.target.value)}
             className="mt-4 w-full h-80 border border-gray-300 rounded-xl p-3 font-mono text-sm"
           />
+          <div className="mt-3 flex gap-2">
+            <input
+              value={importUrl}
+              onChange={(e) => setImportUrl(e.target.value)}
+              placeholder="GitHub YAML 链接（支持 /blob/ 自动转换）"
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+            <button
+              onClick={importFromUrl}
+              disabled={saving || !importUrl.trim()}
+              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50"
+            >
+              URL 导入
+            </button>
+          </div>
           <div className="mt-3 flex gap-2">
             <button
               onClick={upload}
@@ -175,4 +214,3 @@ export default function SkillsPage() {
     </div>
   );
 }
-

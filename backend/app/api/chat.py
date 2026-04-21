@@ -16,6 +16,7 @@ import re
 from app.models import get_db, User, Conversation, Message, EducationData
 from app.services import get_model_provider_for_user, get_vector_store
 from app.services.education_normalizer import build_payload_from_education_data_record
+from app.services.skill_manager import get_skill_manager
 from app.security import enforce_username_isolation
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,47 @@ def _infer_rag_filters(question: str) -> dict:
         semester = m.group(1)
 
     return {"data_types": data_types, "semester": semester}
+
+
+def _build_skill_context(username: str, question: str) -> str:
+    """
+    根据用户启用的 skills 与 triggers 生成路由提示上下文。
+    """
+    try:
+        manager = get_skill_manager()
+        skills = manager.list_skills(username)
+    except Exception as e:
+        logger.warning(f"加载技能失败: {e}")
+        return ""
+
+    q = (question or "").strip().lower()
+    if not q:
+        return ""
+
+    matched = []
+    for s in skills:
+        if not s.get("enabled", True):
+            continue
+        triggers = [str(t).strip() for t in (s.get("triggers") or []) if str(t).strip()]
+        if not triggers:
+            continue
+        if any(t.lower() in q for t in triggers):
+            matched.append(s)
+
+    if not matched:
+        return ""
+
+    lines = ["【技能路由提示】本轮问题命中以下已启用技能，请优先结合对应工具回答："]
+    for s in matched[:3]:
+        tools = ", ".join(
+            str(t.get("name", "")).strip()
+            for t in (s.get("tools") or [])
+            if isinstance(t, dict) and str(t.get("name", "")).strip()
+        ) or "无"
+        triggers = ", ".join(str(t) for t in (s.get("triggers") or [])[:5]) or "无"
+        desc = str(s.get("description", "")).strip() or "无描述"
+        lines.append(f"- {s.get('name', 'unknown')}: {desc}; triggers=[{triggers}]; tools=[{tools}]")
+    return "\n".join(lines)
 
 
 # ============ 数据模型 ============
@@ -145,6 +187,10 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
                 "server_url": user_session_data["server_url"],
                 "username": request.username
             }
+        skill_context = _build_skill_context(request.username, request.message)
+        history_for_model = history
+        if skill_context:
+            history_for_model = [{"role": "system", "content": skill_context}] + history
         
         ai_result = None
         
@@ -152,7 +198,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
         if getattr(model_svc, "available", False) and tools_context:
             logger.info(f"【Chat】用户 {request.username} 使用工具调用模式")
             ai_result = model_svc.chat_with_tools(
-                messages=history,
+                messages=history_for_model,
                 tools_context=tools_context
             )
         
@@ -184,7 +230,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
                 )
             elif getattr(model_svc, "available", False):
                 logger.info(f"【Chat】用户 {request.username} 使用纯对话模式")
-                ai_result = model_svc.chat(history)
+                ai_result = model_svc.chat(history_for_model)
             else:
                 raise HTTPException(status_code=503, detail="AI 服务未配置，请联系管理员")
         
@@ -400,6 +446,10 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                 "server_url": user_session_data["server_url"],
                 "username": request.username
             }
+        skill_context = _build_skill_context(request.username, request.message)
+        history_for_model = history
+        if skill_context:
+            history_for_model = [{"role": "system", "content": skill_context}] + history
         
         # 6. 构建教务数据上下文（从数据库缓存，按学期组织）
         edu_context = ""
@@ -437,6 +487,9 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                     edu_context = "\n".join(context_parts)
         except Exception as e:
             logger.warning(f"加载教务数据缓存失败: {e}")
+
+        if skill_context:
+            edu_context = f"{edu_context}\n\n{skill_context}" if edu_context else skill_context
         
         # 7. 流式生成AI回复（先回包，再在流内执行工具调用/模型调用）
         async def generate():
@@ -453,7 +506,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                 if tools_context:
                     try:
                         tool_task = asyncio.create_task(
-                            asyncio.to_thread(model_svc.chat_with_tools, history, tools_context)
+                            asyncio.to_thread(model_svc.chat_with_tools, history_for_model, tools_context)
                         )
                         while not tool_task.done():
                             yield f"data: {json.dumps({'ping': True, 'stage': 'tool_call', 'done': False})}\n\n"
@@ -490,7 +543,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                 # 7.2 工具调用不可用/失败时：走 chat_stream
                 def sync_producer():
                     try:
-                        for chunk in model_svc.chat_stream(history, education_context=edu_context):
+                        for chunk in model_svc.chat_stream(history_for_model, education_context=edu_context):
                             loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
                     except Exception as e:
                         loop.call_soon_threadsafe(chunk_queue.put_nowait, f"[错误: {str(e)}]")

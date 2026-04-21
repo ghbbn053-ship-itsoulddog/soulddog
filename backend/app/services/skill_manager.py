@@ -9,9 +9,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 import time
 import yaml
+import requests
+from urllib.parse import urlparse
 
 
 REQUIRED_FIELDS = {"name", "version", "description", "tools"}
+ALLOWED_IMPORT_HOSTS = {"raw.githubusercontent.com", "github.com"}
+MAX_SKILL_BYTES = 256 * 1024
 
 
 @dataclass
@@ -54,6 +58,57 @@ class SkillManager:
         target = self._owner_dir(owner) / f"{skill_name}.yaml"
         target.write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding="utf-8")
         return {"owner": owner, "name": skill_name, "path": str(target)}
+
+    @staticmethod
+    def _normalize_raw_url(url: str) -> str:
+        """
+        支持常见 GitHub 链接自动转 raw。
+        - https://github.com/<org>/<repo>/blob/<branch>/path/to/file.yaml
+        -> https://raw.githubusercontent.com/<org>/<repo>/<branch>/path/to/file.yaml
+        """
+        u = (url or "").strip()
+        if "raw.githubusercontent.com" in u:
+            return u
+        if "github.com" in u and "/blob/" in u:
+            parts = u.split("github.com/", 1)[1].split("/")
+            if len(parts) >= 5 and parts[2] == "blob":
+                org, repo, _blob, branch = parts[:4]
+                tail = "/".join(parts[4:])
+                return f"https://raw.githubusercontent.com/{org}/{repo}/{branch}/{tail}"
+        return u
+
+    def import_skill_from_url(self, owner: str, url: str, timeout: int = 12) -> Dict[str, Any]:
+        raw_url = self._normalize_raw_url(url)
+        if not raw_url.startswith("http://") and not raw_url.startswith("https://"):
+            raise ValueError("仅支持 http/https URL")
+        parsed = urlparse(raw_url)
+        if (parsed.hostname or "").lower() not in ALLOWED_IMPORT_HOSTS:
+            raise ValueError("仅允许从 GitHub 官方域名导入")
+
+        resp = requests.get(
+            raw_url,
+            timeout=timeout,
+            headers={"User-Agent": "campus-ai-skill-importer/1.0"},
+        )
+        if resp.status_code != 200:
+            raise ValueError(f"下载 Skill 失败: HTTP {resp.status_code}")
+
+        content_length = resp.headers.get("Content-Length")
+        if content_length:
+            try:
+                if int(content_length) > MAX_SKILL_BYTES:
+                    raise ValueError("Skill 文件过大（超过 256KB）")
+            except ValueError:
+                raise
+            except Exception:
+                pass
+
+        content = resp.text or ""
+        if len(content.encode("utf-8")) > MAX_SKILL_BYTES:
+            raise ValueError("Skill 文件过大（超过 256KB）")
+        if not content.strip():
+            raise ValueError("Skill 内容为空")
+        return self.upload_skill(owner, content)
 
     def list_skills(self, owner: str) -> List[Dict[str, Any]]:
         owner_dir = self._owner_dir(owner)
@@ -109,4 +164,3 @@ def get_skill_manager() -> SkillManager:
     if _skill_manager_singleton is None:
         _skill_manager_singleton = SkillManager()
     return _skill_manager_singleton
-

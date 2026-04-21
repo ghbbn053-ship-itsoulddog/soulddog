@@ -50,6 +50,7 @@
 - [x] 补充：模型管理 API（`/api/models/*`）
 - [x] 补充：Skill 管理 API（`/api/skills/*`）
 - [x] 补充：前端模型设置页 + Skills 管理页
+- [x] 补充：Skills 支持 GitHub URL 导入（含基础安全约束）
 - [ ] 后续：按 Phase B 增强 Skill 安全策略与市场能力
 
 ## Linux 验证命令
