@@ -185,6 +185,12 @@ class SessionStore:
             return self._redis_get_json(f"auth_session:{auth_session_id}")
         return self._auth_sessions.get(auth_session_id)
 
+    def delete_auth_session(self, auth_session_id: str):
+        if self.redis_available:
+            self._redis_del(f"auth_session:{auth_session_id}")
+            return
+        self._auth_sessions.pop(auth_session_id, None)
+
 
 _session_store_singleton: Optional[SessionStore] = None
 

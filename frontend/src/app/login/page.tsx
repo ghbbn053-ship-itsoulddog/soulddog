@@ -20,6 +20,28 @@ export default function LoginPage() {
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
 
+  // 已登录会话直接进聊天页（以服务端会话为准）
+  React.useEffect(() => {
+    let mounted = true;
+    const checkAuth = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (mounted && data?.authenticated && data?.username) {
+          localStorage.setItem("username", data.username);
+          router.replace("/chat");
+        }
+      } catch {
+        // ignore
+      }
+    };
+    checkAuth();
+    return () => {
+      mounted = false;
+    };
+  }, [API_BASE, router]);
+
   // 获取验证码
   const fetchCaptcha = async (currentUsername?: string) => {
     try {
@@ -124,7 +146,7 @@ export default function LoginPage() {
             setError(syncMessage); // 复用error显示，但用不同颜色
           }
           // 1秒后跳转
-          setTimeout(() => router.push("/chat"), 1000);
+          setTimeout(() => router.replace("/chat"), 1000);
         } else {
           // 首次登录，需要后台同步
           setSyncStatus("syncing");
@@ -154,12 +176,12 @@ export default function LoginPage() {
         setSyncStatus(data.status);
         if (data.status === "completed") {
           // 同步完成，跳转到聊天页面
-          setTimeout(() => router.push("/chat"), 800);
+          setTimeout(() => router.replace("/chat"), 800);
           return;
         }
         if (data.status === "failed") {
           // 同步失败，仍然跳转（可以使用缓存数据或纯对话）
-          setTimeout(() => router.push("/chat"), 1500);
+          setTimeout(() => router.replace("/chat"), 1500);
           return;
         }
       } catch (e) {
@@ -170,7 +192,7 @@ export default function LoginPage() {
         setTimeout(poll, 2000);
       } else {
         // 超时也跳转
-        router.push("/chat");
+        router.replace("/chat");
       }
     };
     poll();

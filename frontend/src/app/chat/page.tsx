@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import MarkdownMessage from "@/components/MarkdownMessage";
 import { 
   Send, 
@@ -40,6 +41,7 @@ interface Conversation {
 }
 
 export default function ChatPage() {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -404,63 +406,83 @@ export default function ChatPage() {
     }
   };
 
-  // 页面加载时从 localStorage 读取用户名和当前会话
+  // 页面加载时先验证服务端会话，再恢复本地会话ID
   useEffect(() => {
-    const savedUsername = localStorage.getItem("username");
-    if (!savedUsername) {
-      setInitialLoading(false);
-      return;
-    }
-    setUsername(savedUsername);
+    let mounted = true;
+    const bootstrap = async () => {
+      try {
+        const meRes = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
+        if (!meRes.ok) {
+          if (mounted) router.replace("/login");
+          return;
+        }
+        const me = await meRes.json();
+        if (!me?.authenticated || !me?.username) {
+          if (mounted) router.replace("/login");
+          return;
+        }
 
-    // 兼容旧key，迁移到按学号存储的key
-    const migratedKey = getConversationStorageKey(savedUsername);
-    const oldConversationId = localStorage.getItem("current_conversation_id");
-    if (oldConversationId && !localStorage.getItem(migratedKey)) {
-      localStorage.setItem(migratedKey, oldConversationId);
-      localStorage.removeItem("current_conversation_id");
-    }
+        const authUsername = String(me.username);
+        if (!mounted) return;
+        setUsername(authUsername);
+        localStorage.setItem("username", authUsername);
 
-    // 恢复当前会话ID并加载历史（不再用setTimeout）
-    const savedConversationId = localStorage.getItem(migratedKey);
-    if (savedConversationId) {
-      const convId = parseInt(savedConversationId);
-      if (!isNaN(convId)) {
+        const migratedKey = getConversationStorageKey(authUsername);
+        const oldConversationId = localStorage.getItem("current_conversation_id");
+        if (oldConversationId && !localStorage.getItem(migratedKey)) {
+          localStorage.setItem(migratedKey, oldConversationId);
+          localStorage.removeItem("current_conversation_id");
+        }
+
+        const savedConversationId = localStorage.getItem(migratedKey);
+        if (!savedConversationId) {
+          setInitialLoading(false);
+          return;
+        }
+
+        const convId = parseInt(savedConversationId, 10);
+        if (Number.isNaN(convId)) {
+          setInitialLoading(false);
+          return;
+        }
+
         setCurrentConversationId(convId);
-        // 直接异步加载历史，无需setTimeout
         const reqId = ++activeHistoryReqRef.current;
-        fetch(`${API_BASE}/api/chat/history/${convId}?username=${encodeURIComponent(savedUsername)}`, {
-          credentials: "include",
-        })
-          .then(async (res) => {
-            if (res.ok) return res.json();
-            if (res.status === 404) {
-              localStorage.removeItem(migratedKey);
-              setCurrentConversationId(null);
-            }
-            return null;
-          })
-          .then((data) => {
-            if (reqId !== activeHistoryReqRef.current) return;
-            if (data?.messages) {
-              setMessages(data.messages.map((m: any) => ({
-                id: m.id,
-                role: m.role,
-                content: m.content,
-                sources: m.meta?.sources || [],
-                timestamp: new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-              })));
-            }
-          })
-          .catch(err => console.error("加载历史失败:", err))
-          .finally(() => setInitialLoading(false));
-      } else {
-        setInitialLoading(false);
+        const res = await fetch(
+          `${API_BASE}/api/chat/history/${convId}?username=${encodeURIComponent(authUsername)}`,
+          { credentials: "include" }
+        );
+        if (reqId !== activeHistoryReqRef.current || !mounted) return;
+
+        if (res.ok) {
+          const data = await res.json();
+          if (reqId !== activeHistoryReqRef.current || !mounted) return;
+          if (data?.messages) {
+            setMessages(data.messages.map((m: any) => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              sources: m.meta?.sources || [],
+              timestamp: new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+            })));
+          }
+        } else if (res.status === 404) {
+          localStorage.removeItem(migratedKey);
+          setCurrentConversationId(null);
+        }
+      } catch (err) {
+        console.error("初始化聊天会话失败:", err);
+        router.replace("/login");
+      } finally {
+        if (mounted) setInitialLoading(false);
       }
-    } else {
-      setInitialLoading(false);
-    }
-  }, []);
+    };
+
+    bootstrap();
+    return () => {
+      mounted = false;
+    };
+  }, [API_BASE, router]);
 
   // 当 username 变化时加载对话列表
   useEffect(() => {
@@ -481,16 +503,19 @@ export default function ChatPage() {
   }, [currentConversationId, username]);
 
   // 退出登录
-  const handleLogout = () => {
-    localStorage.removeItem("username");
-    if (username) {
-      localStorage.removeItem(getConversationStorageKey(username));
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE}/api/logout`, { method: "POST", credentials: "include" });
+    } catch {
+      // ignore
+    } finally {
+      localStorage.removeItem("username");
+      if (username) {
+        localStorage.removeItem(getConversationStorageKey(username));
+      }
+      localStorage.removeItem("current_conversation_id");
+      router.replace("/login");
     }
-    // 清理旧key
-    localStorage.removeItem("current_conversation_id");
-    // 清除cookie
-    document.cookie = 'session_username=; path=/; max-age=0';
-    window.location.href = "/login";
   };
 
   // 快捷问题
@@ -646,7 +671,7 @@ export default function ChatPage() {
               <h2 className="text-2xl font-bold text-gray-800 mb-2">未登录</h2>
               <p className="text-gray-500 mb-6 text-center max-w-md">请先登录后再开始对话</p>
               <button
-                onClick={() => { window.location.href = "/login"; }}
+                onClick={() => { router.replace("/login"); }}
                 className="px-5 py-2.5 rounded-xl bg-gray-900 text-white hover:bg-gray-800 transition"
               >
                 前往登录

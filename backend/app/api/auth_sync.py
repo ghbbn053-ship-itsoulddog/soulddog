@@ -233,3 +233,34 @@ async def sync_education_data(username: str, background_tasks: BackgroundTasks, 
     server_url = user_data["server_url"]
     background_tasks.add_task(auto_crawl_and_store, username, session, server_url)
     return {"success": True, "message": "已开始同步数据，可在后台查看进度"}
+
+
+@router.get("/api/auth/me")
+async def auth_me(request: Request):
+    """获取当前登录会话信息（仅信任服务端 auth_session_id）。"""
+    auth_session_id = request.cookies.get("auth_session_id")
+    if not auth_session_id:
+        return {"authenticated": False}
+
+    auth_payload = session_store.get_auth_session(auth_session_id)
+    if not auth_payload:
+        return {"authenticated": False}
+
+    return {
+        "authenticated": True,
+        "username": auth_payload.get("username"),
+        "user_id": auth_payload.get("user_id"),
+    }
+
+
+@router.post("/api/logout")
+async def logout(request: Request):
+    """退出登录并清理服务端会话。"""
+    auth_session_id = request.cookies.get("auth_session_id")
+    if auth_session_id:
+        session_store.delete_auth_session(auth_session_id)
+
+    response = JSONResponse({"success": True, "message": "已退出登录"})
+    response.delete_cookie("session_username", path="/")
+    response.delete_cookie("auth_session_id", path="/")
+    return response
