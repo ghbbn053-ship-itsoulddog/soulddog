@@ -33,6 +33,11 @@ class MCPToolResponse(BaseModel):
     error: Optional[str] = None
 
 
+class MCPImportUrlRequest(BaseModel):
+    username: str
+    url: str
+
+
 @router.get("/tools")
 async def list_tools():
     """列出所有可用的MCP工具"""
@@ -187,4 +192,79 @@ async def import_mcp_tools_file(
         "imported": len(valid_tools),
         "total_tools": len(registry.list_tools()),
         "config_file": str(cfg),
+    }
+
+
+@router.post("/tools/import-url")
+async def import_mcp_tools_url(payload: MCPImportUrlRequest, http_request: Request):
+    """
+    从 URL 导入 MCP 外部工具配置（JSON）。
+    """
+    enforce_username_isolation(http_request, payload.username)
+    try:
+        import requests
+
+        resp = requests.get(payload.url, timeout=15, headers={"User-Agent": "campus-ai-mcp-import/1.0"})
+        if resp.status_code >= 400:
+            raise HTTPException(status_code=400, detail=f"下载失败: HTTP {resp.status_code}")
+        content = resp.text or ""
+        parsed = json.loads(content)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"URL 导入失败: {e}")
+
+    if isinstance(parsed, list):
+        tools = parsed
+    else:
+        tools = parsed.get("tools") if isinstance(parsed, dict) else None
+    if not isinstance(tools, list) or not tools:
+        raise HTTPException(status_code=400, detail="配置格式错误：缺少 tools 数组")
+
+    valid_tools = []
+    for it in tools:
+        if not isinstance(it, dict):
+            continue
+        name = str(it.get("name", "")).strip()
+        kind = str(it.get("kind", "python")).strip().lower() or "python"
+        if not name:
+            continue
+        if kind == "python":
+            if not str(it.get("module_path", "")).strip() or not str(it.get("func_name", "")).strip():
+                continue
+        elif kind == "http":
+            if not str(it.get("url", "")).strip():
+                continue
+        else:
+            continue
+        valid_tools.append(it)
+    if not valid_tools:
+        raise HTTPException(status_code=400, detail="无有效工具配置")
+
+    cfg = Path(__file__).resolve().parents[1] / "mcp" / "external_tools.json"
+    existing = {}
+    if cfg.exists():
+        try:
+            existing = json.loads(cfg.read_text(encoding="utf-8"))
+        except Exception:
+            existing = {}
+    existing_tools = existing.get("tools") if isinstance(existing, dict) else None
+    if not isinstance(existing_tools, list):
+        existing_tools = []
+
+    by_name = {str(t.get("name", "")).strip(): t for t in existing_tools if isinstance(t, dict)}
+    for t in valid_tools:
+        by_name[str(t.get("name", "")).strip()] = t
+
+    merged_tools = [v for k, v in by_name.items() if k]
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(json.dumps({"tools": merged_tools}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    registry = reload_mcp_registry()
+    return {
+        "success": True,
+        "imported": len(valid_tools),
+        "total_tools": len(registry.list_tools()),
+        "config_file": str(cfg),
+        "source": "url",
     }
