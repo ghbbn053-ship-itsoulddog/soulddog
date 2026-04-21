@@ -14,7 +14,7 @@ import threading
 import re
 
 from app.models import get_db, User, Conversation, Message, EducationData
-from app.services import get_qwen_service, get_vector_store
+from app.services import get_model_provider, get_vector_store
 from app.services.education_normalizer import build_payload_from_education_data_record
 from app.security import enforce_username_isolation
 
@@ -90,7 +90,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
     """
     try:
         enforce_username_isolation(http_request, request.username)
-        qwen_svc = get_qwen_service()
+        model_svc = get_model_provider()
         vec_store = get_vector_store()
 
         # 1. 查找或创建用户
@@ -149,9 +149,9 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
         ai_result = None
         
         # 6. 优先使用工具调用（Function Calling）
-        if qwen_svc.available and tools_context:
+        if getattr(model_svc, "available", False) and tools_context:
             logger.info(f"【Chat】用户 {request.username} 使用工具调用模式")
-            ai_result = qwen_svc.chat_with_tools(
+            ai_result = model_svc.chat_with_tools(
                 messages=history,
                 tools_context=tools_context
             )
@@ -160,9 +160,9 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
         if not ai_result or not ai_result.get("success"):
             edu_data = db.query(EducationData).filter(EducationData.user_id == user.id).first()
             context = []
-            if edu_data and vec_store.available and qwen_svc.available:
+            if edu_data and vec_store.available and getattr(model_svc, "available", False):
                 try:
-                    query_embedding = qwen_svc.generate_embedding(request.message)
+                    query_embedding = model_svc.generate_embedding(request.message)
                     if query_embedding:
                         filters = _infer_rag_filters(request.message)
                         context = vec_store.search(
@@ -177,14 +177,14 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
             
             if context:
                 logger.info(f"【Chat】用户 {request.username} 使用 RAG 模式")
-                ai_result = qwen_svc.chat_with_rag(
+                ai_result = model_svc.chat_with_rag(
                     question=request.message,
                     context=context,
                     conversation_history=history[:-1] if len(history) > 1 else None
                 )
-            elif qwen_svc.available:
+            elif getattr(model_svc, "available", False):
                 logger.info(f"【Chat】用户 {request.username} 使用纯对话模式")
-                ai_result = qwen_svc.chat(history)
+                ai_result = model_svc.chat(history)
             else:
                 raise HTTPException(status_code=503, detail="AI 服务未配置，请联系管理员")
         
@@ -341,9 +341,9 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
     conversation = None
     try:
         enforce_username_isolation(http_request, request.username)
-        qwen_svc = get_qwen_service()
+        model_svc = get_model_provider()
         
-        if not qwen_svc.available:
+        if not getattr(model_svc, "available", False):
             async def error_stream():
                 yield f"data: {json.dumps({'content': '[AI服务未配置]', 'done': True})}\n\n"
             return StreamingResponse(error_stream(), media_type="text/event-stream")
@@ -453,7 +453,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                 if tools_context:
                     try:
                         tool_task = asyncio.create_task(
-                            asyncio.to_thread(qwen_svc.chat_with_tools, history, tools_context)
+                            asyncio.to_thread(model_svc.chat_with_tools, history, tools_context)
                         )
                         while not tool_task.done():
                             yield f"data: {json.dumps({'ping': True, 'stage': 'tool_call', 'done': False})}\n\n"
@@ -490,7 +490,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                 # 7.2 工具调用不可用/失败时：走 chat_stream
                 def sync_producer():
                     try:
-                        for chunk in qwen_svc.chat_stream(history, education_context=edu_context):
+                        for chunk in model_svc.chat_stream(history, education_context=edu_context):
                             loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
                     except Exception as e:
                         loop.call_soon_threadsafe(chunk_queue.put_nowait, f"[错误: {str(e)}]")

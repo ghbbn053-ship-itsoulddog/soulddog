@@ -31,6 +31,7 @@ langchain-core==0.3.32
 # AI 模型
 openai==1.59.6
 dashscope==1.20.11
+litellm==1.61.15
 
 # 工具
 python-dotenv==1.0.1

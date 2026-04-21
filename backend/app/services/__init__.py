@@ -44,6 +44,15 @@ except Exception:
         return _dummy_qwen_service
 
 try:
+    from app.services.model_provider import UnifiedModelProvider, get_model_provider
+except Exception:
+    UnifiedModelProvider = None
+
+    def get_model_provider():
+        # 回退到 qwen 旧服务，保持兼容
+        return get_qwen_service()
+
+try:
     from app.services.vector_store import VectorStore, get_vector_store
 except Exception:
     VectorStore = None
@@ -52,9 +61,21 @@ except Exception:
     def get_vector_store():
         return _dummy_vector_store
 
+try:
+    from app.services.mcp_registry import MCPRegistry, get_mcp_registry
+except Exception:
+    MCPRegistry = None
+
+    def get_mcp_registry():
+        return None
+
 __all__ = [
     "VectorStore",
     "get_vector_store",
     "QwenService",
     "get_qwen_service",
+    "UnifiedModelProvider",
+    "get_model_provider",
+    "MCPRegistry",
+    "get_mcp_registry",
 ]
