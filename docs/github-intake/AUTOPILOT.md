@@ -22,3 +22,17 @@ python scripts/github_autopilot.py --no-clone
 - `docs/github-intake/autopilot-report.md`
 - `docs/github-intake/autopilot-report.json`
 - `docs/github-intake/repos.txt`（可选自动更新）
+
+## MCP 自动接入链路
+1. 生成 MCP 外部工具模板：
+```bash
+python scripts/generate_mcp_external_tools.py
+```
+2. 探测工具可达性（只探测）：
+```bash
+python scripts/probe_mcp_external_tools.py
+```
+3. 探测并自动启用可达工具：
+```bash
+python scripts/probe_mcp_external_tools.py --auto-enable
+```
