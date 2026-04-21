@@ -3,6 +3,7 @@
     {
       "name": "ext_query_personal_info",
       "description": "External alias for personal info tool (community-configurable)",
+      "kind": "python",
       "module_path": "app.mcp.tools",
       "func_name": "query_personal_info",
       "parameters": {
@@ -18,6 +19,42 @@
           "username": {
             "type": "string",
             "description": "学号"
+          }
+        },
+        "required": [
+          "username"
+        ]
+      }
+    },
+    {
+      "name": "ext_echo_http",
+      "description": "Example external HTTP tool adapter",
+      "kind": "http",
+      "method": "POST",
+      "url": "https://httpbin.org/post",
+      "timeout": 10,
+      "parameters": {
+        "username": {
+          "type": "string",
+          "required": true,
+          "description": "学号"
+        },
+        "message": {
+          "type": "string",
+          "required": false,
+          "description": "示例消息"
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "学号"
+          },
+          "message": {
+            "type": "string",
+            "description": "示例消息"
           }
         },
         "required": [

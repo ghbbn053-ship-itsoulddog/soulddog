@@ -9,6 +9,7 @@ from typing import Optional, Any
 import logging
 
 from app.services import get_mcp_registry
+from app.services.mcp_registry import reload_mcp_registry
 
 logger = logging.getLogger(__name__)
 
@@ -98,3 +99,10 @@ async def get_tool_schema(tool_name: str):
 
     schema = registry.get_tool_schema(tool_name)
     return schema or {"error": "Schema not found"}
+
+
+@router.post("/tools/reload")
+async def reload_tools():
+    """热重载 MCP 工具配置（包括 external_tools.json）"""
+    registry = reload_mcp_registry()
+    return {"success": True, "tools": registry.list_tools(), "count": len(registry.list_tools())}

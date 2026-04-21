@@ -14,16 +14,21 @@ import json
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
+import requests
 
 
 @dataclass
 class MCPToolSpec:
     name: str
     description: str
-    module_path: str
-    func_name: str
+    module_path: str = ""
+    func_name: str = ""
     parameters: Dict[str, Any]
     input_schema: Optional[Dict[str, Any]] = None
+    kind: str = "python"  # python | http
+    method: str = "POST"
+    url: str = ""
+    timeout: int = 12
 
 
 class MCPRegistry:
@@ -140,6 +145,10 @@ class MCPRegistry:
                     func_name=func_name,
                     parameters=it.get("parameters") or {},
                     input_schema=it.get("input_schema"),
+                    kind=str(it.get("kind", "python")).strip().lower() or "python",
+                    method=str(it.get("method", "POST")).strip().upper() or "POST",
+                    url=str(it.get("url", "")).strip(),
+                    timeout=int(it.get("timeout", 12) or 12),
                 )
                 self.register(spec)
         except Exception:
@@ -154,6 +163,7 @@ class MCPRegistry:
                     "name": spec.name,
                     "description": spec.description,
                     "parameters": spec.parameters,
+                    "kind": spec.kind,
                 }
             )
         return tools
@@ -188,13 +198,33 @@ class MCPRegistry:
         if not self.has_tool(name):
             raise ValueError(f"工具 '{name}' 不存在")
         spec = self._tools[name]
-        module = importlib.import_module(spec.module_path)
-        func = getattr(module, spec.func_name)
-
         merged = {"username": username}
         if params:
             merged.update(params)
+        if spec.kind == "http":
+            return self._call_http_tool(spec, merged)
+        module = importlib.import_module(spec.module_path)
+        func = getattr(module, spec.func_name)
         return await func(**merged)
+
+    @staticmethod
+    def _call_http_tool(spec: MCPToolSpec, payload: Dict[str, Any]) -> str:
+        if not spec.url:
+            raise ValueError(f"HTTP 工具 '{spec.name}' 缺少 url 配置")
+        method = (spec.method or "POST").upper()
+        try:
+            if method == "GET":
+                resp = requests.get(spec.url, params=payload, timeout=spec.timeout)
+            else:
+                resp = requests.request(method, spec.url, json=payload, timeout=spec.timeout)
+            if resp.status_code >= 400:
+                raise ValueError(f"HTTP {resp.status_code}: {resp.text[:300]}")
+            ctype = (resp.headers.get("Content-Type") or "").lower()
+            if "application/json" in ctype:
+                return json.dumps(resp.json(), ensure_ascii=False)
+            return resp.text
+        except Exception as e:
+            raise ValueError(f"HTTP 工具调用失败: {e}")
 
 
 _mcp_registry_singleton: Optional[MCPRegistry] = None
@@ -204,4 +234,10 @@ def get_mcp_registry() -> MCPRegistry:
     global _mcp_registry_singleton
     if _mcp_registry_singleton is None:
         _mcp_registry_singleton = MCPRegistry()
+    return _mcp_registry_singleton
+
+
+def reload_mcp_registry() -> MCPRegistry:
+    global _mcp_registry_singleton
+    _mcp_registry_singleton = MCPRegistry()
     return _mcp_registry_singleton
