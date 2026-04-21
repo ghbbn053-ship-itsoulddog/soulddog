@@ -55,6 +55,16 @@ python scripts/enrich_mcp_external_tools.py
 ## 运行记录查询（API）
 - `GET /api/intake/pipeline/history?limit=20`
 - `GET /api/intake/pipeline/latest`
+- `GET /api/intake/pipeline/state`
+- `GET /api/intake/pipeline/tasks?limit=30`
+- `GET /api/intake/pipeline/tasks/{run_id}`
+
+任务控制（API）：
+- `POST /api/intake/pipeline/tasks/{run_id}/retry`
+- `POST /api/intake/pipeline/tasks/{run_id}/rollback`
+- `POST /api/intake/pipeline/unlock`
 
 记录文件：
 - `docs/github-intake/pipeline-history.jsonl`
+- `docs/github-intake/pipeline-tasks.json`
+- `docs/github-intake/snapshots/<run_id>/...`

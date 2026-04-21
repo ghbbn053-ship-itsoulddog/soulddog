@@ -11,6 +11,7 @@ from pathlib import Path
 from datetime import datetime
 from time import perf_counter
 import os
+import shutil
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -35,6 +36,10 @@ class IntakePipelineRequest(BaseModel):
     auto_enable: bool = False
 
 
+class RetryRequest(BaseModel):
+    auto_start: bool = True
+
+
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
@@ -45,6 +50,14 @@ def _history_path(root: Path) -> Path:
 
 def _state_path(root: Path) -> Path:
     return root / "docs" / "github-intake" / "pipeline-state.json"
+
+
+def _tasks_path(root: Path) -> Path:
+    return root / "docs" / "github-intake" / "pipeline-tasks.json"
+
+
+def _snapshots_dir(root: Path) -> Path:
+    return root / "docs" / "github-intake" / "snapshots"
 
 
 def _append_history(root: Path, record: dict):
@@ -71,6 +84,41 @@ def _read_history(root: Path, limit: int = 20) -> list[dict]:
         if len(rows) >= max(1, limit):
             break
     return rows
+
+
+def _read_tasks(root: Path) -> list[dict]:
+    tp = _tasks_path(root)
+    if not tp.exists():
+        return []
+    try:
+        data = json.loads(tp.read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            return data
+        return []
+    except Exception:
+        return []
+
+
+def _write_tasks(root: Path, items: list[dict]):
+    tp = _tasks_path(root)
+    tp.parent.mkdir(parents=True, exist_ok=True)
+    tp.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _upsert_task(root: Path, task: dict):
+    tasks = _read_tasks(root)
+    by_id = {str(t.get("run_id", "")): t for t in tasks if isinstance(t, dict)}
+    by_id[str(task.get("run_id", ""))] = task
+    merged = [v for k, v in by_id.items() if k]
+    merged.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
+    _write_tasks(root, merged)
+
+
+def _get_task(root: Path, run_id: str) -> dict | None:
+    for t in _read_tasks(root):
+        if str(t.get("run_id", "")) == run_id:
+            return t
+    return None
 
 
 def _read_state(root: Path) -> dict:
@@ -139,6 +187,117 @@ def _run_script(root: Path, cmd: list[str], timeout: int, name: str) -> dict:
         "stdout": (proc.stdout or "").strip(),
         "stderr": (proc.stderr or "").strip(),
         "elapsed_ms": int((perf_counter() - t0) * 1000),
+    }
+
+
+def _create_snapshot(root: Path, run_id: str) -> Path:
+    snap = _snapshots_dir(root) / run_id
+    snap.mkdir(parents=True, exist_ok=True)
+    files = [
+        root / "backend" / "app" / "mcp" / "external_tools.generated.json",
+        root / "backend" / "app" / "mcp" / "external_tools.json",
+        root / "docs" / "github-intake" / "autopilot-report.json",
+        root / "docs" / "github-intake" / "autopilot-report.md",
+        root / "docs" / "github-intake" / "repos.txt",
+    ]
+    for f in files:
+        if f.exists():
+            rel = f.relative_to(root)
+            dst = snap / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(f, dst)
+    return snap
+
+
+def _restore_snapshot(root: Path, run_id: str) -> dict:
+    snap = _snapshots_dir(root) / run_id
+    if not snap.exists():
+        raise HTTPException(status_code=404, detail=f"snapshot 不存在: {run_id}")
+    restored = 0
+    for p in snap.rglob("*"):
+        if not p.is_file():
+            continue
+        rel = p.relative_to(snap)
+        dst = root / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(p, dst)
+        restored += 1
+    return {"restored_files": restored, "snapshot": str(snap)}
+
+
+def _execute_pipeline(root: Path, payload: IntakePipelineRequest, run_id: str, started_at: str) -> dict:
+    t_pipeline = perf_counter()
+    # 1) autopilot
+    autopilot_script = root / "scripts" / "github_autopilot.py"
+    if not autopilot_script.exists():
+        raise HTTPException(status_code=404, detail="github_autopilot 脚本不存在")
+    run_cmd = [
+        "python",
+        str(autopilot_script),
+        "--per-topic",
+        str(payload.per_topic),
+        "--clone-top",
+        str(payload.clone_top),
+        "--integrate-top",
+        str(payload.integrate_top),
+    ]
+    if payload.no_clone:
+        run_cmd.append("--no-clone")
+    if payload.update_repo_list:
+        run_cmd.append("--update-repo-list")
+    step_run = _run_script(root, run_cmd, timeout=240, name="autopilot")
+
+    # 2) generate
+    step_generate = _run_script(
+        root,
+        ["python", str(root / "scripts" / "generate_mcp_external_tools.py")],
+        timeout=120,
+        name="generate_mcp_external_tools",
+    )
+
+    # 3) enrich
+    step_enrich = _run_script(
+        root,
+        ["python", str(root / "scripts" / "enrich_mcp_external_tools.py")],
+        timeout=120,
+        name="enrich_mcp_external_tools",
+    )
+
+    # 4) probe
+    probe_cmd = ["python", str(root / "scripts" / "probe_mcp_external_tools.py")]
+    if payload.auto_enable:
+        probe_cmd.append("--auto-enable")
+    step_probe = _run_script(root, probe_cmd, timeout=120, name="probe_mcp_external_tools")
+
+    # 5) mcp reload（在本进程内执行，确保后端生效）
+    from app.services.mcp_registry import reload_mcp_registry
+
+    registry = reload_mcp_registry()
+    tools = registry.list_tools()
+    total_ms = int((perf_counter() - t_pipeline) * 1000)
+
+    return {
+        "success": True,
+        "run_id": run_id,
+        "started_at": started_at,
+        "duration_ms": total_ms,
+        "steps": {
+            "run": step_run["stdout"],
+            "generate": step_generate["stdout"],
+            "enrich": step_enrich["stdout"],
+            "probe": step_probe["stdout"],
+            "reload_count": len(tools),
+            "timing_ms": {
+                "run": step_run["elapsed_ms"],
+                "generate": step_generate["elapsed_ms"],
+                "enrich": step_enrich["elapsed_ms"],
+                "probe": step_probe["elapsed_ms"],
+            },
+        },
+        "paths": {
+            "report_json": str(root / "docs" / "github-intake" / "autopilot-report.json"),
+            "generated_tools": str(root / "backend" / "app" / "mcp" / "external_tools.generated.json"),
+        },
     }
 
 
@@ -235,100 +394,52 @@ async def run_pipeline(payload: IntakePipelineRequest):
     run -> generate -> enrich -> probe -> mcp reload
     """
     root = _repo_root()
+    t0 = perf_counter()
     lock = _acquire_lock(root)
     run_id = lock["run_id"]
     started_at = datetime.now().isoformat(timespec="seconds")
-    t_pipeline = perf_counter()
-    try:
-        # 1) autopilot
-        autopilot_script = root / "scripts" / "github_autopilot.py"
-        if not autopilot_script.exists():
-            raise HTTPException(status_code=404, detail="github_autopilot 脚本不存在")
-        run_cmd = [
-            "python",
-            str(autopilot_script),
-            "--per-topic",
-            str(payload.per_topic),
-            "--clone-top",
-            str(payload.clone_top),
-            "--integrate-top",
-            str(payload.integrate_top),
-        ]
-        if payload.no_clone:
-            run_cmd.append("--no-clone")
-        if payload.update_repo_list:
-            run_cmd.append("--update-repo-list")
-        step_run = _run_script(root, run_cmd, timeout=240, name="autopilot")
-
-        # 2) generate
-        step_generate = _run_script(
-            root,
-            ["python", str(root / "scripts" / "generate_mcp_external_tools.py")],
-            timeout=120,
-            name="generate_mcp_external_tools",
-        )
-
-        # 3) enrich
-        step_enrich = _run_script(
-            root,
-            ["python", str(root / "scripts" / "enrich_mcp_external_tools.py")],
-            timeout=120,
-            name="enrich_mcp_external_tools",
-        )
-
-        # 4) probe
-        probe_cmd = ["python", str(root / "scripts" / "probe_mcp_external_tools.py")]
-        if payload.auto_enable:
-            probe_cmd.append("--auto-enable")
-        step_probe = _run_script(root, probe_cmd, timeout=120, name="probe_mcp_external_tools")
-
-        # 5) mcp reload（在本进程内执行，确保后端生效）
-        from app.services.mcp_registry import reload_mcp_registry
-
-        registry = reload_mcp_registry()
-        tools = registry.list_tools()
-        total_ms = int((perf_counter() - t_pipeline) * 1000)
-
-        result = {
-            "success": True,
+    snapshot = _create_snapshot(root, run_id)
+    _upsert_task(
+        root,
+        {
             "run_id": run_id,
-            "started_at": started_at,
-            "duration_ms": total_ms,
-            "steps": {
-                "run": step_run["stdout"],
-                "generate": step_generate["stdout"],
-                "enrich": step_enrich["stdout"],
-                "probe": step_probe["stdout"],
-                "reload_count": len(tools),
-                "timing_ms": {
-                    "run": step_run["elapsed_ms"],
-                    "generate": step_generate["elapsed_ms"],
-                    "enrich": step_enrich["elapsed_ms"],
-                    "probe": step_probe["elapsed_ms"],
-                },
-            },
-            "paths": {
-                "report_json": str(root / "docs" / "github-intake" / "autopilot-report.json"),
-                "generated_tools": str(root / "backend" / "app" / "mcp" / "external_tools.generated.json"),
-            },
-        }
+            "created_at": started_at,
+            "status": "running",
+            "params": payload.model_dump(),
+            "snapshot": str(snapshot),
+        },
+    )
+    try:
+        result = _execute_pipeline(root, payload, run_id, started_at)
 
         _append_history(
             root,
             {
                 "run_id": run_id,
                 "started_at": started_at,
-                "duration_ms": total_ms,
+                "duration_ms": result["duration_ms"],
                 "params": payload.model_dump(),
-                "reload_count": len(tools),
+                "reload_count": result["steps"]["reload_count"],
                 "timing_ms": result["steps"]["timing_ms"],
                 "success": True,
+            },
+        )
+        _upsert_task(
+            root,
+            {
+                "run_id": run_id,
+                "created_at": started_at,
+                "status": "success",
+                "params": payload.model_dump(),
+                "snapshot": str(snapshot),
+                "duration_ms": result["duration_ms"],
+                "reload_count": result["steps"]["reload_count"],
             },
         )
         _release_lock(root, run_id=run_id, ok=True)
         return result
     except Exception as e:
-        total_ms = int((perf_counter() - t_pipeline) * 1000)
+        total_ms = int((perf_counter() - t0) * 1000)
         _append_history(
             root,
             {
@@ -337,6 +448,17 @@ async def run_pipeline(payload: IntakePipelineRequest):
                 "duration_ms": total_ms,
                 "params": payload.model_dump(),
                 "success": False,
+                "error": str(e),
+            },
+        )
+        _upsert_task(
+            root,
+            {
+                "run_id": run_id,
+                "created_at": started_at,
+                "status": "failed",
+                "params": payload.model_dump(),
+                "snapshot": str(snapshot),
                 "error": str(e),
             },
         )
@@ -383,3 +505,56 @@ async def force_unlock_pipeline():
         },
     )
     return {"success": True, "message": "pipeline 已强制解锁", "state": _read_state(root)}
+
+
+@router.get("/pipeline/tasks")
+async def list_pipeline_tasks(limit: int = 30):
+    root = _repo_root()
+    items = _read_tasks(root)[: max(1, limit)]
+    return {"success": True, "count": len(items), "items": items}
+
+
+@router.get("/pipeline/tasks/{run_id}")
+async def get_pipeline_task(run_id: str):
+    root = _repo_root()
+    task = _get_task(root, run_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="task 不存在")
+    return {"success": True, "item": task}
+
+
+@router.post("/pipeline/tasks/{run_id}/retry")
+async def retry_pipeline_task(run_id: str, payload: RetryRequest):
+    root = _repo_root()
+    task = _get_task(root, run_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="task 不存在")
+    params = task.get("params") or {}
+    req = IntakePipelineRequest(**params)
+    if not payload.auto_start:
+        return {"success": True, "message": "retry 参数已校验", "params": req.model_dump()}
+    return await run_pipeline(req)
+
+
+@router.post("/pipeline/tasks/{run_id}/rollback")
+async def rollback_pipeline_task(run_id: str):
+    root = _repo_root()
+    task = _get_task(root, run_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="task 不存在")
+    snapshot = str(task.get("snapshot", "")).strip()
+    if not snapshot:
+        raise HTTPException(status_code=400, detail="task 无 snapshot 信息")
+    snap_dir = Path(snapshot)
+    if not snap_dir.exists():
+        raise HTTPException(status_code=404, detail="snapshot 目录不存在")
+    # snapshot 路径基于 run_id，直接恢复
+    restored = _restore_snapshot(root, run_id)
+    from app.services.mcp_registry import reload_mcp_registry
+
+    registry = reload_mcp_registry()
+    return {
+        "success": True,
+        "restored": restored,
+        "reloaded_tools": len(registry.list_tools()),
+    }

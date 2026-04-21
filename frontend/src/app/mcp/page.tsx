@@ -11,11 +11,13 @@ type MCPTool = {
 };
 
 type PipelineItem = {
+  run_id?: string;
   started_at?: string;
   duration_ms?: number;
   reload_count?: number;
   success?: boolean;
   timing_ms?: Record<string, number>;
+  error?: string;
 };
 
 type PipelineState = {
@@ -24,6 +26,16 @@ type PipelineState = {
   started_at?: string;
   status?: string;
   finished_at?: string;
+  error?: string;
+};
+
+type PipelineTask = {
+  run_id: string;
+  created_at?: string;
+  status?: "running" | "success" | "failed" | string;
+  duration_ms?: number;
+  reload_count?: number;
+  snapshot?: string;
   error?: string;
 };
 
@@ -37,6 +49,7 @@ export default function MCPPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [importUrl, setImportUrl] = useState("");
   const [history, setHistory] = useState<PipelineItem[]>([]);
+  const [tasks, setTasks] = useState<PipelineTask[]>([]);
   const [state, setState] = useState<PipelineState | null>(null);
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
@@ -60,6 +73,12 @@ export default function MCPPage() {
     setState(data?.state || null);
   };
 
+  const refreshTasks = async () => {
+    const res = await fetch(`${API_BASE}/api/intake/pipeline/tasks?limit=10`, { credentials: "include" });
+    const data = res.ok ? await res.json() : null;
+    setTasks(data?.items || []);
+  };
+
   useEffect(() => {
     const run = async () => {
       try {
@@ -73,6 +92,7 @@ export default function MCPPage() {
         await refresh();
         await refreshHistory();
         await refreshState();
+        await refreshTasks();
       } catch {
         router.replace("/chat");
       } finally {
@@ -81,6 +101,15 @@ export default function MCPPage() {
     };
     run();
   }, [API_BASE, router]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      refreshState();
+      refreshHistory();
+      refreshTasks();
+    }, 8000);
+    return () => clearInterval(id);
+  }, [API_BASE]);
 
   const reloadTools = async () => {
     setSaving(true);
@@ -191,6 +220,7 @@ export default function MCPPage() {
       await refresh();
       await refreshHistory();
       await refreshState();
+      await refreshTasks();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "流水线失败");
     } finally {
@@ -210,8 +240,56 @@ export default function MCPPage() {
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `解锁失败(${res.status})`);
       setMsg(data?.message || "已解锁");
       await refreshState();
+      await refreshTasks();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "解锁失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const retryTask = async (runId: string) => {
+    if (!runId) return;
+    setSaving(true);
+    setMsg("");
+    try {
+      const res = await fetch(`${API_BASE}/api/intake/pipeline/tasks/${encodeURIComponent(runId)}/retry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ auto_start: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `重试失败(${res.status})`);
+      setMsg(`重试已完成：${data?.run_id || runId}`);
+      await refresh();
+      await refreshHistory();
+      await refreshState();
+      await refreshTasks();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "重试失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const rollbackTask = async (runId: string) => {
+    if (!runId) return;
+    setSaving(true);
+    setMsg("");
+    try {
+      const res = await fetch(`${API_BASE}/api/intake/pipeline/tasks/${encodeURIComponent(runId)}/rollback`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `回滚失败(${res.status})`);
+      setMsg(`回滚成功：${data?.restored?.restored_files ?? 0} 个文件`);
+      await refresh();
+      await refreshState();
+      await refreshTasks();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "回滚失败");
     } finally {
       setSaving(false);
     }
@@ -319,17 +397,49 @@ export default function MCPPage() {
         </div>
 
         <div className="bg-white border border-gray-200 rounded-2xl p-5">
-          <h2 className="text-lg font-semibold text-gray-900">流水线历史</h2>
+          <h2 className="text-lg font-semibold text-gray-900">任务队列</h2>
+          <div className="mt-3 space-y-2">
+            {tasks.length === 0 && <div className="text-sm text-gray-500">暂无任务</div>}
+            {tasks.map((t) => (
+              <div key={t.run_id} className="border border-gray-200 rounded-xl p-3">
+                <div className="text-sm font-medium text-gray-900">
+                  {t.run_id} · {t.status || "-"}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {t.created_at || "-"} · 耗时: {t.duration_ms ?? "-"} ms · reload: {t.reload_count ?? "-"}
+                </div>
+                {t.error && <div className="text-xs text-red-600 mt-1 break-all">{t.error}</div>}
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => retryTask(t.run_id)}
+                    disabled={saving || state?.running}
+                    className="px-3 py-1 rounded-lg border border-gray-300 bg-white text-xs disabled:opacity-50"
+                  >
+                    重试
+                  </button>
+                  <button
+                    onClick={() => rollbackTask(t.run_id)}
+                    disabled={saving || state?.running || !t.snapshot}
+                    className="px-3 py-1 rounded-lg border border-orange-300 text-orange-700 bg-white text-xs disabled:opacity-50"
+                  >
+                    回滚
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <h2 className="text-lg font-semibold text-gray-900 mt-6">流水线历史</h2>
           <div className="mt-3 space-y-2">
             {history.length === 0 && <div className="text-sm text-gray-500">暂无记录</div>}
             {history.map((h, idx) => (
-              <div key={idx} className="border border-gray-200 rounded-xl p-3">
+              <div key={`${h.run_id || idx}`} className="border border-gray-200 rounded-xl p-3">
                 <div className="text-sm font-medium text-gray-900">
-                  {h.started_at || "-"} · {h.success ? "成功" : "失败"}
+                  {h.run_id || "-"} · {h.success ? "成功" : "失败"}
                 </div>
                 <div className="text-xs text-gray-500 mt-1">
-                  耗时: {h.duration_ms ?? "-"} ms · reload: {h.reload_count ?? "-"}
+                  {h.started_at || "-"} · 耗时: {h.duration_ms ?? "-"} ms · reload: {h.reload_count ?? "-"}
                 </div>
+                {h.error && <div className="text-xs text-red-600 mt-1 break-all">{h.error}</div>}
               </div>
             ))}
           </div>
