@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-21 22:30:58",
+  "generated_at": "2026-04-21 23:28:10",
   "topics": [
     "rag",
     "skill_plugin",
@@ -15,11 +15,11 @@
       "html_url": "https://github.com/openai/openai-agents-python",
       "description": "A lightweight, powerful framework for multi-agent workflows",
       "language": "Python",
-      "stars": 24276,
-      "forks": 3725,
-      "open_issues": 71,
-      "size_kb": 27799,
-      "updated_at": "2026-04-21T14:19:01Z",
+      "stars": 24296,
+      "forks": 3728,
+      "open_issues": 74,
+      "size_kb": 27822,
+      "updated_at": "2026-04-21T15:17:15Z",
       "pushed_at": "2026-04-21T13:55:40Z",
       "license": "MIT",
       "score": 1.0201
@@ -30,29 +30,14 @@
       "html_url": "https://github.com/langchain-ai/langchain",
       "description": "The agent engineering platform",
       "language": "Python",
-      "stars": 134349,
-      "forks": 22193,
+      "stars": 134354,
+      "forks": 22192,
       "open_issues": 537,
-      "size_kb": 537245,
-      "updated_at": "2026-04-21T14:09:06Z",
-      "pushed_at": "2026-04-21T14:09:01Z",
+      "size_kb": 537268,
+      "updated_at": "2026-04-21T15:25:16Z",
+      "pushed_at": "2026-04-21T15:24:34Z",
       "license": "MIT",
       "score": 1.02
-    },
-    {
-      "topic": "rag",
-      "full_name": "neuml/txtai",
-      "html_url": "https://github.com/neuml/txtai",
-      "description": "💡 All-in-one AI framework for semantic search, LLM orchestration and language model workflows",
-      "language": "Python",
-      "stars": 12410,
-      "forks": 802,
-      "open_issues": 6,
-      "size_kb": 55761,
-      "updated_at": "2026-04-21T12:52:34Z",
-      "pushed_at": "2026-04-21T12:58:25Z",
-      "license": "Apache-2.0",
-      "score": 0.9822
     },
     {
       "topic": "multi_agent",
@@ -60,14 +45,14 @@
       "html_url": "https://github.com/microsoft/agent-framework",
       "description": "A framework for building, orchestrating and deploying AI agents and multi-agent workflows with support for Python and .NET.",
       "language": "Python",
-      "stars": 9658,
-      "forks": 1586,
-      "open_issues": 787,
+      "stars": 9660,
+      "forks": 1587,
+      "open_issues": 785,
       "size_kb": 90051,
-      "updated_at": "2026-04-21T14:17:45Z",
-      "pushed_at": "2026-04-21T10:17:27Z",
+      "updated_at": "2026-04-21T15:22:28Z",
+      "pushed_at": "2026-04-21T15:24:41Z",
       "license": "MIT",
-      "score": 0.9679
+      "score": 0.9681
     },
     {
       "topic": "rag",
@@ -75,26 +60,26 @@
       "html_url": "https://github.com/langchain-ai/langgraph",
       "description": "Build resilient language agents as graphs.",
       "language": "Python",
-      "stars": 29863,
-      "forks": 5099,
+      "stars": 29870,
+      "forks": 5103,
       "open_issues": 494,
-      "size_kb": 517445,
-      "updated_at": "2026-04-21T14:08:45Z",
+      "size_kb": 517447,
+      "updated_at": "2026-04-21T15:24:19Z",
       "pushed_at": "2026-04-21T13:43:18Z",
       "license": "MIT",
-      "score": 0.9518
+      "score": 0.9517
     },
     {
-      "topic": "rag",
+      "topic": "multi_agent",
       "full_name": "raga-ai-hub/RagaAI-Catalyst",
       "html_url": "https://github.com/raga-ai-hub/RagaAI-Catalyst",
       "description": "Python SDK for Agent AI Observability, Monitoring and Evaluation Framework. Includes features like agent, llm and tools tracing, debugging multi-agentic system, self-hosted dashboard and advanced analytics with timeline and execution graph view ",
       "language": "Python",
-      "stars": 16140,
+      "stars": 16141,
       "forks": 3616,
       "open_issues": 32,
       "size_kb": 58519,
-      "updated_at": "2026-04-20T17:34:37Z",
+      "updated_at": "2026-04-21T14:22:03Z",
       "pushed_at": "2026-02-11T14:43:33Z",
       "license": "Apache-2.0",
       "score": 0.9498
@@ -105,44 +90,14 @@
       "html_url": "https://github.com/pathwaycom/pathway",
       "description": "Python ETL framework for stream processing, real-time analytics, LLM pipelines, and RAG.",
       "language": "Python",
-      "stars": 63445,
+      "stars": 63443,
       "forks": 1624,
       "open_issues": 36,
       "size_kb": 141829,
-      "updated_at": "2026-04-21T14:19:03Z",
+      "updated_at": "2026-04-21T15:21:06Z",
       "pushed_at": "2026-04-21T05:29:38Z",
       "license": "NOASSERTION",
-      "score": 0.9341
-    },
-    {
-      "topic": "rag",
-      "full_name": "deepset-ai/haystack",
-      "html_url": "https://github.com/deepset-ai/haystack",
-      "description": "Open-source AI orchestration framework for building context-engineered, production-ready LLM applications. Design modular pipelines and agent workflows with explicit control over retrieval, routing, memory, and generation. Built for scalable agents, RAG, multimodal applications, semantic search, and conversational systems.",
-      "language": "MDX",
-      "stars": 24932,
-      "forks": 2726,
-      "open_issues": 111,
-      "size_kb": 60792,
-      "updated_at": "2026-04-21T14:08:19Z",
-      "pushed_at": "2026-04-21T12:41:13Z",
-      "license": "Apache-2.0",
-      "score": 0.9215
-    },
-    {
-      "topic": "multi_agent",
-      "full_name": "darrenhinde/OpenAgentsControl",
-      "html_url": "https://github.com/darrenhinde/OpenAgentsControl",
-      "description": "AI agent framework for plan-first development workflows with approval-based execution. Multi-language support (TypeScript, Python, Go, Rust) with automatic testing, code review, and validation built for OpenCode",
-      "language": "TypeScript",
-      "stars": 3612,
-      "forks": 292,
-      "open_issues": 40,
-      "size_kb": 5191,
-      "updated_at": "2026-04-21T12:24:54Z",
-      "pushed_at": "2026-03-25T00:27:12Z",
-      "license": "MIT",
-      "score": 0.8936
+      "score": 0.934
     },
     {
       "topic": "mcp",
@@ -160,21 +115,6 @@
       "score": 0.8831
     },
     {
-      "topic": "multi_agent",
-      "full_name": "guy-hartstein/company-research-agent",
-      "html_url": "https://github.com/guy-hartstein/company-research-agent",
-      "description": "An agentic company research tool powered by LangGraph and Tavily that conducts deep diligence on companies using a multi-agent framework. It leverages Google's Gemini 2.5 Flash and OpenAI's GPT-5.1 on the backend for inference.",
-      "language": "Python",
-      "stars": 1684,
-      "forks": 255,
-      "open_issues": 4,
-      "size_kb": 32374,
-      "updated_at": "2026-04-21T07:02:43Z",
-      "pushed_at": "2026-04-17T01:17:17Z",
-      "license": "Apache-2.0",
-      "score": 0.8663
-    },
-    {
       "topic": "workflow",
       "full_name": "yzhao062/pyod",
       "html_url": "https://github.com/yzhao062/pyod",
@@ -188,36 +128,6 @@
       "pushed_at": "2026-04-16T21:59:36Z",
       "license": "BSD-2-Clause",
       "score": 0.8657
-    },
-    {
-      "topic": "rag",
-      "full_name": "cocoindex-io/cocoindex",
-      "html_url": "https://github.com/cocoindex-io/cocoindex",
-      "description": "Data transformation framework for AI. Ultra performant, with incremental processing.  🌟 Star if you like it!",
-      "language": "Rust",
-      "stars": 6924,
-      "forks": 502,
-      "open_issues": 52,
-      "size_kb": 109255,
-      "updated_at": "2026-04-21T12:59:57Z",
-      "pushed_at": "2026-04-21T07:33:19Z",
-      "license": "Apache-2.0",
-      "score": 0.8491
-    },
-    {
-      "topic": "mcp",
-      "full_name": "utensils/mcp-nixos",
-      "html_url": "https://github.com/utensils/mcp-nixos",
-      "description": "MCP-NixOS - Model Context Protocol Server for NixOS resources",
-      "language": "Python",
-      "stars": 597,
-      "forks": 33,
-      "open_issues": 12,
-      "size_kb": 2958,
-      "updated_at": "2026-04-20T19:31:14Z",
-      "pushed_at": "2026-04-03T15:22:52Z",
-      "license": "MIT",
-      "score": 0.7987
     },
     {
       "topic": "mcp",
@@ -247,7 +157,7 @@
       "updated_at": "2026-04-20T15:19:37Z",
       "pushed_at": "2026-03-14T21:20:37Z",
       "license": "GPL-3.0",
-      "score": 0.7768
+      "score": 0.7767
     },
     {
       "topic": "skill_plugin",
@@ -280,36 +190,6 @@
       "score": 0.7502
     },
     {
-      "topic": "mcp",
-      "full_name": "loonghao/photoshop-python-api-mcp-server",
-      "html_url": "https://github.com/loonghao/photoshop-python-api-mcp-server",
-      "description": "A Model Context Protocol (MCP) server that interfaces with Adobe Photoshop's Python API. Enables LLMs to execute image editing operations, automate workflows, and manage Photoshop tasks through structured commands and context-aware interactions.",
-      "language": "Python",
-      "stars": 206,
-      "forks": 24,
-      "open_issues": 23,
-      "size_kb": 1193,
-      "updated_at": "2026-04-21T07:56:03Z",
-      "pushed_at": "2026-04-15T20:22:10Z",
-      "license": "MIT",
-      "score": 0.7471
-    },
-    {
-      "topic": "mcp",
-      "full_name": "joenorton/comfyui-mcp-server",
-      "html_url": "https://github.com/joenorton/comfyui-mcp-server",
-      "description": "lightweight Python-based MCP (Model Context Protocol) server for local ComfyUI",
-      "language": "Python",
-      "stars": 286,
-      "forks": 62,
-      "open_issues": 3,
-      "size_kb": 371,
-      "updated_at": "2026-04-21T05:22:58Z",
-      "pushed_at": "2026-02-17T15:42:46Z",
-      "license": "Apache-2.0",
-      "score": 0.7264
-    },
-    {
       "topic": "evaluation",
       "full_name": "BlazeUp-AI/Observal",
       "html_url": "https://github.com/BlazeUp-AI/Observal",
@@ -318,11 +198,11 @@
       "stars": 570,
       "forks": 56,
       "open_issues": 40,
-      "size_kb": 4567,
-      "updated_at": "2026-04-21T12:35:16Z",
-      "pushed_at": "2026-04-21T14:19:52Z",
+      "size_kb": 4655,
+      "updated_at": "2026-04-21T14:36:48Z",
+      "pushed_at": "2026-04-21T14:35:50Z",
       "license": "NOASSERTION",
-      "score": 0.7084
+      "score": 0.7083
     },
     {
       "topic": "workflow",
@@ -340,51 +220,6 @@
       "score": 0.7
     },
     {
-      "topic": "mcp",
-      "full_name": "dedalus-labs/dedalus-mcp-python",
-      "html_url": "https://github.com/dedalus-labs/dedalus-mcp-python",
-      "description": "A simple and performant Model Context Protocol framework for Python.",
-      "language": "Python",
-      "stars": 154,
-      "forks": 6,
-      "open_issues": 0,
-      "size_kb": 2118,
-      "updated_at": "2026-04-21T06:52:43Z",
-      "pushed_at": "2026-01-28T01:48:09Z",
-      "license": "MIT",
-      "score": 0.6775
-    },
-    {
-      "topic": "rag",
-      "full_name": "kreuzberg-dev/kreuzberg",
-      "html_url": "https://github.com/kreuzberg-dev/kreuzberg",
-      "description": "A polyglot document intelligence framework with a Rust core. Extract text, metadata, images, and structured information from PDFs, Office documents, images, and 97+ formats. Available for Rust, Python, Ruby, Java, Go, PHP, Elixir, C#, R, C, TypeScript (Node/Bun/Wasm/Deno)- or use via CLI, REST API, or MCP server.",
-      "language": "Rust",
-      "stars": 7616,
-      "forks": 380,
-      "open_issues": 25,
-      "size_kb": 627300,
-      "updated_at": "2026-04-21T14:15:53Z",
-      "pushed_at": "2026-04-21T14:15:51Z",
-      "license": "NOASSERTION",
-      "score": 0.6746
-    },
-    {
-      "topic": "multi_agent",
-      "full_name": "oxwhirl/pymarl",
-      "html_url": "https://github.com/oxwhirl/pymarl",
-      "description": "Python Multi-Agent Reinforcement Learning framework",
-      "language": "Python",
-      "stars": 2180,
-      "forks": 413,
-      "open_issues": 60,
-      "size_kb": 283,
-      "updated_at": "2026-04-21T09:32:50Z",
-      "pushed_at": "2022-12-08T02:58:39Z",
-      "license": "Apache-2.0",
-      "score": 0.634
-    },
-    {
       "topic": "evaluation",
       "full_name": "selftune-dev/selftune",
       "html_url": "https://github.com/selftune-dev/selftune",
@@ -400,156 +235,6 @@
       "score": 0.5936
     },
     {
-      "topic": "workflow",
-      "full_name": "jkmaina/LangGraphProjects",
-      "html_url": "https://github.com/jkmaina/LangGraphProjects",
-      "description": "This is the official companion repository for the book The Complete LangGraph Blueprint: Build 50+ AI Agents for Business Success. The repository provides source code, practical examples, and resources to help you build dynamic AI agents using LangGraph, a cutting-edge graph-based framework for artificial intelligence workflows.",
-      "language": "Python",
-      "stars": 181,
-      "forks": 77,
-      "open_issues": 2,
-      "size_kb": 3339,
-      "updated_at": "2026-04-20T16:05:13Z",
-      "pushed_at": "2026-01-10T10:05:34Z",
-      "license": "NOASSERTION",
-      "score": 0.5745
-    },
-    {
-      "topic": "evaluation",
-      "full_name": "iris-eval/mcp-server",
-      "html_url": "https://github.com/iris-eval/mcp-server",
-      "description": "The agent eval standard for MCP — score output quality, catch safety failures, enforce cost budgets",
-      "language": "TypeScript",
-      "stars": 6,
-      "forks": 3,
-      "open_issues": 19,
-      "size_kb": 2950,
-      "updated_at": "2026-04-17T03:48:27Z",
-      "pushed_at": "2026-04-20T16:10:40Z",
-      "license": "MIT",
-      "score": 0.5592
-    },
-    {
-      "topic": "multi_agent",
-      "full_name": "Doriandarko/make-it-heavy",
-      "html_url": "https://github.com/Doriandarko/make-it-heavy",
-      "description": "A Python framework that emulates Grok Heavy functionality using intelligent multi-agent orchestration. Deploy 4 (or more) specialized AI agents in parallel to deliver comprehensive, multi-perspective analysis on any query.",
-      "language": "Python",
-      "stars": 1109,
-      "forks": 184,
-      "open_issues": 6,
-      "size_kb": 33,
-      "updated_at": "2026-04-17T18:28:53Z",
-      "pushed_at": "2025-07-16T15:18:33Z",
-      "license": "NOASSERTION",
-      "score": 0.5548
-    },
-    {
-      "topic": "workflow",
-      "full_name": "mx-Liu123/AgentCommander",
-      "html_url": "https://github.com/mx-Liu123/AgentCommander",
-      "description": "An open-source, graph-based workflow engine for Gemini/OpenCode/Claude Code/Qwen CLI. Automate ML experiments and scientific discovery.",
-      "language": "HTML",
-      "stars": 28,
-      "forks": 0,
-      "open_issues": 0,
-      "size_kb": 39127,
-      "updated_at": "2026-04-20T10:21:35Z",
-      "pushed_at": "2026-04-17T23:25:20Z",
-      "license": "Apache-2.0",
-      "score": 0.5376
-    },
-    {
-      "topic": "evaluation",
-      "full_name": "Ubajaj1/llm-project-template",
-      "html_url": "https://github.com/Ubajaj1/llm-project-template",
-      "description": "Production-ready Python starter for LLM projects: agents, RAG, evals, and observability",
-      "language": "Python",
-      "stars": 9,
-      "forks": 3,
-      "open_issues": 0,
-      "size_kb": 36,
-      "updated_at": "2026-04-13T04:05:08Z",
-      "pushed_at": "2026-04-13T04:05:03Z",
-      "license": "",
-      "score": 0.4742
-    },
-    {
-      "topic": "workflow",
-      "full_name": "leslieo2/LangGraph-Mastery-Playbook",
-      "html_url": "https://github.com/leslieo2/LangGraph-Mastery-Playbook",
-      "description": "LangGraph Mastery Playbook: guided, code-first lessons for building memory-aware LLM agents and workflows with LangGraph, TrustCall, and LangChain.",
-      "language": "Python",
-      "stars": 46,
-      "forks": 4,
-      "open_issues": 0,
-      "size_kb": 2957,
-      "updated_at": "2026-04-10T08:54:43Z",
-      "pushed_at": "2025-11-04T07:01:52Z",
-      "license": "",
-      "score": 0.4521
-    },
-    {
-      "topic": "workflow",
-      "full_name": "reedxiao/langdag",
-      "html_url": "https://github.com/reedxiao/langdag",
-      "description": "LangDAG is a specialized orchestration framework for building LLM (Large Language Model) agent workflows using DAGs(Directed Acyclic Graphs), written in Python.",
-      "language": "Python",
-      "stars": 8,
-      "forks": 0,
-      "open_issues": 0,
-      "size_kb": 194,
-      "updated_at": "2026-01-23T05:39:10Z",
-      "pushed_at": "2025-10-02T14:36:16Z",
-      "license": "MIT",
-      "score": 0.4364
-    },
-    {
-      "topic": "evaluation",
-      "full_name": "razroo/iso",
-      "html_url": "https://github.com/razroo/iso",
-      "description": "Isomorphic agent tooling: author once, run on frontier or 7B. Build, lint, fan out, eval, and trace AI agent harnesses across Cursor, Claude Code, Codex, and OpenCode.",
-      "language": "TypeScript",
-      "stars": 2,
-      "forks": 0,
-      "open_issues": 0,
-      "size_kb": 573,
-      "updated_at": "2026-04-20T23:10:28Z",
-      "pushed_at": "2026-04-20T23:10:22Z",
-      "license": "",
-      "score": 0.4116
-    },
-    {
-      "topic": "mcp",
-      "full_name": "wshobson/mcp-trader",
-      "html_url": "https://github.com/wshobson/mcp-trader",
-      "description": "A Model Context Protocol (MCP) server for stock traders",
-      "language": "",
-      "stars": 269,
-      "forks": 67,
-      "open_issues": 6,
-      "size_kb": 6730,
-      "updated_at": "2026-04-20T23:33:48Z",
-      "pushed_at": "2025-08-24T15:36:43Z",
-      "license": "",
-      "score": 0.4017
-    },
-    {
-      "topic": "evaluation",
-      "full_name": "FamilOrujov/agentic-rag-lab",
-      "html_url": "https://github.com/FamilOrujov/agentic-rag-lab",
-      "description": "Agentic RAG lab with FastAPI + Streamlit: document ingestion to Chroma, LangGraph routing (direct/retrieve), Ollama LLM/embeddings, LLMOps observability via Langfuse + Ragas eval, optional Postgres memory, Keploy replay tests, CI.",
-      "language": "Python",
-      "stars": 3,
-      "forks": 0,
-      "open_issues": 0,
-      "size_kb": 2641,
-      "updated_at": "2026-02-16T19:25:59Z",
-      "pushed_at": "2026-02-01T20:46:56Z",
-      "license": "",
-      "score": 0.3743
-    },
-    {
       "topic": "evaluation",
       "full_name": "kshvakov/ai-agent-course",
       "html_url": "https://github.com/kshvakov/ai-agent-course",
@@ -562,37 +247,7 @@
       "updated_at": "2026-03-26T19:55:50Z",
       "pushed_at": "2026-03-21T13:58:05Z",
       "license": "",
-      "score": 0.3691
-    },
-    {
-      "topic": "workflow",
-      "full_name": "dyneqtra/dyneqtra-dev",
-      "html_url": "https://github.com/dyneqtra/dyneqtra-dev",
-      "description": "Graph-Based Editor for LLM Workflows",
-      "language": "TypeScript",
-      "stars": 3,
-      "forks": 2,
-      "open_issues": 0,
-      "size_kb": 942,
-      "updated_at": "2025-10-08T19:18:14Z",
-      "pushed_at": "2025-01-21T17:50:19Z",
-      "license": "MIT",
-      "score": 0.2783
-    },
-    {
-      "topic": "evaluation",
-      "full_name": "Aftabbs/Evaluating-AI-Agents",
-      "html_url": "https://github.com/Aftabbs/Evaluating-AI-Agents",
-      "description": "Arize AI is an AI observability and LLM evaluation platform built to enable more successful AI in production.",
-      "language": "Jupyter Notebook",
-      "stars": 2,
-      "forks": 1,
-      "open_issues": 0,
-      "size_kb": 3189,
-      "updated_at": "2025-07-17T09:34:58Z",
-      "pushed_at": "2025-06-23T02:55:08Z",
-      "license": "MIT",
-      "score": 0.2049
+      "score": 0.369
     }
   ],
   "integration_recommendations": [
@@ -600,88 +255,23 @@
       "repo": "openai/openai-agents-python",
       "topic": "multi_agent",
       "score": 1.0201,
-      "why": "stars=24276, pushed=2026-04-21, lang=Python",
+      "why": "stars=24296, pushed=2026-04-21, lang=Python",
       "integrate_to": "接入 backend/app/services/agent_runtime.py，扩展 framework 分派与路由策略"
     },
     {
       "repo": "langchain-ai/langchain",
       "topic": "rag",
       "score": 1.02,
-      "why": "stars=134349, pushed=2026-04-21, lang=Python",
-      "integrate_to": "映射到 backend/app/services/vector_store.py 与检索过滤策略"
-    },
-    {
-      "repo": "neuml/txtai",
-      "topic": "rag",
-      "score": 0.9822,
-      "why": "stars=12410, pushed=2026-04-21, lang=Python",
+      "why": "stars=134354, pushed=2026-04-21, lang=Python",
       "integrate_to": "映射到 backend/app/services/vector_store.py 与检索过滤策略"
     },
     {
       "repo": "microsoft/agent-framework",
       "topic": "multi_agent",
-      "score": 0.9679,
-      "why": "stars=9658, pushed=2026-04-21, lang=Python",
+      "score": 0.9681,
+      "why": "stars=9660, pushed=2026-04-21, lang=Python",
       "integrate_to": "接入 backend/app/services/agent_runtime.py，扩展 framework 分派与路由策略"
-    },
-    {
-      "repo": "langchain-ai/langgraph",
-      "topic": "rag",
-      "score": 0.9518,
-      "why": "stars=29863, pushed=2026-04-21, lang=Python",
-      "integrate_to": "映射到 backend/app/services/vector_store.py 与检索过滤策略"
-    },
-    {
-      "repo": "raga-ai-hub/RagaAI-Catalyst",
-      "topic": "rag",
-      "score": 0.9498,
-      "why": "stars=16140, pushed=2026-02-11, lang=Python",
-      "integrate_to": "映射到 backend/app/services/vector_store.py 与检索过滤策略"
-    },
-    {
-      "repo": "pathwaycom/pathway",
-      "topic": "rag",
-      "score": 0.9341,
-      "why": "stars=63445, pushed=2026-04-21, lang=Python",
-      "integrate_to": "映射到 backend/app/services/vector_store.py 与检索过滤策略"
-    },
-    {
-      "repo": "deepset-ai/haystack",
-      "topic": "rag",
-      "score": 0.9215,
-      "why": "stars=24932, pushed=2026-04-21, lang=MDX",
-      "integrate_to": "映射到 backend/app/services/vector_store.py 与检索过滤策略"
-    },
-    {
-      "repo": "darrenhinde/OpenAgentsControl",
-      "topic": "multi_agent",
-      "score": 0.8936,
-      "why": "stars=3612, pushed=2026-03-25, lang=TypeScript",
-      "integrate_to": "接入 backend/app/services/agent_runtime.py，扩展 framework 分派与路由策略"
-    },
-    {
-      "repo": "blazickjp/arxiv-mcp-server",
-      "topic": "mcp",
-      "score": 0.8831,
-      "why": "stars=2571, pushed=2026-04-06, lang=Python",
-      "integrate_to": "映射到 backend/app/services/mcp_registry.py，新增 registry adapter"
     }
   ],
-  "clone_status": {
-    "openai/openai-agents-python": {
-      "status": "ok",
-      "note": "exists",
-      "path": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\vendor\\autopilot\\openai__openai-agents-python"
-    },
-    "langchain-ai/langchain": {
-      "status": "ok",
-      "note": "exists",
-      "path": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\vendor\\autopilot\\langchain-ai__langchain"
-    },
-    "neuml/txtai": {
-      "status": "fail",
-      "note": "Cloning into 'C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\vendor\\autopilot\\neuml__txtai'...\nerror: RPC failed; curl 18 transfer closed with outstanding read data remaining\nerror: 5481 bytes of body are still expected\nfetch-pack: unexpected disconnect while reading sideband packet\nfatal: early EOF\nfatal: fetch-pack: invalid index-pack output",
-      "path": "C:\\Users\\ASUS\\Desktop\\智能体构建\\project_20260404_235124\\vendor\\autopilot\\neuml__txtai"
-    }
-  }
+  "clone_status": {}
 }

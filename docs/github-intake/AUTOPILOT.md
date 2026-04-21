@@ -51,3 +51,10 @@ python scripts/enrich_mcp_external_tools.py
 3. `enrich_mcp_external_tools.py`
 4. `probe_mcp_external_tools.py`
 5. 后端进程内 `reload_mcp_registry()`
+
+## 运行记录查询（API）
+- `GET /api/intake/pipeline/history?limit=20`
+- `GET /api/intake/pipeline/latest`
+
+记录文件：
+- `docs/github-intake/pipeline-history.jsonl`

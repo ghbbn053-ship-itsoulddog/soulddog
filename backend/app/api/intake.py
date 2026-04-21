@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from datetime import datetime
+from time import perf_counter
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -36,7 +38,38 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
+def _history_path(root: Path) -> Path:
+    return root / "docs" / "github-intake" / "pipeline-history.jsonl"
+
+
+def _append_history(root: Path, record: dict):
+    hp = _history_path(root)
+    hp.parent.mkdir(parents=True, exist_ok=True)
+    with hp.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def _read_history(root: Path, limit: int = 20) -> list[dict]:
+    hp = _history_path(root)
+    if not hp.exists():
+        return []
+    lines = hp.read_text(encoding="utf-8", errors="ignore").splitlines()
+    rows = []
+    for line in reversed(lines):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rows.append(json.loads(line))
+        except Exception:
+            continue
+        if len(rows) >= max(1, limit):
+            break
+    return rows
+
+
 def _run_script(root: Path, cmd: list[str], timeout: int, name: str) -> dict:
+    t0 = perf_counter()
     try:
         proc = subprocess.run(
             cmd,
@@ -52,7 +85,11 @@ def _run_script(root: Path, cmd: list[str], timeout: int, name: str) -> dict:
             status_code=500,
             detail=f"{name} 失败: {(proc.stderr or proc.stdout or '').strip()[:500]}",
         )
-    return {"stdout": (proc.stdout or "").strip(), "stderr": (proc.stderr or "").strip()}
+    return {
+        "stdout": (proc.stdout or "").strip(),
+        "stderr": (proc.stderr or "").strip(),
+        "elapsed_ms": int((perf_counter() - t0) * 1000),
+    }
 
 
 @router.post("/run")
@@ -148,6 +185,8 @@ async def run_pipeline(payload: IntakePipelineRequest):
     run -> generate -> enrich -> probe -> mcp reload
     """
     root = _repo_root()
+    started_at = datetime.now().isoformat(timespec="seconds")
+    t_pipeline = perf_counter()
 
     # 1) autopilot
     autopilot_script = root / "scripts" / "github_autopilot.py"
@@ -196,18 +235,57 @@ async def run_pipeline(payload: IntakePipelineRequest):
 
     registry = reload_mcp_registry()
     tools = registry.list_tools()
+    total_ms = int((perf_counter() - t_pipeline) * 1000)
 
-    return {
+    result = {
         "success": True,
+        "started_at": started_at,
+        "duration_ms": total_ms,
         "steps": {
             "run": step_run["stdout"],
             "generate": step_generate["stdout"],
             "enrich": step_enrich["stdout"],
             "probe": step_probe["stdout"],
             "reload_count": len(tools),
+            "timing_ms": {
+                "run": step_run["elapsed_ms"],
+                "generate": step_generate["elapsed_ms"],
+                "enrich": step_enrich["elapsed_ms"],
+                "probe": step_probe["elapsed_ms"],
+            },
         },
         "paths": {
             "report_json": str(root / "docs" / "github-intake" / "autopilot-report.json"),
             "generated_tools": str(root / "backend" / "app" / "mcp" / "external_tools.generated.json"),
         },
     }
+
+    _append_history(
+        root,
+        {
+            "started_at": started_at,
+            "duration_ms": total_ms,
+            "params": payload.model_dump(),
+            "reload_count": len(tools),
+            "timing_ms": result["steps"]["timing_ms"],
+            "success": True,
+        },
+    )
+
+    return result
+
+
+@router.get("/pipeline/history")
+async def get_pipeline_history(limit: int = 20):
+    root = _repo_root()
+    rows = _read_history(root, limit=limit)
+    return {"success": True, "count": len(rows), "items": rows}
+
+
+@router.get("/pipeline/latest")
+async def get_pipeline_latest():
+    root = _repo_root()
+    rows = _read_history(root, limit=1)
+    if not rows:
+        raise HTTPException(status_code=404, detail="暂无 pipeline 运行记录")
+    return {"success": True, "item": rows[0]}
