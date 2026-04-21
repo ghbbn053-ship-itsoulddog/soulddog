@@ -102,3 +102,14 @@
 - 前端页面已上线：
   - `/settings/models` 模型切换
   - `/skills` Skill 上传与启停
+
+## 9. 新增落地（2026-04-21 夜间）
+- 新增 Agent Runtime 抽象与 API（不侵入现有聊天主链路）：
+  - `backend/app/services/agent_runtime.py`
+  - `backend/app/api/agents.py`
+- 新接口：
+  - `GET /api/agents/frameworks`：返回框架可用性
+  - `POST /api/agents/run`：按 framework 执行 agent（失败自动回退统一模型层）
+- 当前支持策略：
+  - 主路径：`openai_agents`（OpenAI Agents SDK）
+  - 兼容位：`langgraph`（先暴露能力位，后续接工作流图）
