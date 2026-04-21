@@ -2,7 +2,12 @@
 向量数据库服务 - Milvus 集成
 """
 
-from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
+try:
+    from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
+    MILVUS_IMPORT_OK = True
+except Exception:  # pragma: no cover - optional dependency
+    connections = Collection = FieldSchema = CollectionSchema = DataType = utility = None  # type: ignore
+    MILVUS_IMPORT_OK = False
 import os
 import json
 import logging
@@ -26,6 +31,10 @@ class VectorStore:
     
     def _connect(self):
         """连接 Milvus"""
+        if not MILVUS_IMPORT_OK:
+            self.available = False
+            logger.warning("⚠️ pymilvus 未安装，Milvus 后端不可用")
+            return
         try:
             connections.connect(
                 alias="default",
@@ -239,8 +248,9 @@ class VectorStore:
     
     def close(self):
         """关闭连接"""
-        connections.disconnect("default")
-        logger.info("✅ Milvus 连接已关闭")
+        if MILVUS_IMPORT_OK:
+            connections.disconnect("default")
+            logger.info("✅ Milvus 连接已关闭")
 
 
 class TxtaiVectorStore:
