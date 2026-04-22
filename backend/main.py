@@ -5,8 +5,17 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+import time
 
 from app.core.runtime import DB_AVAILABLE, create_tables, logger, session_store
+from app.core.observability import (
+    HTTP_REQUEST_TOTAL,
+    HTTP_REQUEST_DURATION,
+    new_trace_id,
+    set_trace_id,
+)
 from app.api import chat
 from app.api import mcp as mcp_router
 from app.api.auth_sync import router as auth_sync_router
@@ -35,6 +44,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def trace_and_metrics_middleware(request, call_next):
+    trace_id = request.headers.get("x-trace-id") or new_trace_id()
+    request.state.trace_id = trace_id
+    set_trace_id(trace_id)
+    t0 = time.perf_counter()
+    path = request.url.path
+    method = request.method
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed = time.perf_counter() - t0
+        HTTP_REQUEST_DURATION.labels(method=method, path=path).observe(elapsed)
+        HTTP_REQUEST_TOTAL.labels(method=method, path=path, status="500").inc()
+        raise
+    elapsed = time.perf_counter() - t0
+    status = str(getattr(response, "status_code", 200))
+    response.headers["x-trace-id"] = trace_id
+    HTTP_REQUEST_DURATION.labels(method=method, path=path).observe(elapsed)
+    HTTP_REQUEST_TOTAL.labels(method=method, path=path, status=status).inc()
+    return response
 
 # 业务路由
 app.include_router(auth_sync_router)
@@ -90,6 +122,11 @@ async def root():
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/api/metrics")
+async def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/api")

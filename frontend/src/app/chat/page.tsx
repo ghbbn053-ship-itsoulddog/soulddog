@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import MarkdownMessage from "@/components/MarkdownMessage";
 import { 
@@ -56,11 +56,16 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeHistoryReqRef = useRef(0);
   const streamFlushTimerRef = useRef<number | null>(null);
+  const currentConversationIdRef = useRef<number | null>(null);
 
   // 默认走同域 /api 反向代理，避免不同访问入口下的地址不一致问题
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
   const getConversationStorageKey = (uname: string) => `current_conversation_id_${uname}`;
+
+  useEffect(() => {
+    currentConversationIdRef.current = currentConversationId;
+  }, [currentConversationId]);
 
   // 滚动到底部
   const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
@@ -84,7 +89,7 @@ export default function ChatPage() {
   }, [messages.length]);
 
   // 获取对话列表
-  const fetchConversations = async () => {
+  const fetchConversations = useCallback(async () => {
     if (!username) return;
     try {
       const res = await fetch(`${API_BASE}/api/chat/conversations/${username}`, {
@@ -97,11 +102,13 @@ export default function ChatPage() {
     } catch (error) {
       console.error("获取对话列表失败:", error);
     }
-  };
+  }, [API_BASE, username]);
 
   // 获取对话历史
-  const fetchHistory = async (conversationId: number, uname: string = username) => {
+  const fetchHistory = useCallback(async (conversationId: number, uname: string = username) => {
     if (!uname) return;
+    if (isLoading) return;
+    if (currentConversationIdRef.current !== conversationId) return;
     const reqId = ++activeHistoryReqRef.current;
     try {
       const res = await fetch(
@@ -134,7 +141,7 @@ export default function ChatPage() {
       console.error("获取历史失败:", error);
       // 网络异常时保留当前消息，避免“闪一下全无”
     }
-  };
+  }, [API_BASE, username, isLoading]);
 
   // 发送消息（流式版本）
   const sendMessage = async () => {
@@ -208,6 +215,7 @@ export default function ChatPage() {
           "Content-Type": "application/json",
           "Accept": "text/event-stream",
           "Cache-Control": "no-cache",
+          "x-trace-id": `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         },
         credentials: "include",
         signal: controller.signal,
@@ -491,7 +499,7 @@ export default function ChatPage() {
     if (username) {
       fetchConversations();
     }
-  }, [username]);
+  }, [username, fetchConversations]);
   
   // 当 currentConversationId 变化时，保存到 localStorage
   useEffect(() => {
@@ -592,6 +600,13 @@ export default function ChatPage() {
             >
               <Wrench className="w-4 h-4" />
               MCP 工具
+            </button>
+            <button
+              onClick={() => router.push("/composition")}
+              className="col-span-2 flex items-center justify-center gap-1.5 py-2 px-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition text-sm text-gray-700"
+            >
+              <Blocks className="w-4 h-4" />
+              组合编排
             </button>
           </div>
         </div>

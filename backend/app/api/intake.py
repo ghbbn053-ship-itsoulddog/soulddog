@@ -21,6 +21,14 @@ import hashlib
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from app.core.observability import (
+    INTAKE_TASK_ENQUEUED_TOTAL,
+    INTAKE_TASK_STARTED_TOTAL,
+    INTAKE_TASK_FINISHED_TOTAL,
+    INTAKE_TASK_DURATION,
+    INTAKE_QUEUE_SIZE,
+    INTAKE_RUNNING_SIZE,
+)
 
 router = APIRouter(prefix="/api/intake", tags=["GitHub Intake"])
 _TASK_LOCK = threading.Lock()
@@ -515,6 +523,9 @@ def _run_pipeline_task(root: Path, run_id: str):
             "cancel_requested": bool(task.get("cancel_requested", False)),
         },
     )
+    INTAKE_TASK_STARTED_TOTAL.inc()
+    INTAKE_RUNNING_SIZE.set(_running_count(root))
+    INTAKE_QUEUE_SIZE.set(_queued_count(root))
     _append_task_log(root, run_id, "info", "pipeline", "task started")
 
     try:
@@ -545,6 +556,8 @@ def _run_pipeline_task(root: Path, run_id: str):
         )
         _release_lock(root, run_id=run_id, ok=True)
         _append_task_log(root, run_id, "info", "pipeline", "task success")
+        INTAKE_TASK_FINISHED_TOTAL.labels(outcome="success").inc()
+        INTAKE_TASK_DURATION.labels(outcome="success").observe(max(0.001, (perf_counter() - t0)))
     except PipelineCancelled:
         total_ms = int((perf_counter() - t0) * 1000)
         _append_history(
@@ -572,6 +585,8 @@ def _run_pipeline_task(root: Path, run_id: str):
         )
         _release_lock(root, run_id=run_id, ok=False, error="cancelled")
         _append_task_log(root, run_id, "warn", "pipeline", "task cancelled")
+        INTAKE_TASK_FINISHED_TOTAL.labels(outcome="cancelled").inc()
+        INTAKE_TASK_DURATION.labels(outcome="cancelled").observe(max(0.001, (perf_counter() - t0)))
     except Exception as e:
         total_ms = int((perf_counter() - t0) * 1000)
         retries = int(task.get("retries", 0))
@@ -598,6 +613,8 @@ def _run_pipeline_task(root: Path, run_id: str):
             )
             _append_task_log(root, run_id, "warn", "pipeline", f"retry scheduled #{next_retry} in {backoff_sec}s: {e}")
             _release_lock(root, run_id=run_id, ok=False, error=f"retry scheduled in {backoff_sec}s")
+            INTAKE_RUNNING_SIZE.set(_running_count(root))
+            INTAKE_QUEUE_SIZE.set(_queued_count(root))
             return
 
         _append_history(
@@ -625,6 +642,11 @@ def _run_pipeline_task(root: Path, run_id: str):
         )
         _release_lock(root, run_id=run_id, ok=False, error=str(e))
         _append_task_log(root, run_id, "error", "pipeline", f"task failed: {e}")
+        INTAKE_TASK_FINISHED_TOTAL.labels(outcome="failed").inc()
+        INTAKE_TASK_DURATION.labels(outcome="failed").observe(max(0.001, (perf_counter() - t0)))
+    finally:
+        INTAKE_RUNNING_SIZE.set(_running_count(root))
+        INTAKE_QUEUE_SIZE.set(_queued_count(root))
 
 
 def _worker_loop(root: Path):
@@ -1010,6 +1032,9 @@ async def run_pipeline(payload: IntakePipelineRequest, http_request: Request):
             "cancel_requested": False,
         },
     )
+    INTAKE_TASK_ENQUEUED_TOTAL.inc()
+    INTAKE_QUEUE_SIZE.set(_queued_count(root))
+    INTAKE_RUNNING_SIZE.set(_running_count(root))
     _append_task_log(root, run_id, "info", "queue", f"enqueued by owner={owner}, priority={priority}")
     _ensure_worker(root)
     return {

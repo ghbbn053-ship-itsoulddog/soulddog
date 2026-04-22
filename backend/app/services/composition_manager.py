@@ -128,7 +128,9 @@ class CompositionManager:
         return {
             "owner": owner,
             "skills": filtered_skills,
+            "all_skills": skill_names,
             "mcp_tools": sorted_mcp,
+            "all_mcp_tools": mcp_names,
             "profile": self.get_profile(owner),
         }
 

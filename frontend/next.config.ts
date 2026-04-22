@@ -7,7 +7,6 @@ const nextConfig: NextConfig = {
   distDir: 'dist',
   allowedDevOrigins: [
     '*.dev.coze.site',
-    '*',
     'localhost',
     'localhost:5000',
     '127.0.0.1',

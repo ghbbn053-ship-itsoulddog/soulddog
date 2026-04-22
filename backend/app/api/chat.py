@@ -12,12 +12,18 @@ import json
 import asyncio
 import threading
 import re
+import time
 
 from app.models import get_db, User, Conversation, Message, EducationData
 from app.services import get_model_provider_for_user, get_vector_store
 from app.services.education_normalizer import build_payload_from_education_data_record
 from app.services.skill_router import build_skill_prompt_hint
 from app.security import enforce_username_isolation
+from app.core.observability import (
+    CHAT_STREAM_REQUESTS_TOTAL,
+    CHAT_STREAM_ABORTED_TOTAL,
+    CHAT_STREAM_DURATION,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["对话"])
@@ -344,7 +350,10 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
     支持工具调用 + RAG + 纯流式对话
     """
     conversation = None
+    trace_id = getattr(getattr(http_request, "state", None), "trace_id", "")
     try:
+        CHAT_STREAM_REQUESTS_TOTAL.inc()
+        stream_t0 = time.perf_counter()
         enforce_username_isolation(http_request, request.username)
         session_store = getattr(http_request.app.state, 'session_store', None)
         model_svc = get_model_provider_for_user(request.username, session_store)
@@ -454,12 +463,15 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
         async def generate():
             full_content = ""
             done_sent = False
+            stream_outcome = "success"
             loop = asyncio.get_running_loop()
             chunk_queue: asyncio.Queue = asyncio.Queue()
             tool_calls_info = []
 
             try:
                 yield f"data: {json.dumps({'conversation_id': conversation.id, 'done': False})}\n\n"
+                if trace_id:
+                    yield f"data: {json.dumps({'trace_id': trace_id, 'done': False})}\n\n"
 
                 # 7.1 优先工具调用（在流内执行，并发送 keepalive 防止连接空闲断开）
                 if tools_context:
@@ -541,6 +553,8 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                 done_sent = True
             except asyncio.CancelledError:
                 logger.warning(f"流式连接被客户端中断: conversation_id={conversation.id}")
+                CHAT_STREAM_ABORTED_TOTAL.inc()
+                stream_outcome = "aborted"
                 raise
             except Exception as e:
                 logger.exception(f"流式生成异常: {e}")
@@ -561,10 +575,12 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                 yield f"data: {json.dumps({'content': error_text, 'done': False})}\n\n"
                 yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id})}\n\n"
                 done_sent = True
+                stream_outcome = "failed"
             finally:
                 if not done_sent:
                     # 确保前端能收到结束帧，避免一直转圈
                     yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id})}\n\n"
+                CHAT_STREAM_DURATION.labels(outcome=stream_outcome).observe(max(0.001, time.perf_counter() - stream_t0))
         
         return StreamingResponse(
             generate(),

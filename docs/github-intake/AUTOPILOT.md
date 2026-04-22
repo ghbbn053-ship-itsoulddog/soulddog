@@ -100,3 +100,13 @@ python scripts/enrich_mcp_external_tools.py
   - 控制 skill 是否生效（路由阶段）
   - 控制 mcp 工具是否可调用（执行阶段）
   - 定义 mcp 工具排序与权重
+
+## 观测与排障
+- 指标端点：`GET /api/metrics`
+- 请求 trace：所有 API 响应头携带 `x-trace-id`
+- 聊天流式：
+  - SSE 首帧会回传 `trace_id`
+  - 统计 `requests/aborted/duration`
+- Intake：
+  - 统计 enqueue/start/finish/duration
+  - 统计当前 queue/running gauge
