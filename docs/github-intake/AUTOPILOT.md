@@ -81,3 +81,11 @@ python scripts/enrich_mcp_external_tools.py
 - `docs/github-intake/pipeline-history.jsonl`
 - `docs/github-intake/pipeline-tasks.json`
 - `docs/github-intake/snapshots/<run_id>/...`
+
+## Openclaw 对齐（2026-04）
+- 参考 `E:/Openclaw/tasks/runs.sqlite` 结构，接入本项目 `backend/data/intake/runs.sqlite`
+- 任务主表：`task_runs`（owner/status/priority/retry/timeout/cancel 等）
+- 日志表：`task_logs`（按 run_id + 自增 id 拉流）
+- 支持实时日志接口：
+  - `GET /api/intake/pipeline/tasks/{run_id}/logs`
+  - `GET /api/intake/pipeline/tasks/{run_id}/logs/stream`（SSE）

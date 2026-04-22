@@ -58,6 +58,15 @@ async def startup_event():
             logger.error(f"❌ 数据库表创建失败: {e}")
     else:
         logger.warning("⚠️ 数据库模块不可用，跳过建表")
+    try:
+        from app.api.intake import _repo_root, _ensure_runs_db, _ensure_worker
+
+        root = _repo_root()
+        _ensure_runs_db(root)
+        _ensure_worker(root)
+        logger.info("✅ Intake worker 与 runs.sqlite 已初始化")
+    except Exception as e:
+        logger.error(f"❌ Intake 初始化失败: {e}")
 
 
 @app.get("/")

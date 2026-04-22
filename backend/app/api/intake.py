@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sqlite3
+import asyncio
 from pathlib import Path
 from datetime import datetime
 from time import perf_counter
@@ -16,15 +18,37 @@ import threading
 import time
 import hashlib
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/intake", tags=["GitHub Intake"])
 _TASK_LOCK = threading.Lock()
 _WORKER_LOCK = threading.Lock()
-_WORKER_THREAD: threading.Thread | None = None
+_WORKER_THREADS: list[threading.Thread] = []
 _RUN_PROCS: dict[str, subprocess.Popen] = {}
 _RUN_PROCS_LOCK = threading.Lock()
+_WORKER_COUNT = max(1, int(os.getenv("INTAKE_WORKERS", "2")))
+_CIRCUIT_LOCK = threading.Lock()
+_CIRCUIT: dict[str, dict] = {}
+
+
+def _resolve_owner(request: Request | None) -> str:
+    if request is None:
+        return "system"
+    auth_session_id = request.cookies.get("auth_session_id")
+    app_obj = request.scope.get("app")
+    session_store = getattr(getattr(app_obj, "state", None), "session_store", None) if app_obj else None
+    if auth_session_id and session_store:
+        auth_payload = session_store.get_auth_session(auth_session_id)
+        if auth_payload and auth_payload.get("username"):
+            return str(auth_payload.get("username"))
+    return "system"
+
+
+def _assert_task_owner(task: dict, owner: str):
+    if str(task.get("owner", "")) != owner:
+        raise HTTPException(status_code=403, detail="无权访问该任务")
 
 
 class IntakeRunRequest(BaseModel):
@@ -82,6 +106,74 @@ def _snapshots_dir(root: Path) -> Path:
     return root / "docs" / "github-intake" / "snapshots"
 
 
+def _runs_db_path(root: Path) -> Path:
+    return root / "backend" / "data" / "intake" / "runs.sqlite"
+
+
+def _ensure_runs_db(root: Path):
+    db = _runs_db_path(root)
+    db.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(str(db))
+    try:
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS task_runs (
+              run_id TEXT PRIMARY KEY,
+              owner TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              status TEXT NOT NULL,
+              priority INTEGER NOT NULL DEFAULT 2,
+              priority_label TEXT NOT NULL DEFAULT 'normal',
+              next_run_at TEXT,
+              idempotency_key TEXT,
+              fingerprint TEXT,
+              retries INTEGER NOT NULL DEFAULT 0,
+              max_retries INTEGER NOT NULL DEFAULT 0,
+              retry_backoff_base_sec INTEGER NOT NULL DEFAULT 5,
+              timeout_sec INTEGER NOT NULL DEFAULT 600,
+              cancel_requested INTEGER NOT NULL DEFAULT 0,
+              cancel_requested_at TEXT,
+              started_at TEXT,
+              finished_at TEXT,
+              cancelled_at TEXT,
+              duration_ms INTEGER,
+              reload_count INTEGER,
+              error TEXT,
+              last_error TEXT,
+              snapshot TEXT,
+              params_json TEXT
+            )
+            """
+        )
+        con.execute("CREATE INDEX IF NOT EXISTS idx_task_runs_status ON task_runs(status)")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_task_runs_created_at ON task_runs(created_at)")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_task_runs_priority_next ON task_runs(priority, next_run_at, created_at)")
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS task_logs (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              run_id TEXT NOT NULL,
+              ts TEXT NOT NULL,
+              level TEXT NOT NULL,
+              stage TEXT NOT NULL,
+              message TEXT NOT NULL
+            )
+            """
+        )
+        con.execute("CREATE INDEX IF NOT EXISTS idx_task_logs_run_id_id ON task_logs(run_id, id)")
+        con.commit()
+    finally:
+        con.close()
+
+
+def _db_conn(root: Path) -> sqlite3.Connection:
+    _ensure_runs_db(root)
+    con = sqlite3.connect(str(_runs_db_path(root)))
+    con.row_factory = sqlite3.Row
+    return con
+
+
 def _append_history(root: Path, record: dict):
     hp = _history_path(root)
     hp.parent.mkdir(parents=True, exist_ok=True)
@@ -108,44 +200,162 @@ def _read_history(root: Path, limit: int = 20) -> list[dict]:
     return rows
 
 
+def _row_to_task(row: sqlite3.Row) -> dict:
+    params = {}
+    try:
+        params = json.loads(row["params_json"] or "{}")
+    except Exception:
+        params = {}
+    return {
+        "run_id": row["run_id"],
+        "owner": row["owner"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "status": row["status"],
+        "priority": row["priority_label"],
+        "next_run_at": row["next_run_at"] or "",
+        "idempotency_key": row["idempotency_key"] or "",
+        "fingerprint": row["fingerprint"] or "",
+        "retries": int(row["retries"] or 0),
+        "max_retries": int(row["max_retries"] or 0),
+        "retry_backoff_base_sec": int(row["retry_backoff_base_sec"] or 5),
+        "timeout_sec": int(row["timeout_sec"] or 600),
+        "cancel_requested": bool(row["cancel_requested"] or 0),
+        "cancel_requested_at": row["cancel_requested_at"] or "",
+        "started_at": row["started_at"] or "",
+        "finished_at": row["finished_at"] or "",
+        "cancelled_at": row["cancelled_at"] or "",
+        "duration_ms": row["duration_ms"],
+        "reload_count": row["reload_count"],
+        "error": row["error"] or "",
+        "last_error": row["last_error"] or "",
+        "snapshot": row["snapshot"] or "",
+        "params": params,
+    }
+
+
 def _read_tasks(root: Path) -> list[dict]:
     with _TASK_LOCK:
-        tp = _tasks_path(root)
-        if not tp.exists():
-            return []
+        con = _db_conn(root)
         try:
-            data = json.loads(tp.read_text(encoding="utf-8"))
-            if isinstance(data, list):
-                return data
-            return []
-        except Exception:
-            return []
+            rows = con.execute("SELECT * FROM task_runs ORDER BY created_at DESC LIMIT 500").fetchall()
+            return [_row_to_task(r) for r in rows]
+        finally:
+            con.close()
 
 
 def _write_tasks(root: Path, items: list[dict]):
-    with _TASK_LOCK:
-        tp = _tasks_path(root)
-        tp.parent.mkdir(parents=True, exist_ok=True)
-        tp.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+    for item in items:
+        if isinstance(item, dict):
+            _upsert_task(root, item)
 
 
 def _upsert_task(root: Path, task: dict):
+    run_id = str(task.get("run_id", "")).strip()
+    if not run_id:
+        return
     with _TASK_LOCK:
-        tp = _tasks_path(root)
-        tasks: list[dict] = []
-        if tp.exists():
-            try:
-                data = json.loads(tp.read_text(encoding="utf-8"))
-                if isinstance(data, list):
-                    tasks = data
-            except Exception:
-                tasks = []
-        by_id = {str(t.get("run_id", "")): t for t in tasks if isinstance(t, dict)}
-        by_id[str(task.get("run_id", ""))] = task
-        merged = [v for k, v in by_id.items() if k]
-        merged.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
-        tp.parent.mkdir(parents=True, exist_ok=True)
-        tp.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+        con = _db_conn(root)
+        try:
+            existing = con.execute("SELECT * FROM task_runs WHERE run_id=?", (run_id,)).fetchone()
+            if existing:
+                old = _row_to_task(existing)
+                merged = {**old, **task}
+            else:
+                merged = task
+            now = datetime.now().isoformat(timespec="seconds")
+            params_json = json.dumps(merged.get("params") or {}, ensure_ascii=False)
+            con.execute(
+                """
+                INSERT OR REPLACE INTO task_runs(
+                  run_id, owner, created_at, updated_at, status, priority, priority_label, next_run_at,
+                  idempotency_key, fingerprint, retries, max_retries, retry_backoff_base_sec, timeout_sec,
+                  cancel_requested, cancel_requested_at, started_at, finished_at, cancelled_at, duration_ms,
+                  reload_count, error, last_error, snapshot, params_json
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    run_id,
+                    str(merged.get("owner", "system")),
+                    str(merged.get("created_at", now)),
+                    now,
+                    str(merged.get("status", "queued")),
+                    int(_priority_value(str(merged.get("priority", "normal")))),
+                    str(merged.get("priority", "normal")),
+                    str(merged.get("next_run_at", "")) or None,
+                    str(merged.get("idempotency_key", "")) or None,
+                    str(merged.get("fingerprint", "")) or None,
+                    int(merged.get("retries", 0) or 0),
+                    int(merged.get("max_retries", 0) or 0),
+                    int(merged.get("retry_backoff_base_sec", 5) or 5),
+                    int(merged.get("timeout_sec", 600) or 600),
+                    1 if bool(merged.get("cancel_requested", False)) else 0,
+                    str(merged.get("cancel_requested_at", "")) or None,
+                    str(merged.get("started_at", "")) or None,
+                    str(merged.get("finished_at", "")) or None,
+                    str(merged.get("cancelled_at", "")) or None,
+                    merged.get("duration_ms"),
+                    merged.get("reload_count"),
+                    str(merged.get("error", "")) or None,
+                    str(merged.get("last_error", "")) or None,
+                    str(merged.get("snapshot", "")) or None,
+                    params_json,
+                ),
+            )
+            con.commit()
+        finally:
+            con.close()
+
+
+def _append_task_log(root: Path, run_id: str, level: str, stage: str, message: str):
+    if not run_id:
+        return
+    con = _db_conn(root)
+    try:
+        con.execute(
+            "INSERT INTO task_logs(run_id, ts, level, stage, message) VALUES(?,?,?,?,?)",
+            (run_id, datetime.now().isoformat(timespec="seconds"), level, stage, message[:2000]),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
+def _read_task_logs(root: Path, run_id: str, after_id: int = 0, limit: int = 200) -> list[dict]:
+    con = _db_conn(root)
+    try:
+        rows = con.execute(
+            "SELECT id, run_id, ts, level, stage, message FROM task_logs WHERE run_id=? AND id>? ORDER BY id ASC LIMIT ?",
+            (run_id, int(after_id), max(1, int(limit))),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        con.close()
+
+
+def _claim_next_task(root: Path) -> dict | None:
+    with _TASK_LOCK:
+        con = _db_conn(root)
+        try:
+            now_iso = datetime.now().isoformat(timespec="seconds")
+            row = con.execute(
+                """
+                SELECT * FROM task_runs
+                WHERE status='queued' AND (next_run_at IS NULL OR next_run_at='' OR next_run_at<=?)
+                ORDER BY priority DESC, COALESCE(next_run_at, created_at) ASC, created_at ASC
+                LIMIT 1
+                """,
+                (now_iso,),
+            ).fetchone()
+            if not row:
+                return None
+            run_id = str(row["run_id"])
+            con.execute("UPDATE task_runs SET status='claimed', updated_at=? WHERE run_id=?", (now_iso, run_id))
+            con.commit()
+            claimed = con.execute("SELECT * FROM task_runs WHERE run_id=?", (run_id,)).fetchone()
+            return _row_to_task(claimed) if claimed else None
+        finally:
+            con.close()
 
 
 def _next_queued_task(root: Path) -> dict | None:
@@ -179,7 +389,7 @@ def _next_queued_task(root: Path) -> dict | None:
 
 
 def _queued_count(root: Path) -> int:
-    return sum(1 for t in _read_tasks(root) if str(t.get("status", "")) == "queued")
+    return sum(1 for t in _read_tasks(root) if str(t.get("status", "")) in {"queued", "claimed"})
 
 
 def _running_count(root: Path) -> int:
@@ -278,7 +488,7 @@ def _run_pipeline_task(root: Path, run_id: str):
     task = _get_task(root, run_id)
     if not task:
         return
-    if str(task.get("status", "")) not in {"queued", "running"}:
+    if str(task.get("status", "")) not in {"queued", "claimed", "running"}:
         return
     params = task.get("params") or {}
     payload = IntakePipelineRequest(**params)
@@ -305,6 +515,7 @@ def _run_pipeline_task(root: Path, run_id: str):
             "cancel_requested": bool(task.get("cancel_requested", False)),
         },
     )
+    _append_task_log(root, run_id, "info", "pipeline", "task started")
 
     try:
         result = _execute_pipeline(root, payload, run_id, started_at)
@@ -333,6 +544,7 @@ def _run_pipeline_task(root: Path, run_id: str):
             },
         )
         _release_lock(root, run_id=run_id, ok=True)
+        _append_task_log(root, run_id, "info", "pipeline", "task success")
     except PipelineCancelled:
         total_ms = int((perf_counter() - t0) * 1000)
         _append_history(
@@ -359,6 +571,7 @@ def _run_pipeline_task(root: Path, run_id: str):
             },
         )
         _release_lock(root, run_id=run_id, ok=False, error="cancelled")
+        _append_task_log(root, run_id, "warn", "pipeline", "task cancelled")
     except Exception as e:
         total_ms = int((perf_counter() - t0) * 1000)
         retries = int(task.get("retries", 0))
@@ -383,6 +596,7 @@ def _run_pipeline_task(root: Path, run_id: str):
                     "last_failed_at": datetime.now().isoformat(timespec="seconds"),
                 },
             )
+            _append_task_log(root, run_id, "warn", "pipeline", f"retry scheduled #{next_retry} in {backoff_sec}s: {e}")
             _release_lock(root, run_id=run_id, ok=False, error=f"retry scheduled in {backoff_sec}s")
             return
 
@@ -410,17 +624,15 @@ def _run_pipeline_task(root: Path, run_id: str):
             },
         )
         _release_lock(root, run_id=run_id, ok=False, error=str(e))
+        _append_task_log(root, run_id, "error", "pipeline", f"task failed: {e}")
 
 
 def _worker_loop(root: Path):
     while True:
-        state = _read_state(root)
-        if state.get("running"):
-            time.sleep(0.8)
-            continue
-        task = _next_queued_task(root)
+        task = _claim_next_task(root)
         if not task:
-            break
+            time.sleep(0.5)
+            continue
         run_id = str(task.get("run_id", "")).strip()
         if not run_id:
             _upsert_task(
@@ -449,17 +661,20 @@ def _worker_loop(root: Path):
 
 
 def _ensure_worker(root: Path):
-    global _WORKER_THREAD
+    global _WORKER_THREADS
     with _WORKER_LOCK:
-        if _WORKER_THREAD and _WORKER_THREAD.is_alive():
-            return
-        _WORKER_THREAD = threading.Thread(
-            target=_worker_loop,
-            args=(root,),
-            daemon=True,
-            name="intake-pipeline-worker",
-        )
-        _WORKER_THREAD.start()
+        alive = [t for t in _WORKER_THREADS if t.is_alive()]
+        _WORKER_THREADS = alive
+        need = _WORKER_COUNT - len(_WORKER_THREADS)
+        for i in range(max(0, need)):
+            t = threading.Thread(
+                target=_worker_loop,
+                args=(root,),
+                daemon=True,
+                name=f"intake-pipeline-worker-{len(_WORKER_THREADS) + i + 1}",
+            )
+            t.start()
+            _WORKER_THREADS.append(t)
 
 
 def _run_script(root: Path, cmd: list[str], timeout: int, name: str, *, run_id: str | None = None) -> dict:
@@ -467,6 +682,11 @@ def _run_script(root: Path, cmd: list[str], timeout: int, name: str, *, run_id: 
     proc: subprocess.Popen | None = None
     stdout = ""
     stderr = ""
+    circuit_key = str(cmd[0]) if cmd else name
+    with _CIRCUIT_LOCK:
+        c = _CIRCUIT.get(circuit_key, {"fails": 0, "opened_until": 0.0})
+        if c.get("opened_until", 0.0) > time.time():
+            raise HTTPException(status_code=503, detail=f"{name} 熔断中，请稍后重试")
     try:
         proc = subprocess.Popen(
             cmd,
@@ -482,6 +702,12 @@ def _run_script(root: Path, cmd: list[str], timeout: int, name: str, *, run_id: 
     except subprocess.TimeoutExpired:
         if proc:
             proc.kill()
+        with _CIRCUIT_LOCK:
+            c = _CIRCUIT.get(circuit_key, {"fails": 0, "opened_until": 0.0})
+            c["fails"] = int(c.get("fails", 0)) + 1
+            if c["fails"] >= 3:
+                c["opened_until"] = time.time() + 60
+            _CIRCUIT[circuit_key] = c
         raise HTTPException(status_code=504, detail=f"{name} 执行超时")
     finally:
         if run_id:
@@ -492,10 +718,18 @@ def _run_script(root: Path, cmd: list[str], timeout: int, name: str, *, run_id: 
         raise PipelineCancelled("任务已取消")
 
     if not proc or proc.returncode != 0:
+        with _CIRCUIT_LOCK:
+            c = _CIRCUIT.get(circuit_key, {"fails": 0, "opened_until": 0.0})
+            c["fails"] = int(c.get("fails", 0)) + 1
+            if c["fails"] >= 3:
+                c["opened_until"] = time.time() + 60
+            _CIRCUIT[circuit_key] = c
         raise HTTPException(
             status_code=500,
             detail=f"{name} 失败: {(stderr or stdout or '').strip()[:500]}",
         )
+    with _CIRCUIT_LOCK:
+        _CIRCUIT[circuit_key] = {"fails": 0, "opened_until": 0.0}
     return {
         "stdout": (stdout or "").strip(),
         "stderr": (stderr or "").strip(),
@@ -571,7 +805,9 @@ def _execute_pipeline(root: Path, payload: IntakePipelineRequest, run_id: str, s
         run_cmd.append("--no-clone")
     if payload.update_repo_list:
         run_cmd.append("--update-repo-list")
+    _append_task_log(root, run_id, "info", "autopilot", "starting autopilot script")
     step_run = _run_script(root, run_cmd, timeout=min(240, step_timeout()), name="autopilot", run_id=run_id)
+    _append_task_log(root, run_id, "info", "autopilot", "autopilot done")
     ensure_not_cancelled()
 
     # 2) generate
@@ -582,6 +818,7 @@ def _execute_pipeline(root: Path, payload: IntakePipelineRequest, run_id: str, s
         name="generate_mcp_external_tools",
         run_id=run_id,
     )
+    _append_task_log(root, run_id, "info", "generate", "generate done")
     ensure_not_cancelled()
 
     # 3) enrich
@@ -592,6 +829,7 @@ def _execute_pipeline(root: Path, payload: IntakePipelineRequest, run_id: str, s
         name="enrich_mcp_external_tools",
         run_id=run_id,
     )
+    _append_task_log(root, run_id, "info", "enrich", "enrich done")
     ensure_not_cancelled()
 
     # 4) probe
@@ -599,6 +837,7 @@ def _execute_pipeline(root: Path, payload: IntakePipelineRequest, run_id: str, s
     if payload.auto_enable:
         probe_cmd.append("--auto-enable")
     step_probe = _run_script(root, probe_cmd, timeout=min(120, step_timeout()), name="probe_mcp_external_tools", run_id=run_id)
+    _append_task_log(root, run_id, "info", "probe", "probe done")
     ensure_not_cancelled()
 
     # 5) mcp reload（在本进程内执行，确保后端生效）
@@ -606,6 +845,7 @@ def _execute_pipeline(root: Path, payload: IntakePipelineRequest, run_id: str, s
 
     registry = reload_mcp_registry()
     tools = registry.list_tools()
+    _append_task_log(root, run_id, "info", "reload", f"registry reloaded, tools={len(tools)}")
     total_ms = int((perf_counter() - t_pipeline) * 1000)
 
     return {
@@ -720,13 +960,13 @@ async def enrich_generated_mcp_tools():
 
 
 @router.post("/pipeline")
-async def run_pipeline(payload: IntakePipelineRequest):
+async def run_pipeline(payload: IntakePipelineRequest, http_request: Request):
     """
     全自动接入流水线（异步）：
     入队后由后台 worker 串行执行，避免接口长时间阻塞。
     """
     root = _repo_root()
-    owner = "system"
+    owner = _resolve_owner(http_request)
     priority = (payload.priority or "normal").strip().lower()
     if priority not in {"high", "normal", "low"}:
         priority = "normal"
@@ -770,6 +1010,7 @@ async def run_pipeline(payload: IntakePipelineRequest):
             "cancel_requested": False,
         },
     )
+    _append_task_log(root, run_id, "info", "queue", f"enqueued by owner={owner}, priority={priority}")
     _ensure_worker(root)
     return {
         "success": True,
@@ -802,11 +1043,15 @@ async def get_pipeline_latest():
 @router.get("/pipeline/state")
 async def get_pipeline_state():
     root = _repo_root()
+    with _WORKER_LOCK:
+        workers_alive = len([t for t in _WORKER_THREADS if t.is_alive()])
     return {
         "success": True,
         "state": _read_state(root),
         "queue_size": _queued_count(root),
         "running_count": _running_count(root),
+        "worker_count": _WORKER_COUNT,
+        "workers_alive": workers_alive,
     }
 
 
@@ -830,41 +1075,48 @@ async def force_unlock_pipeline():
 
 
 @router.get("/pipeline/tasks")
-async def list_pipeline_tasks(limit: int = 30):
+async def list_pipeline_tasks(limit: int = 30, http_request: Request = None):
     root = _repo_root()
-    items = _read_tasks(root)[: max(1, limit)]
+    owner = _resolve_owner(http_request)
+    items = [t for t in _read_tasks(root) if str(t.get("owner", "")) == owner][: max(1, limit)]
     return {"success": True, "count": len(items), "items": items}
 
 
 @router.get("/pipeline/tasks/{run_id}")
-async def get_pipeline_task(run_id: str):
+async def get_pipeline_task(run_id: str, http_request: Request):
     root = _repo_root()
+    owner = _resolve_owner(http_request)
     task = _get_task(root, run_id)
     if not task:
         raise HTTPException(status_code=404, detail="task 不存在")
+    _assert_task_owner(task, owner)
     return {"success": True, "item": task}
 
 
 @router.post("/pipeline/tasks/{run_id}/retry")
-async def retry_pipeline_task(run_id: str, payload: RetryRequest):
+async def retry_pipeline_task(run_id: str, payload: RetryRequest, http_request: Request):
     root = _repo_root()
+    owner = _resolve_owner(http_request)
     task = _get_task(root, run_id)
     if not task:
         raise HTTPException(status_code=404, detail="task 不存在")
+    _assert_task_owner(task, owner)
     params = task.get("params") or {}
     req = IntakePipelineRequest(**params)
     if not payload.auto_start:
         return {"success": True, "message": "retry 参数已校验", "params": req.model_dump()}
     req.idempotency_key = f"retry-{run_id}-{int(time.time())}"
-    return await run_pipeline(req)
+    return await run_pipeline(req, http_request)
 
 
 @router.post("/pipeline/tasks/{run_id}/cancel")
-async def cancel_pipeline_task(run_id: str):
+async def cancel_pipeline_task(run_id: str, http_request: Request):
     root = _repo_root()
+    owner = _resolve_owner(http_request)
     task = _get_task(root, run_id)
     if not task:
         raise HTTPException(status_code=404, detail="task 不存在")
+    _assert_task_owner(task, owner)
     status = str(task.get("status", ""))
     if status in {"success", "failed", "cancelled"}:
         return {"success": True, "message": f"任务已结束：{status}", "item": task}
@@ -881,16 +1133,19 @@ async def cancel_pipeline_task(run_id: str):
                 proc.terminate()
             except Exception:
                 pass
+    _append_task_log(root, run_id, "warn", "cancel", f"cancel requested by owner={owner}")
 
     return {"success": True, "message": "已请求取消", "run_id": run_id}
 
 
 @router.post("/pipeline/tasks/{run_id}/rollback")
-async def rollback_pipeline_task(run_id: str):
+async def rollback_pipeline_task(run_id: str, http_request: Request):
     root = _repo_root()
+    owner = _resolve_owner(http_request)
     task = _get_task(root, run_id)
     if not task:
         raise HTTPException(status_code=404, detail="task 不存在")
+    _assert_task_owner(task, owner)
     snapshot = str(task.get("snapshot", "")).strip()
     if not snapshot:
         raise HTTPException(status_code=400, detail="task 无 snapshot 信息")
@@ -907,3 +1162,46 @@ async def rollback_pipeline_task(run_id: str):
         "restored": restored,
         "reloaded_tools": len(registry.list_tools()),
     }
+
+
+@router.get("/pipeline/tasks/{run_id}/logs")
+async def get_pipeline_task_logs(run_id: str, after_id: int = 0, limit: int = 200, http_request: Request = None):
+    root = _repo_root()
+    owner = _resolve_owner(http_request)
+    task = _get_task(root, run_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="task 不存在")
+    _assert_task_owner(task, owner)
+    items = _read_task_logs(root, run_id, after_id=after_id, limit=limit)
+    return {"success": True, "count": len(items), "items": items}
+
+
+@router.get("/pipeline/tasks/{run_id}/logs/stream")
+async def stream_pipeline_task_logs(run_id: str, http_request: Request):
+    root = _repo_root()
+    owner = _resolve_owner(http_request)
+    task = _get_task(root, run_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="task 不存在")
+    _assert_task_owner(task, owner)
+
+    async def event_gen():
+        last_id = 0
+        idle_round = 0
+        while True:
+            rows = _read_task_logs(root, run_id, after_id=last_id, limit=100)
+            if rows:
+                idle_round = 0
+                for r in rows:
+                    last_id = int(r.get("id", last_id))
+                    yield f"data: {json.dumps(r, ensure_ascii=False)}\n\n"
+            else:
+                idle_round += 1
+                yield "data: {\"ping\":true}\n\n"
+            current = _get_task(root, run_id)
+            if current and str(current.get("status", "")) in {"success", "failed", "cancelled"} and idle_round >= 2:
+                break
+            await asyncio.sleep(1.0)
+        yield "data: {\"done\":true}\n\n"
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream")
