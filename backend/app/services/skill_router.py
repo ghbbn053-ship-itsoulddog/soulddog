@@ -7,12 +7,14 @@ from __future__ import annotations
 
 from typing import Dict, List
 
+from app.services.composition_manager import get_composition_manager
 from app.services.skill_manager import get_skill_manager
 
 
 def match_enabled_skills(owner: str, question: str, max_match: int = 3) -> List[Dict]:
     manager = get_skill_manager()
     skills = manager.list_skills(owner)
+    comp = get_composition_manager()
     q = (question or "").strip().lower()
     if not q:
         return []
@@ -20,6 +22,9 @@ def match_enabled_skills(owner: str, question: str, max_match: int = 3) -> List[
     matched: List[Dict] = []
     for s in skills:
         if not s.get("enabled", True):
+            continue
+        name = str(s.get("name", "")).strip()
+        if name and name not in comp.filter_skill_names(owner, [name]):
             continue
         triggers = [str(t).strip() for t in (s.get("triggers") or []) if str(t).strip()]
         if not triggers:

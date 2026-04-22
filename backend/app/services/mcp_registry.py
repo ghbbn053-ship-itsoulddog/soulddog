@@ -207,6 +207,11 @@ class MCPRegistry:
     async def call_tool(self, name: str, username: str, params: Optional[Dict[str, Any]] = None) -> str:
         if not self.has_tool(name):
             raise ValueError(f"工具 '{name}' 不存在")
+        from app.services.composition_manager import get_composition_manager
+
+        comp = get_composition_manager()
+        if not comp.is_mcp_tool_enabled(username, name):
+            raise ValueError(f"工具 '{name}' 在当前组合中已禁用")
         spec = self._tools[name]
         merged = {"username": username}
         if params:

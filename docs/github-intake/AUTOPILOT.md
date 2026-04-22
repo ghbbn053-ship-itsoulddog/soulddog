@@ -89,3 +89,14 @@ python scripts/enrich_mcp_external_tools.py
 - 支持实时日志接口：
   - `GET /api/intake/pipeline/tasks/{run_id}/logs`
   - `GET /api/intake/pipeline/tasks/{run_id}/logs/stream`（SSE）
+
+## Skill + MCP 自由拼接（Composition）
+- 新增用户组合配置（参考 Openclaw 配置式拼接思路）：
+  - `GET /api/composition/{username}`
+  - `POST /api/composition/skills`
+  - `POST /api/composition/mcp`
+  - `POST /api/composition/mcp/reorder`
+- 作用：
+  - 控制 skill 是否生效（路由阶段）
+  - 控制 mcp 工具是否可调用（执行阶段）
+  - 定义 mcp 工具排序与权重
