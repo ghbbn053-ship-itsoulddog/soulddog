@@ -348,12 +348,12 @@ export default function MCPPage() {
               value={importUrl}
               onChange={(e) => setImportUrl(e.target.value)}
               placeholder="MCP 配置 JSON 链接"
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm"
             />
             <button
               onClick={importFromUrl}
               disabled={saving || !importUrl.trim()}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50"
+              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50 whitespace-nowrap shrink-0"
             >
               URL 导入
             </button>
@@ -363,21 +363,21 @@ export default function MCPPage() {
               type="file"
               accept=".json"
               onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+              className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
             />
             <button
               onClick={importFromFile}
               disabled={saving || !uploadFile}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50"
+              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50 whitespace-nowrap shrink-0"
             >
               文件导入
             </button>
           </div>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value as "high" | "normal" | "low")}
-              className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm"
+              className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm min-w-[120px] shrink-0"
             >
               <option value="high">高优先级</option>
               <option value="normal">普通优先级</option>
@@ -386,39 +386,39 @@ export default function MCPPage() {
             <button
               onClick={reloadTools}
               disabled={saving}
-              className="px-4 py-2 rounded-lg bg-gray-900 text-white disabled:opacity-50"
+              className="px-4 py-2 rounded-lg bg-gray-900 text-white disabled:opacity-50 whitespace-nowrap shrink-0"
             >
               {saving ? "处理中..." : "重载工具"}
             </button>
             <button
               onClick={() => runProbe(false)}
               disabled={saving}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50"
+              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50 whitespace-nowrap shrink-0"
             >
               探测
             </button>
             <button
               onClick={() => runProbe(true)}
               disabled={saving}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50"
+              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50 whitespace-nowrap shrink-0"
             >
               探测并启用
             </button>
             <button
               onClick={runPipeline}
               disabled={saving}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50"
+              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50 whitespace-nowrap shrink-0"
             >
               一键流水线
             </button>
             <button
               onClick={forceUnlock}
               disabled={saving}
-              className="px-4 py-2 rounded-lg border border-red-300 text-red-600 bg-white disabled:opacity-50"
+              className="px-4 py-2 rounded-lg border border-red-300 text-red-600 bg-white disabled:opacity-50 whitespace-nowrap shrink-0"
             >
               强制解锁
             </button>
-            <button onClick={() => router.push("/chat")} className="px-4 py-2 rounded-lg border border-gray-300 bg-white">
+            <button onClick={() => router.push("/chat")} className="px-4 py-2 rounded-lg border border-gray-300 bg-white whitespace-nowrap shrink-0">
               返回聊天
             </button>
           </div>

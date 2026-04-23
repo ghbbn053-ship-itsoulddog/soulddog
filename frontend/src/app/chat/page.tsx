@@ -775,10 +775,8 @@ export default function ChatPage() {
                         : "bg-white border border-gray-200 rounded-bl-md"
                       }
                     `}>
-                      {msg.role === 'assistant' && !msg.streaming ? (
+                      {msg.role === 'assistant' ? (
                         <MarkdownMessage content={msg.content || "✨ 正在思考..."} />
-                      ) : msg.role === 'assistant' ? (
-                        <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content || "✨ 正在思考..."}</p>
                       ) : (
                         <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                       )}
