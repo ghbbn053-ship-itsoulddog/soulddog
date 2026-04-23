@@ -103,7 +103,10 @@ services:
       - backend
     environment:
       - NEXT_PUBLIC_API_URL=/api
-      - WATCHPACK_POLLING=true  # 支持文件监听
+      # Linux 开发默认使用 inotify 热更新；需要跨系统挂载时再手动 WATCHPACK_POLLING=true
+      - WATCHPACK_POLLING=${WATCHPACK_POLLING:-false}
+      - CHOKIDAR_USEPOLLING=${CHOKIDAR_USEPOLLING:-false}
+      - NEXT_TELEMETRY_DISABLED=1
     # 开发模式：挂载代码目录，改代码后自动刷新
     volumes:
       - ./frontend/src:/app/src

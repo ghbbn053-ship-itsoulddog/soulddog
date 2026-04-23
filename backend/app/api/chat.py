@@ -623,9 +623,10 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
             generate(),
             media_type="text/event-stream",
             headers={
-                "Cache-Control": "no-cache",
+                "Cache-Control": "no-cache, no-transform",
                 "Connection": "keep-alive",
-                "X-Accel-Buffering": "no"
+                "X-Accel-Buffering": "no",
+                "Content-Encoding": "identity",
             }
         )
         
@@ -657,5 +658,10 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
         return StreamingResponse(
             error_stream(),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+                "Content-Encoding": "identity",
+            },
         )
