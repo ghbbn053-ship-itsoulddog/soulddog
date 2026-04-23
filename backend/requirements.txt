@@ -51,7 +51,7 @@ pandas==2.2.3
 numpy==1.26.4
 
 # MCP (Model Context Protocol)
-mcp==1.6.0
+mcp==1.8.0
 
 # Agent framework (high-star modern runtime)
 openai-agents==0.0.15
