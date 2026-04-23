@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import MarkdownMessage from "@/components/MarkdownMessage";
 import { 
@@ -72,6 +72,17 @@ export default function ChatPage() {
   // 默认走同域 /api 反向代理，避免不同访问入口下的地址不一致问题
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
+  const STREAM_API_BASE = useMemo(() => {
+    const envBase = (process.env.NEXT_PUBLIC_STREAM_API_URL || "").trim();
+    if (envBase) {
+      return envBase.endsWith("/api") ? envBase.slice(0, -4) : envBase;
+    }
+    // 开发环境优先直连 backend，避免 Next dev 代理对 SSE 的中断/缓冲影响
+    if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+      return `${window.location.protocol}//${window.location.hostname}:8000`;
+    }
+    return API_BASE;
+  }, [API_BASE]);
   const getConversationStorageKey = (uname: string) => `current_conversation_id_${uname}`;
 
   useEffect(() => {
@@ -244,7 +255,7 @@ export default function ChatPage() {
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 180000);
-      const response = await fetch(`${API_BASE}/api/chat/send-stream`, {
+      const response = await fetch(`${STREAM_API_BASE}/api/chat/send-stream`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -908,41 +919,50 @@ export default function ChatPage() {
         <div className="bg-white/80 backdrop-blur-xl border-t border-gray-200/50 p-4">
           <div className="max-w-3xl mx-auto">
             <div className="mb-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <select
-                value={provider}
-                onChange={(e) => {
-                  const p = e.target.value;
-                  setProvider(p);
-                  const defaultModel = providers.find((x) => x.provider === p)?.default_model || "";
-                  setModel(defaultModel);
-                }}
-                disabled={isLoading}
-                className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:opacity-60"
-              >
-                {providers.map((p) => (
-                  <option key={p.provider} value={p.provider}>{p.provider}</option>
-                ))}
-              </select>
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                disabled={isLoading}
-                className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:opacity-60"
-              >
-                {(providers.find((p) => p.provider === provider)?.models || []).map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-              <select
-                value={reasoningMode}
-                onChange={(e) => setReasoningMode(e.target.value)}
-                disabled={isLoading}
-                className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:opacity-60"
-              >
-                <option value="standard">标准模式</option>
-                <option value="thinking">推理模式</option>
-                <option value="deep">深度推理</option>
-              </select>
+              <label className="group rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition hover:border-blue-300 hover:shadow-md">
+                <div className="mb-1 text-[11px] font-semibold tracking-wide text-slate-400">PROVIDER</div>
+                <select
+                  value={provider}
+                  onChange={(e) => {
+                    const p = e.target.value;
+                    setProvider(p);
+                    const defaultModel = providers.find((x) => x.provider === p)?.default_model || "";
+                    setModel(defaultModel);
+                  }}
+                  disabled={isLoading}
+                  className="h-7 w-full border-0 bg-transparent p-0 text-sm font-semibold text-slate-700 focus:outline-none disabled:opacity-60"
+                >
+                  {providers.map((p) => (
+                    <option key={p.provider} value={p.provider}>{p.provider}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="group rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition hover:border-blue-300 hover:shadow-md">
+                <div className="mb-1 text-[11px] font-semibold tracking-wide text-slate-400">MODEL</div>
+                <select
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  disabled={isLoading}
+                  className="h-7 w-full border-0 bg-transparent p-0 text-sm font-semibold text-slate-700 focus:outline-none disabled:opacity-60"
+                >
+                  {(providers.find((p) => p.provider === provider)?.models || []).map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="group rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition hover:border-blue-300 hover:shadow-md">
+                <div className="mb-1 text-[11px] font-semibold tracking-wide text-slate-400">MODE</div>
+                <select
+                  value={reasoningMode}
+                  onChange={(e) => setReasoningMode(e.target.value)}
+                  disabled={isLoading}
+                  className="h-7 w-full border-0 bg-transparent p-0 text-sm font-semibold text-slate-700 focus:outline-none disabled:opacity-60"
+                >
+                  <option value="standard">标准模式</option>
+                  <option value="thinking">推理模式</option>
+                  <option value="deep">深度推理</option>
+                </select>
+              </label>
             </div>
             <div className="rounded-3xl border border-gray-200 bg-gray-50/95 shadow-xl shadow-gray-200/60 px-5 py-4">
               <textarea
