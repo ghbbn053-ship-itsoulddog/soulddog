@@ -194,9 +194,18 @@ class SessionStore:
 
     # ===== Model Preferences =====
     def set_user_model_preference(self, username: str, preference: Dict[str, Any], ttl: int = 30 * 24 * 3600):
+        old = self.get_user_model_preference(username) or {}
+        api_key = preference.get("api_key")
+        # 传 null/未传 => 保留旧值；传空字符串 => 清空
+        if api_key is None:
+            api_key = old.get("api_key", "")
         payload = {
             "provider": preference.get("provider", "qwen"),
             "model": preference.get("model", ""),
+            "api_base": preference.get("api_base", old.get("api_base", "")),
+            "api_key": api_key,
+            "reasoning_mode": preference.get("reasoning_mode", old.get("reasoning_mode", "standard")),
+            "show_thinking": bool(preference.get("show_thinking", old.get("show_thinking", False))),
             "updated_at": time.time(),
         }
         if self.redis_available:

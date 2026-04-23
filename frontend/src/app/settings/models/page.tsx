@@ -7,6 +7,8 @@ type ProviderItem = {
   provider: string;
   models: string[];
   default_model: string;
+  supports_custom_endpoint?: boolean;
+  supports_reasoning?: boolean;
 };
 
 export default function ModelsSettingsPage() {
@@ -15,6 +17,11 @@ export default function ModelsSettingsPage() {
   const [providers, setProviders] = useState<ProviderItem[]>([]);
   const [provider, setProvider] = useState("qwen");
   const [model, setModel] = useState("");
+  const [apiBase, setApiBase] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [apiKeyMasked, setApiKeyMasked] = useState("");
+  const [reasoningMode, setReasoningMode] = useState("standard");
+  const [showThinking, setShowThinking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -46,6 +53,10 @@ export default function ModelsSettingsPage() {
         const prefProvider = pref?.provider || "qwen";
         setProvider(prefProvider);
         setModel(pref?.model || list.find((x) => x.provider === prefProvider)?.default_model || "");
+        setApiBase(pref?.api_base || "");
+        setApiKeyMasked(pref?.api_key_masked || "");
+        setReasoningMode(pref?.reasoning_mode || "standard");
+        setShowThinking(!!pref?.show_thinking);
       } catch {
         router.replace("/chat");
       } finally {
@@ -56,22 +67,33 @@ export default function ModelsSettingsPage() {
   }, [API_BASE, router]);
 
   const providerModels = providers.find((p) => p.provider === provider)?.models || [];
+  const providerMeta = providers.find((p) => p.provider === provider);
 
   const save = async () => {
     if (!username) return;
     setSaving(true);
     setMsg("");
     try {
+      const payload = {
+        username,
+        provider,
+        model,
+        api_base: apiBase,
+        api_key: apiKey.trim() ? apiKey.trim() : null,
+        reasoning_mode: reasoningMode,
+        show_thinking: showThinking,
+      };
       const res = await fetch(`${API_BASE}/api/models/preference`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ username, provider, model }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) {
         throw new Error(data?.detail || data?.message || `保存失败(${res.status})`);
       }
+      setApiKey("");
       setMsg(`已保存：${data.provider} / ${data.model}`);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "保存失败");
@@ -125,6 +147,50 @@ export default function ModelsSettingsPage() {
             </select>
           </div>
 
+          {providerMeta?.supports_custom_endpoint && (
+            <>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Base URL</label>
+                <input
+                  value={apiBase}
+                  onChange={(e) => setApiBase(e.target.value)}
+                  placeholder="https://api.openai.com/v1"
+                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">API Key</label>
+                <input
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder={apiKeyMasked ? `已保存(${apiKeyMasked})，留空不修改` : "sk-..."}
+                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
+                />
+              </div>
+            </>
+          )}
+
+          <div>
+            <label className="text-sm font-medium text-gray-700">模式</label>
+            <select
+              className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
+              value={reasoningMode}
+              onChange={(e) => setReasoningMode(e.target.value)}
+            >
+              <option value="standard">标准</option>
+              <option value="thinking">推理</option>
+              <option value="deep">深度推理</option>
+            </select>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={showThinking}
+              onChange={(e) => setShowThinking(e.target.checked)}
+            />
+            显示思考流（若模型支持）
+          </label>
+
           <div className="flex gap-2">
             <button
               onClick={save}
@@ -147,4 +213,3 @@ export default function ModelsSettingsPage() {
     </div>
   );
 }
-

@@ -31,6 +31,19 @@ class BaseProvider:
     ) -> Generator[str, None, None]:
         raise NotImplementedError
 
+    def chat_stream_events(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        education_context: str = "",
+        reasoning_mode: str = "standard",
+        show_thinking: bool = False,
+    ) -> Generator[Dict[str, str], None, None]:
+        # 默认实现：仅输出答案片段
+        for chunk in self.chat_stream(messages, temperature=temperature, education_context=education_context):
+            if chunk:
+                yield {"type": "content", "content": chunk}
+
     def chat_with_tools(self, messages: List[Dict], tools_context: Optional[Dict] = None) -> Dict[str, Any]:
         raise NotImplementedError
 
@@ -93,10 +106,10 @@ class LiteLLMProvider(BaseProvider):
     工具调用与RAG暂通过统一层回退到 QwenProvider。
     """
 
-    def __init__(self, model: Optional[str] = None):
+    def __init__(self, model: Optional[str] = None, api_base: Optional[str] = None, api_key: Optional[str] = None):
         self.model = model or os.getenv("LITELLM_MODEL", os.getenv("QWEN_MODEL", "qwen-plus"))
-        self.api_key = os.getenv("LITELLM_API_KEY") or os.getenv("QWEN_API_KEY")
-        self.api_base = os.getenv("LITELLM_API_BASE")
+        self.api_key = api_key or os.getenv("LITELLM_API_KEY") or os.getenv("QWEN_API_KEY")
+        self.api_base = api_base or os.getenv("LITELLM_API_BASE")
         self._completion = None
         self.available = False
 
@@ -171,6 +184,47 @@ class LiteLLMProvider(BaseProvider):
             logger.error(f"LiteLLM chat_stream 失败: {e}")
             yield f"[异常: {e}]"
 
+    def chat_stream_events(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        education_context: str = "",
+        reasoning_mode: str = "standard",
+        show_thinking: bool = False,
+    ) -> Generator[Dict[str, str], None, None]:
+        if not self.available or self._completion is None:
+            yield {"type": "content", "content": "[LiteLLM 未就绪]"}
+            return
+
+        stream_messages = messages
+        if education_context:
+            system_ctx = {
+                "role": "system",
+                "content": f"以下是该学生教务数据，请严格基于数据回答：\n{education_context}",
+            }
+            stream_messages = [system_ctx] + messages
+
+        try:
+            kwargs = self._build_kwargs()
+            # 简单推理模式参数（兼容支持该字段的后端；不支持会被忽略）
+            if reasoning_mode in {"thinking", "deep"}:
+                kwargs["reasoning_effort"] = "high" if reasoning_mode == "deep" else "medium"
+            resp = self._completion(messages=stream_messages, temperature=temperature, stream=True, **kwargs)
+            for chunk in resp:
+                try:
+                    delta = chunk.choices[0].delta
+                    think = getattr(delta, "reasoning_content", None) or ""
+                    text = getattr(delta, "content", None) or ""
+                    if show_thinking and think:
+                        yield {"type": "thinking", "content": think}
+                    if text:
+                        yield {"type": "content", "content": text}
+                except Exception:
+                    continue
+        except Exception as e:
+            logger.error(f"LiteLLM chat_stream_events 失败: {e}")
+            yield {"type": "content", "content": f"[异常: {e}]"}
+
     def chat_with_tools(self, messages: List[Dict], tools_context: Optional[Dict] = None) -> Dict[str, Any]:
         return {"success": False, "message": "LiteLLM Provider 尚未实现工具调用编排"}
 
@@ -193,14 +247,20 @@ class UnifiedModelProvider(BaseProvider):
     - 主 Provider 失败时自动回退 QwenProvider（保证可用性）
     """
 
-    def __init__(self, provider_name: Optional[str] = None, model: Optional[str] = None):
+    def __init__(
+        self,
+        provider_name: Optional[str] = None,
+        model: Optional[str] = None,
+        api_base: Optional[str] = None,
+        api_key: Optional[str] = None,
+    ):
         provider_name = (provider_name or os.getenv("MODEL_PROVIDER", "qwen")).strip().lower()
         self.provider_name = provider_name
         self.primary: BaseProvider
         self.fallback: BaseProvider = QwenProvider(model=model if provider_name == "qwen" else None)
 
         if provider_name == "litellm":
-            self.primary = LiteLLMProvider(model=model)
+            self.primary = LiteLLMProvider(model=model, api_base=api_base, api_key=api_key)
         else:
             self.primary = self.fallback
 
@@ -242,6 +302,41 @@ class UnifiedModelProvider(BaseProvider):
             logger.warning(f"ModelProvider chat_stream 主通道异常，回退Qwen: {e}")
 
         yield from self.fallback.chat_stream(messages, temperature=temperature, education_context=education_context)
+
+    def chat_stream_events(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        education_context: str = "",
+        reasoning_mode: str = "standard",
+        show_thinking: bool = False,
+    ) -> Generator[Dict[str, str], None, None]:
+        try:
+            yielded = False
+            if hasattr(self.primary, "chat_stream_events"):
+                for event in self.primary.chat_stream_events(
+                    messages,
+                    temperature=temperature,
+                    education_context=education_context,
+                    reasoning_mode=reasoning_mode,
+                    show_thinking=show_thinking,
+                ):
+                    yielded = True
+                    yield event
+            else:
+                for chunk in self.primary.chat_stream(messages, temperature=temperature, education_context=education_context):
+                    yielded = True
+                    if chunk:
+                        yield {"type": "content", "content": chunk}
+            if yielded or self.primary is self.fallback:
+                return
+        except Exception as e:
+            logger.warning(f"ModelProvider chat_stream_events 主通道异常，回退Qwen: {e}")
+
+        # Qwen 当前无 thinking 事件，作为 content 回退
+        for chunk in self.fallback.chat_stream(messages, temperature=temperature, education_context=education_context):
+            if chunk:
+                yield {"type": "content", "content": chunk}
 
     def chat_with_tools(self, messages: List[Dict], tools_context: Optional[Dict] = None) -> Dict[str, Any]:
         result = self.primary.chat_with_tools(messages, tools_context=tools_context)
@@ -295,4 +390,6 @@ def get_model_provider_for_user(username: str, session_store) -> UnifiedModelPro
         return get_model_provider()
     provider = (pref.get("provider") or "qwen").strip().lower()
     model = (pref.get("model") or "").strip() or None
-    return UnifiedModelProvider(provider_name=provider, model=model)
+    api_base = (pref.get("api_base") or "").strip() or None
+    api_key = (pref.get("api_key") or "").strip() or None
+    return UnifiedModelProvider(provider_name=provider, model=model, api_base=api_base, api_key=api_key)

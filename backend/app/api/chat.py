@@ -16,6 +16,7 @@ import time
 
 from app.models import get_db, User, Conversation, Message, EducationData
 from app.services import get_model_provider_for_user, get_vector_store
+from app.services.model_provider import UnifiedModelProvider
 from app.services.education_normalizer import build_payload_from_education_data_record
 from app.services.skill_router import build_skill_prompt_hint
 from app.security import enforce_username_isolation
@@ -64,6 +65,12 @@ class ChatRequest(BaseModel):
     username: str
     message: str
     conversation_id: Optional[int] = None
+    override_provider: Optional[str] = None
+    override_model: Optional[str] = None
+    override_api_base: Optional[str] = None
+    override_api_key: Optional[str] = None
+    reasoning_mode: Optional[str] = "standard"
+    show_thinking: Optional[bool] = False
 
 
 class ChatResponse(BaseModel):
@@ -99,6 +106,13 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
         enforce_username_isolation(http_request, request.username)
         session_store = getattr(http_request.app.state, 'session_store', None)
         model_svc = get_model_provider_for_user(request.username, session_store)
+        if (request.override_provider or "").strip():
+            model_svc = UnifiedModelProvider(
+                provider_name=(request.override_provider or "").strip().lower(),
+                model=(request.override_model or "").strip() or None,
+                api_base=(request.override_api_base or "").strip() or None,
+                api_key=(request.override_api_key or "").strip() or None,
+            )
         vec_store = get_vector_store()
 
         # 1. 查找或创建用户
@@ -357,6 +371,13 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
         enforce_username_isolation(http_request, request.username)
         session_store = getattr(http_request.app.state, 'session_store', None)
         model_svc = get_model_provider_for_user(request.username, session_store)
+        if (request.override_provider or "").strip():
+            model_svc = UnifiedModelProvider(
+                provider_name=(request.override_provider or "").strip().lower(),
+                model=(request.override_model or "").strip() or None,
+                api_base=(request.override_api_base or "").strip() or None,
+                api_key=(request.override_api_key or "").strip() or None,
+            )
         
         if not getattr(model_svc, "available", False):
             async def error_stream():
@@ -514,10 +535,15 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                 # 7.2 工具调用不可用/失败时：走 chat_stream
                 def sync_producer():
                     try:
-                        for chunk in model_svc.chat_stream(history_for_model, education_context=edu_context):
-                            loop.call_soon_threadsafe(chunk_queue.put_nowait, chunk)
+                        for event in model_svc.chat_stream_events(
+                            history_for_model,
+                            education_context=edu_context,
+                            reasoning_mode=(request.reasoning_mode or "standard"),
+                            show_thinking=bool(request.show_thinking),
+                        ):
+                            loop.call_soon_threadsafe(chunk_queue.put_nowait, event)
                     except Exception as e:
-                        loop.call_soon_threadsafe(chunk_queue.put_nowait, f"[错误: {str(e)}]")
+                        loop.call_soon_threadsafe(chunk_queue.put_nowait, {"type": "content", "content": f"[错误: {str(e)}]"})
                     finally:
                         loop.call_soon_threadsafe(chunk_queue.put_nowait, None)
 
@@ -526,15 +552,26 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
 
                 while True:
                     try:
-                        chunk = await asyncio.wait_for(chunk_queue.get(), timeout=10)
+                        event = await asyncio.wait_for(chunk_queue.get(), timeout=10)
                     except asyncio.TimeoutError:
                         yield f"data: {json.dumps({'ping': True, 'stage': 'model_stream', 'done': False})}\n\n"
                         continue
 
-                    if chunk is None:
+                    if event is None:
                         break
-                    full_content += chunk
-                    yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
+                    if isinstance(event, dict):
+                        etype = event.get("type", "content")
+                        econtent = event.get("content", "") or ""
+                    else:
+                        etype = "content"
+                        econtent = str(event or "")
+                    if not econtent:
+                        continue
+                    if etype == "thinking":
+                        yield f"data: {json.dumps({'thinking': econtent, 'done': False})}\n\n"
+                    else:
+                        full_content += econtent
+                        yield f"data: {json.dumps({'content': econtent, 'done': False})}\n\n"
 
                 if not full_content.strip():
                     full_content = "本次未获取到有效回复，请重试。"

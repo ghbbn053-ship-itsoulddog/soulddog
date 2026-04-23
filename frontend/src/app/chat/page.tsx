@@ -30,6 +30,7 @@ interface Message {
   id: number;
   role: "user" | "assistant";
   content: string;
+  thinking?: string;
   sources?: string[];
   tool_calls?: ToolCall[];
   timestamp?: string;
@@ -42,6 +43,12 @@ interface Conversation {
   created_at: string;
 }
 
+interface ProviderItem {
+  provider: string;
+  models: string[];
+  default_model: string;
+}
+
 export default function ChatPage() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -51,6 +58,11 @@ export default function ChatPage() {
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [username, setUsername] = useState("");
+  const [providers, setProviders] = useState<ProviderItem[]>([]);
+  const [provider, setProvider] = useState("qwen");
+  const [model, setModel] = useState("");
+  const [reasoningMode, setReasoningMode] = useState("standard");
+  const [showThinking, setShowThinking] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true); // 初始加载状态，防止空状态闪烁
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -103,6 +115,26 @@ export default function ChatPage() {
       console.error("获取对话列表失败:", error);
     }
   }, [API_BASE, username]);
+
+  const fetchModelPrefs = useCallback(async (uname: string) => {
+    try {
+      const availRes = await fetch(`${API_BASE}/api/models/available`, { credentials: "include" });
+      const avail = availRes.ok ? await availRes.json() : null;
+      const list: ProviderItem[] = avail?.providers || [];
+      setProviders(list);
+
+      const prefRes = await fetch(`${API_BASE}/api/models/preference/${encodeURIComponent(uname)}`, { credentials: "include" });
+      const pref = prefRes.ok ? await prefRes.json() : null;
+      const p = pref?.provider || "qwen";
+      const m = pref?.model || list.find((x) => x.provider === p)?.default_model || "";
+      setProvider(p);
+      setModel(m);
+      setReasoningMode(pref?.reasoning_mode || "standard");
+      setShowThinking(!!pref?.show_thinking);
+    } catch {
+      // ignore
+    }
+  }, [API_BASE]);
 
   // 获取对话历史
   const fetchHistory = useCallback(async (conversationId: number, uname: string = username) => {
@@ -170,7 +202,11 @@ export default function ChatPage() {
           body: JSON.stringify({
             username,
             message: userMessage,
-            conversation_id: currentConversationId
+            conversation_id: currentConversationId,
+            override_provider: provider,
+            override_model: model,
+            reasoning_mode: reasoningMode,
+            show_thinking: showThinking,
           })
         });
         if (!res.ok) {
@@ -223,7 +259,11 @@ export default function ChatPage() {
         body: JSON.stringify({
           username,
           message: userMessage,
-          conversation_id: currentConversationId
+          conversation_id: currentConversationId,
+          override_provider: provider,
+          override_model: model,
+          reasoning_mode: reasoningMode,
+          show_thinking: showThinking,
         })
       });
       clearTimeout(timeoutId);
@@ -243,6 +283,7 @@ export default function ChatPage() {
 
       const decoder = new TextDecoder();
       let aiContent = "";
+      let aiThinking = "";
       let conversationId = currentConversationId;
       let sseBuffer = "";
       let receivedAnyChunk = false;
@@ -278,7 +319,32 @@ export default function ChatPage() {
                 // 节流刷新：降低高频分片导致的整页重绘抖动
                 if (streamFlushTimerRef.current === null) {
                   streamFlushTimerRef.current = window.setTimeout(() => {
-                    flushAssistantContent(assistantMsgId, aiContent);
+                    setMessages(prev => {
+                      const idx = prev.findIndex(msg => msg.id === assistantMsgId);
+                      if (idx === -1) return prev;
+                      const next = [...prev];
+                      next[idx] = { ...next[idx], content: aiContent, thinking: aiThinking };
+                      return next;
+                    });
+                    requestAnimationFrame(() => scrollToBottom("auto"));
+                    streamFlushTimerRef.current = null;
+                  }, 60);
+                }
+              }
+
+              if (data.thinking) {
+                aiThinking += data.thinking;
+                receivedAnyChunk = true;
+                if (streamFlushTimerRef.current === null) {
+                  streamFlushTimerRef.current = window.setTimeout(() => {
+                    setMessages(prev => {
+                      const idx = prev.findIndex(msg => msg.id === assistantMsgId);
+                      if (idx === -1) return prev;
+                      const next = [...prev];
+                      next[idx] = { ...next[idx], content: aiContent, thinking: aiThinking };
+                      return next;
+                    });
+                    requestAnimationFrame(() => scrollToBottom("auto"));
                     streamFlushTimerRef.current = null;
                   }, 60);
                 }
@@ -436,6 +502,7 @@ export default function ChatPage() {
         if (!mounted) return;
         setUsername(authUsername);
         localStorage.setItem("username", authUsername);
+        fetchModelPrefs(authUsername);
 
         const migratedKey = getConversationStorageKey(authUsername);
         const oldConversationId = localStorage.getItem("current_conversation_id");
@@ -492,7 +559,7 @@ export default function ChatPage() {
     return () => {
       mounted = false;
     };
-  }, [API_BASE, router]);
+  }, [API_BASE, router, fetchModelPrefs]);
 
   // 当 username 变化时加载对话列表
   useEffect(() => {
@@ -776,7 +843,14 @@ export default function ChatPage() {
                       }
                     `}>
                       {msg.role === 'assistant' ? (
-                        <MarkdownMessage content={msg.content || "✨ 正在思考..."} />
+                        <>
+                          {msg.thinking && (
+                            <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 whitespace-pre-wrap">
+                              <span className="font-medium">思考：</span>{msg.thinking}
+                            </div>
+                          )}
+                          <MarkdownMessage content={msg.content || "✨ 正在思考..."} />
+                        </>
                       ) : (
                         <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                       )}
@@ -823,6 +897,47 @@ export default function ChatPage() {
         {/* 输入框 */}
         <div className="bg-white/80 backdrop-blur-xl border-t border-gray-200/50 p-4">
           <div className="max-w-3xl mx-auto">
+            <div className="mb-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <select
+                value={provider}
+                onChange={(e) => {
+                  const p = e.target.value;
+                  setProvider(p);
+                  const defaultModel = providers.find((x) => x.provider === p)?.default_model || "";
+                  setModel(defaultModel);
+                }}
+                disabled={isLoading}
+                className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm disabled:opacity-60"
+              >
+                {providers.map((p) => (
+                  <option key={p.provider} value={p.provider}>{p.provider}</option>
+                ))}
+              </select>
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                disabled={isLoading}
+                className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm disabled:opacity-60"
+              >
+                {(providers.find((p) => p.provider === provider)?.models || []).map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <select
+                value={reasoningMode}
+                onChange={(e) => setReasoningMode(e.target.value)}
+                disabled={isLoading}
+                className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm disabled:opacity-60"
+              >
+                <option value="standard">标准模式</option>
+                <option value="thinking">推理模式</option>
+                <option value="deep">深度推理</option>
+              </select>
+            </div>
+            <label className="mb-2 inline-flex items-center gap-2 text-xs text-gray-600">
+              <input type="checkbox" checked={showThinking} onChange={(e) => setShowThinking(e.target.checked)} />
+              显示思考流
+            </label>
             <div className="relative flex items-end gap-2 bg-white border border-gray-200 rounded-2xl shadow-lg shadow-gray-200/50 p-2 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400 transition">
               <textarea
                 ref={inputRef}
