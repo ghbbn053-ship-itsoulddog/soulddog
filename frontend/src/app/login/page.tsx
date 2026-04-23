@@ -133,25 +133,9 @@ export default function LoginPage() {
       if (data.success) {
         // 保存用户名到 localStorage
         localStorage.setItem("username", username);
-        
-        // 检查同步状态
-        const syncStatus = data.sync_status;
-        const syncMessage = data.sync_message || "";
-        
-        if (syncStatus === "completed") {
-          // 已有数据，直接跳转（带提示）
-          setSyncStatus("completed");
-          if (syncMessage) {
-            // 显示提示信息
-            setError(syncMessage); // 复用error显示，但用不同颜色
-          }
-          // 1秒后跳转
-          setTimeout(() => router.replace("/chat"), 1000);
-        } else {
-          // 首次登录，需要后台同步
-          setSyncStatus("syncing");
-          pollSyncStatus(username);
-        }
+        // 登录成功后立即进入聊天页，后台同步继续进行，避免登录页卡住
+        router.replace("/chat");
+        return;
       } else {
         setError(data.message || data.detail || "登录失败");
         fetchCaptcha(); // 刷新验证码
@@ -163,39 +147,6 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // 轮询数据同步状态
-  const pollSyncStatus = async (uname: string) => {
-    const maxAttempts = 60; // 最多轮询60次（约2分钟）
-    let attempts = 0;
-    const poll = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/sync-status?username=${encodeURIComponent(uname)}`);
-        const data = await res.json();
-        setSyncStatus(data.status);
-        if (data.status === "completed") {
-          // 同步完成，跳转到聊天页面
-          setTimeout(() => router.replace("/chat"), 800);
-          return;
-        }
-        if (data.status === "failed") {
-          // 同步失败，仍然跳转（可以使用缓存数据或纯对话）
-          setTimeout(() => router.replace("/chat"), 1500);
-          return;
-        }
-      } catch (e) {
-        console.error("轮询同步状态失败:", e);
-      }
-      attempts++;
-      if (attempts < maxAttempts) {
-        setTimeout(poll, 2000);
-      } else {
-        // 超时也跳转
-        router.replace("/chat");
-      }
-    };
-    poll();
   };
 
   return (

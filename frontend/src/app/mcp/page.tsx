@@ -343,12 +343,12 @@ export default function MCPPage() {
         <div className="bg-white border border-gray-200 rounded-2xl p-5">
           <h1 className="text-xl font-semibold text-gray-900">MCP 工具管理</h1>
           <p className="text-sm text-gray-500 mt-1">导入 JSON 配置并重载即可接入工具。</p>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2 items-center">
             <input
               value={importUrl}
               onChange={(e) => setImportUrl(e.target.value)}
               placeholder="MCP 配置 JSON 链接"
-              className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              className="flex-1 min-w-0 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
             />
             <button
               onClick={importFromUrl}
@@ -358,12 +358,12 @@ export default function MCPPage() {
               URL 导入
             </button>
           </div>
-          <div className="mt-4 flex gap-2 items-center">
+          <div className="mt-4 flex flex-wrap gap-2 items-center">
             <input
               type="file"
               accept=".json"
               onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-              className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+              className="flex-1 min-w-0 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white file:mr-2 file:rounded-md file:border-0 file:bg-gray-100 file:px-2 file:py-1 file:text-xs overflow-hidden"
             />
             <button
               onClick={importFromFile}
