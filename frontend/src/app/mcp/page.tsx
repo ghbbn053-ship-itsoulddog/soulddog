@@ -343,41 +343,46 @@ export default function MCPPage() {
         <div className="bg-white border border-gray-200 rounded-2xl p-5">
           <h1 className="text-xl font-semibold text-gray-900">MCP 工具管理</h1>
           <p className="text-sm text-gray-500 mt-1">导入 JSON 配置并重载即可接入工具。</p>
-          <div className="mt-3 flex flex-wrap gap-2 items-center">
+          <div className="mt-4">
+            <p className="text-xs font-medium text-gray-500 mb-2">导入配置</p>
+            <div className="flex flex-wrap gap-2 items-center">
             <input
               value={importUrl}
               onChange={(e) => setImportUrl(e.target.value)}
               placeholder="MCP 配置 JSON 链接"
-              className="flex-1 min-w-0 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              className="flex-1 min-w-0 w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm"
             />
             <button
               onClick={importFromUrl}
               disabled={saving || !importUrl.trim()}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50 whitespace-nowrap shrink-0"
+              className="h-10 px-4 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap shrink-0 text-sm font-medium"
             >
               URL 导入
             </button>
+            </div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2 items-center">
+          <div className="mt-3 flex flex-wrap gap-2 items-center">
             <input
               type="file"
               accept=".json"
               onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-              className="flex-1 min-w-0 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white file:mr-2 file:rounded-md file:border-0 file:bg-gray-100 file:px-2 file:py-1 file:text-xs overflow-hidden"
+              className="flex-1 min-w-0 w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-white file:mr-2 file:rounded-md file:border-0 file:bg-gray-100 file:px-2 file:py-1 file:text-xs overflow-hidden"
             />
             <button
               onClick={importFromFile}
               disabled={saving || !uploadFile}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50 whitespace-nowrap shrink-0"
+              className="h-10 px-4 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap shrink-0 text-sm font-medium"
             >
               文件导入
             </button>
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-4">
+            <p className="text-xs font-medium text-gray-500 mb-2">流水线操作</p>
+            <div className="grid grid-cols-2 gap-2">
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value as "high" | "normal" | "low")}
-              className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm min-w-[120px] shrink-0"
+              className="h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm min-w-0 w-full"
             >
               <option value="high">高优先级</option>
               <option value="normal">普通优先级</option>
@@ -386,41 +391,42 @@ export default function MCPPage() {
             <button
               onClick={reloadTools}
               disabled={saving}
-              className="px-4 py-2 rounded-lg bg-gray-900 text-white disabled:opacity-50 whitespace-nowrap shrink-0"
+              className="h-10 px-4 rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50 whitespace-nowrap text-sm font-medium"
             >
               {saving ? "处理中..." : "重载工具"}
             </button>
             <button
               onClick={() => runProbe(false)}
               disabled={saving}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50 whitespace-nowrap shrink-0"
+              className="h-10 px-4 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap text-sm font-medium"
             >
               探测
             </button>
             <button
               onClick={() => runProbe(true)}
               disabled={saving}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50 whitespace-nowrap shrink-0"
+              className="h-10 px-4 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap text-sm font-medium"
             >
               探测并启用
             </button>
             <button
               onClick={runPipeline}
               disabled={saving}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50 whitespace-nowrap shrink-0"
+              className="h-10 px-4 rounded-lg border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 whitespace-nowrap text-sm font-medium"
             >
               一键流水线
             </button>
             <button
               onClick={forceUnlock}
               disabled={saving}
-              className="px-4 py-2 rounded-lg border border-red-300 text-red-600 bg-white disabled:opacity-50 whitespace-nowrap shrink-0"
+              className="h-10 px-4 rounded-lg border border-red-300 text-red-600 bg-white hover:bg-red-50 disabled:opacity-50 whitespace-nowrap text-sm font-medium"
             >
               强制解锁
             </button>
-            <button onClick={() => router.push("/chat")} className="px-4 py-2 rounded-lg border border-gray-300 bg-white whitespace-nowrap shrink-0">
+            <button onClick={() => router.push("/chat")} className="col-span-2 h-10 px-4 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 whitespace-nowrap text-sm font-medium">
               返回聊天
             </button>
+            </div>
           </div>
           <div className="mt-3 text-xs text-gray-500">
             状态：{state?.running ? "运行中" : "空闲"} · run_id: {state?.run_id || "-"} · status: {state?.status || "-"} · 运行中: {runningCount} · 队列: {queueSize}
