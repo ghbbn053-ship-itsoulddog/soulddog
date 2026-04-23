@@ -20,27 +20,7 @@ export default function LoginPage() {
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
 
-  // 已登录会话直接进聊天页（以服务端会话为准）
-  React.useEffect(() => {
-    let mounted = true;
-    const checkAuth = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (mounted && data?.authenticated && data?.username) {
-          localStorage.setItem("username", data.username);
-          router.replace("/chat");
-        }
-      } catch {
-        // ignore
-      }
-    };
-    checkAuth();
-    return () => {
-      mounted = false;
-    };
-  }, [API_BASE, router]);
+  // 登录页保持可见，不再自动跳转到 chat（避免无法重新登录/切换账号）
 
   // 获取验证码
   const fetchCaptcha = async (currentUsername?: string) => {
@@ -76,6 +56,18 @@ export default function LoginPage() {
 
   // 页面加载时获取验证码
   React.useEffect(() => {
+    // 进入登录页时清理旧会话上下文，避免历史会话干扰本次登录
+    try {
+      localStorage.removeItem("current_conversation_id");
+      const keys = Object.keys(localStorage);
+      keys.forEach((k) => {
+        if (k.startsWith("current_conversation_id_")) {
+          localStorage.removeItem(k);
+        }
+      });
+    } catch {
+      // ignore
+    }
     fetchCaptcha();
   }, []);
 

@@ -350,7 +350,18 @@ export default function ChatPage() {
               }
 
               if (data.ping) {
-                // 后端保活帧，忽略
+                // 保活/阶段帧：在真实分片返回前给用户可见进度，避免“像卡死”
+                if (!receivedAnyChunk) {
+                  const stageHint = data.stage === "tool_call" ? "正在调用教务工具..." : "正在生成回答...";
+                  setMessages(prev => {
+                    const idx = prev.findIndex(msg => msg.id === assistantMsgId);
+                    if (idx === -1) return prev;
+                    if ((prev[idx].content || "") === stageHint) return prev;
+                    const next = [...prev];
+                    next[idx] = { ...next[idx], content: stageHint };
+                    return next;
+                  });
+                }
                 continue;
               }
 
@@ -906,7 +917,7 @@ export default function ChatPage() {
                   setModel(defaultModel);
                 }}
                 disabled={isLoading}
-                className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm disabled:opacity-60"
+                className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:opacity-60"
               >
                 {providers.map((p) => (
                   <option key={p.provider} value={p.provider}>{p.provider}</option>
@@ -916,7 +927,7 @@ export default function ChatPage() {
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
                 disabled={isLoading}
-                className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm disabled:opacity-60"
+                className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:opacity-60"
               >
                 {(providers.find((p) => p.provider === provider)?.models || []).map((m) => (
                   <option key={m} value={m}>{m}</option>
@@ -926,7 +937,7 @@ export default function ChatPage() {
                 value={reasoningMode}
                 onChange={(e) => setReasoningMode(e.target.value)}
                 disabled={isLoading}
-                className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm disabled:opacity-60"
+                className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:opacity-60"
               >
                 <option value="standard">标准模式</option>
                 <option value="thinking">推理模式</option>
