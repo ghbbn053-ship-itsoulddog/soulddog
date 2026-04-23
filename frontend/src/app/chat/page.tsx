@@ -19,7 +19,15 @@ import {
   Wrench,
   LogOut,
   Settings,
-  Blocks
+  Blocks,
+  BrainCircuit,
+  PenLine,
+  Image as ImageIcon,
+  Code2,
+  Music2,
+  Languages,
+  Grid2x2,
+  Mic
 } from "lucide-react";
 
 interface ToolCall {
@@ -63,6 +71,7 @@ export default function ChatPage() {
   const [model, setModel] = useState("");
   const [reasoningMode, setReasoningMode] = useState("standard");
   const [showThinking, setShowThinking] = useState(false);
+  const [showMoreTools, setShowMoreTools] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true); // 初始加载状态，防止空状态闪烁
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -603,6 +612,11 @@ export default function ChatPage() {
     "考试安排"
   ];
 
+  const applyQuickPrompt = (text: string) => {
+    setInput(text);
+    inputRef.current?.focus();
+  };
+
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       {/* 移动端侧边栏遮罩 */}
@@ -897,66 +911,103 @@ export default function ChatPage() {
         {/* 输入框 */}
         <div className="bg-white/80 backdrop-blur-xl border-t border-gray-200/50 p-4">
           <div className="max-w-3xl mx-auto">
-            <div className="mb-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <select
-                value={provider}
-                onChange={(e) => {
-                  const p = e.target.value;
-                  setProvider(p);
-                  const defaultModel = providers.find((x) => x.provider === p)?.default_model || "";
-                  setModel(defaultModel);
-                }}
-                disabled={isLoading}
-                className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm disabled:opacity-60"
-              >
-                {providers.map((p) => (
-                  <option key={p.provider} value={p.provider}>{p.provider}</option>
-                ))}
-              </select>
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                disabled={isLoading}
-                className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm disabled:opacity-60"
-              >
-                {(providers.find((p) => p.provider === provider)?.models || []).map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-              <select
-                value={reasoningMode}
-                onChange={(e) => setReasoningMode(e.target.value)}
-                disabled={isLoading}
-                className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm disabled:opacity-60"
-              >
-                <option value="standard">标准模式</option>
-                <option value="thinking">推理模式</option>
-                <option value="deep">深度推理</option>
-              </select>
-            </div>
-            <label className="mb-2 inline-flex items-center gap-2 text-xs text-gray-600">
-              <input type="checkbox" checked={showThinking} onChange={(e) => setShowThinking(e.target.checked)} />
-              显示思考流
-            </label>
-            <div className="relative flex items-end gap-2 bg-white border border-gray-200 rounded-2xl shadow-lg shadow-gray-200/50 p-2 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400 transition">
+            <div className="rounded-3xl border border-gray-200 bg-gray-50/95 shadow-xl shadow-gray-200/60 px-5 py-4">
               <textarea
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={username ? "输入消息，按 Enter 发送..." : "请先输入学号"}
+                placeholder={username ? "发消息或输入“/”选择技能" : "请先输入学号"}
                 disabled={!username || isLoading}
                 rows={1}
-                className="flex-1 px-3 py-2.5 max-h-32 resize-none bg-transparent focus:outline-none text-[15px] disabled:text-gray-400"
-                style={{ minHeight: "44px" }}
+                className="w-full px-1 py-1 max-h-32 resize-none bg-transparent focus:outline-none text-[30px] leading-8 text-gray-700 disabled:text-gray-400"
+                style={{ minHeight: "54px" }}
               />
-              <button
-                onClick={sendMessage}
-                disabled={!username || !input.trim() || isLoading}
-                className="flex-shrink-0 p-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-lg shadow-blue-500/25"
-              >
-                <Send className="w-5 h-5" />
-              </button>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <div className="min-w-0 flex items-center gap-2 overflow-x-auto">
+                  <button className="h-9 w-9 shrink-0 rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 inline-flex items-center justify-center">
+                    <Plus className="w-4 h-4" />
+                  </button>
+                  <span className="h-5 w-px shrink-0 bg-gray-300" />
+                  <button
+                    onClick={() => setShowThinking((v) => !v)}
+                    className={`h-9 shrink-0 rounded-full px-3 text-sm inline-flex items-center gap-1.5 border ${showThinking ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-100"}`}
+                  >
+                    <BrainCircuit className="w-4 h-4" />
+                    思考
+                  </button>
+                  <button onClick={() => applyQuickPrompt("帮我写一段关于本周学习总结的内容")} className="h-9 shrink-0 rounded-full px-3 text-sm inline-flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 hover:bg-gray-100">
+                    <PenLine className="w-4 h-4" />
+                    帮我写作
+                  </button>
+                  <button onClick={() => applyQuickPrompt("请根据我的需求生成一段图像提示词")} className="h-9 shrink-0 rounded-full px-3 text-sm inline-flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 hover:bg-gray-100">
+                    <ImageIcon className="w-4 h-4" />
+                    图像生成
+                  </button>
+                  <button onClick={() => applyQuickPrompt("请帮我写一段可运行代码")} className="h-9 shrink-0 rounded-full px-3 text-sm inline-flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 hover:bg-gray-100">
+                    <Code2 className="w-4 h-4" />
+                    编程
+                  </button>
+                  <button onClick={() => applyQuickPrompt("给我写一段歌曲创作灵感文本")} className="h-9 shrink-0 rounded-full px-3 text-sm inline-flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 hover:bg-gray-100">
+                    <Music2 className="w-4 h-4" />
+                    音乐生成
+                  </button>
+                  <button onClick={() => applyQuickPrompt("请把这段内容翻译成英文并润色")} className="h-9 shrink-0 rounded-full px-3 text-sm inline-flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 hover:bg-gray-100">
+                    <Languages className="w-4 h-4" />
+                    翻译
+                  </button>
+                  <button onClick={() => setShowMoreTools((v) => !v)} className="h-9 shrink-0 rounded-full px-3 text-sm inline-flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 hover:bg-gray-100">
+                    <Grid2x2 className="w-4 h-4" />
+                    更多
+                  </button>
+                </div>
+                <button
+                  onClick={sendMessage}
+                  disabled={!username || !input.trim() || isLoading}
+                  className="h-11 w-11 shrink-0 rounded-full bg-white border border-gray-300 text-gray-700 inline-flex items-center justify-center hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {input.trim() ? <Send className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                </button>
+              </div>
+              {showMoreTools && (
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <select
+                    value={provider}
+                    onChange={(e) => {
+                      const p = e.target.value;
+                      setProvider(p);
+                      const defaultModel = providers.find((x) => x.provider === p)?.default_model || "";
+                      setModel(defaultModel);
+                    }}
+                    disabled={isLoading}
+                    className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm disabled:opacity-60"
+                  >
+                    {providers.map((p) => (
+                      <option key={p.provider} value={p.provider}>{p.provider}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    disabled={isLoading}
+                    className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm disabled:opacity-60"
+                  >
+                    {(providers.find((p) => p.provider === provider)?.models || []).map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={reasoningMode}
+                    onChange={(e) => setReasoningMode(e.target.value)}
+                    disabled={isLoading}
+                    className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-sm disabled:opacity-60"
+                  >
+                    <option value="standard">标准模式</option>
+                    <option value="thinking">推理模式</option>
+                    <option value="deep">深度推理</option>
+                  </select>
+                </div>
+              )}
             </div>
             <p className="text-center text-xs text-gray-400 mt-2">
               AI助手可能会有错误，请核实重要信息
