@@ -102,6 +102,20 @@ class JwxtScraper:
 
         return expanded_rows
 
+    def _extract_first_number(self, text: str) -> Optional[float]:
+        """从文本中提取第一个数字，兼容整数与小数。"""
+        if not text:
+            return None
+        import re
+        normalized = " ".join(str(text).replace("\xa0", " ").split())
+        match = re.search(r"(\d+(?:\.\d+)?)", normalized)
+        if not match:
+            return None
+        try:
+            return float(match.group(1))
+        except ValueError:
+            return None
+
     def get_captcha(self) -> bytes:
         """获取验证码图片"""
         try:
@@ -1082,6 +1096,18 @@ class JwxtScraper:
                 if credit_match:
                     progress_data["总学分要求"] = float(credit_match.group(1))
                     logger.info(f"【学业进度调试】提取总学分要求: {progress_data['总学分要求']}")
+                else:
+                    for table_idx, progress_table in progress_tables:
+                        for row_values in self._expand_table_rows(progress_table)[:3]:
+                            row_text = " ".join(value for value in row_values if value).replace('\xa0', ' ')
+                            if "需修读总学分" in row_text:
+                                number = self._extract_first_number(row_text)
+                                if number is not None:
+                                    progress_data["总学分要求"] = number
+                                    logger.info(f"【学业进度调试】从表格{table_idx}头部回退提取总学分要求: {progress_data['总学分要求']}")
+                                    break
+                        if progress_data["总学分要求"] > 0:
+                            break
 
                 total_earned = 0.0
                 seen_courses = set()
