@@ -67,6 +67,25 @@ def auto_crawl_and_store(username: str, session, server_url: str):
         summary = snapshot_payload["summary"]
         sync_key = build_sync_key(username, normalized_payload)
 
+        scraped_student_id = (
+            ((normalized_payload.get("个人信息") or {}).get("student_id", "") or "")
+            .strip()
+        )
+        if scraped_student_id and scraped_student_id != username:
+            mismatch_message = f"scraped student_id mismatch: expected={username}, actual={scraped_student_id}"
+            if db and snapshot:
+                snapshot.sync_key = sync_key
+                snapshot.raw_payload = raw_data
+                snapshot.normalized_payload = normalized_payload
+                snapshot.summary = summary
+                snapshot.status = "failed"
+                snapshot.crawl_success = False
+                snapshot.error_message = mismatch_message
+                db.commit()
+            session_store.set_sync_status(username, {"status": "failed", "message": "学号校验失败，已拒绝写入", "timestamp": time.time()})
+            logger.error(f"【自动爬取】用户 {username} 学号校验失败，实际抓到 {scraped_student_id}")
+            return
+
         if payload_is_effectively_empty(normalized_payload):
             if db and snapshot:
                 snapshot.sync_key = sync_key
