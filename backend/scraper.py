@@ -816,18 +816,22 @@ class JwxtScraper:
     def get_my_training_plan(self) -> Dict:
         """
         获取"我的培养方案"（当前登录学生）
-        URL: /jsxsd/pyfa/pyfa_query
-        基于深度爬取真实HTML修复（1__jsxsd_pyfa_pyfa_query.html）
-        返回详细的培养方案，包括学期、课程代码、课程名称、学分等
+        URL: /jsxsd/pyfa/pyfazd_query
+        基于教务系统导出的“指导培养方案”页面解析。
         """
         try:
-            url = f"{self.base_url}pyfa/pyfa_query"
+            import re
+
+            url = f"{self.base_url}pyfa/pyfazd_query"
             logger.info(f"【培养方案调试】请求URL: {url}")
             response = self.session.get(url, timeout=10)
             logger.info(f"【培养方案调试】响应状态: {response.status_code}")
             logger.info(f"【培养方案调试】响应URL: {response.url}")
             html_text = self._fix_encoding(response)
             logger.info(f"【培养方案调试】HTML长度: {len(html_text)}")
+
+            if not self._check_session_valid(html_text):
+                return {"success": False, "message": "会话已过期，请重新登录"}
             
             # 保存HTML到文件用于调试
             import tempfile, os
@@ -841,74 +845,92 @@ class JwxtScraper:
 
             soup = BeautifulSoup(html_text, 'html.parser')
 
-            # 解析个人培养方案
             plan_data = {
+                "基本信息": {},
+                "学分统计": {},
                 "课程列表": []
             }
 
-            # 查找课程表格 - 根据真实HTML，表格没有id='mxh'，直接查找所有table
-            # 真实表格结构：序号、学期、课程代码、课程名称、开课院系、学分、学时、考核方式、性质、是否适用
-            all_tables = soup.find_all('table')
-            logger.info(f"【培养方案调试】找到 {len(all_tables)} 个表格")
-            
-            target_table = None
-            for table_idx, table in enumerate(all_tables):
-                rows = table.find_all('tr')
-                logger.info(f"【培养方案调试】表格{table_idx}有 {len(rows)} 行")
-                if len(rows) > 10:  # 课程表格应该有超过10行
-                    # 检查是否包含课程代码（8位数字，根据深度爬取HTML）
-                    import re
-                    for row in rows[:5]:  # 检查前5行
-                        cells = row.find_all('td')
-                        for cell in cells:
-                            cell_text = cell.get_text(strip=True)
-                            if re.match(r'^\d{8}$', cell_text):  # 8位数字
-                                logger.info(f"【培养方案调试】表格{table_idx}找到课程代码: {cell_text}")
-                                target_table = table
-                                break
-                        if target_table:
-                            break
-                if target_table:
-                    break
-            
+            title = soup.find("title")
+            plan_title = soup.find("font", style=lambda x: x and "font-size:16px" in x)
+            if title:
+                plan_data["基本信息"]["页面标题"] = title.get_text(strip=True)
+            if plan_title:
+                plan_data["基本信息"]["方案名称"] = plan_title.get_text(strip=True)
+
+            page_text = soup.get_text("\n", strip=True)
+            credit_match = re.search(r"修满\s*(\d+)\s*学分", page_text)
+            if credit_match:
+                plan_data["学分统计"]["总学分要求"] = int(credit_match.group(1))
+
+            target_table = soup.find("table", id="mxh")
             if not target_table:
-                logger.warning(f"【培养方案调试】未找到包含课程代码的表格")
-            
-            if target_table:
-                rows = target_table.find_all('tr')
-                logger.info(f"【培养方案】找到课程表格，共 {len(rows)} 行")
-                
+                logger.warning("【培养方案调试】未找到 id='mxh' 的课程表格")
+            else:
+                logger.info("【培养方案调试】找到 id='mxh' 课程表格")
+                active_rowspans = {}
+                tbody = target_table.find("tbody") or target_table
+                rows = tbody.find_all("tr", recursive=False)
+
                 for row in rows:
-                    # 跳过表头行
-                    if row.find('th'):
+                    if row.find("th"):
                         continue
-                    
-                    cells = row.find_all('td')
-                    # 真实HTML列结构：
-                    # 0:序号 1:学期 2:课程代码 3:课程名称 4:开课院系 5:学分 6:学时 7:考核方式 8:性质 9:是否适用
-                    if len(cells) >= 10:
-                        try:
-                            course_code = cells[2].get_text(strip=True)
-                            # 验证课程代码格式（应该是8位数字）
-                            if not re.match(r'^\d{8}$', course_code):
-                                continue
-                            
-                            course = {
-                                "序号": cells[0].get_text(strip=True),
-                                "学期": cells[1].get_text(strip=True),
-                                "课程代码": course_code,
-                                "课程名称": cells[3].get_text(strip=True),
-                                "开课院系": cells[4].get_text(strip=True),
-                                "学分": cells[5].get_text(strip=True),
-                                "学时": cells[6].get_text(strip=True),
-                                "考核方式": cells[7].get_text(strip=True),
-                                "性质": cells[8].get_text(strip=True),
-                                "是否适用": cells[9].get_text(strip=True)
-                            }
-                            plan_data["课程列表"].append(course)
-                        except Exception as e:
-                            logger.warning(f"解析课程行失败: {str(e)}")
-                            continue
+
+                    cells = row.find_all("td", recursive=False)
+                    if not cells:
+                        continue
+
+                    expanded = []
+                    col_idx = 0
+
+                    def fill_rowspans_until(limit=None):
+                        nonlocal col_idx
+                        while col_idx in active_rowspans and (limit is None or col_idx < limit):
+                            span = active_rowspans[col_idx]
+                            expanded.append(span["text"])
+                            span["remaining"] -= 1
+                            if span["remaining"] <= 0:
+                                del active_rowspans[col_idx]
+                            col_idx += 1
+
+                    for cell in cells:
+                        fill_rowspans_until()
+                        text = cell.get_text(" ", strip=True).replace("\xa0", " ").strip()
+                        colspan = int(cell.get("colspan", 1) or 1)
+                        rowspan = int(cell.get("rowspan", 1) or 1)
+                        for _ in range(colspan):
+                            expanded.append(text)
+                            if rowspan > 1:
+                                active_rowspans[col_idx] = {"text": text, "remaining": rowspan - 1}
+                            col_idx += 1
+
+                    fill_rowspans_until()
+
+                    if len(expanded) < 15:
+                        continue
+
+                    course_code = expanded[3].strip()
+                    if not re.fullmatch(r"\d{8}", course_code):
+                        continue
+
+                    course = {
+                        "课程类别": expanded[0].strip(),
+                        "课程性质": expanded[1].strip(),
+                        "课程模块": expanded[2].strip(),
+                        "课程代码": course_code,
+                        "课程名称": expanded[4].strip(),
+                        "学分": expanded[5].strip(),
+                        "授课周数": expanded[6].strip(),
+                        "总学时": expanded[7].strip(),
+                        "理论学时": expanded[8].strip(),
+                        "实验学时": expanded[9].strip(),
+                        "实习学时": expanded[10].strip(),
+                        "其他学时": expanded[11].strip(),
+                        "建议修读学期": expanded[12].strip(),
+                        "是否适用辅修专业": expanded[13].strip(),
+                        "建议考核方式": expanded[14].strip(),
+                    }
+                    plan_data["课程列表"].append(course)
 
             logger.info(f"成功获取我的培养方案，共 {len(plan_data['课程列表'])} 门课程")
 

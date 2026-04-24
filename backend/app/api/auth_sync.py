@@ -6,6 +6,7 @@ import base64
 import re
 import time
 import secrets
+from datetime import datetime, timedelta, timezone
 
 import requests
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
@@ -13,10 +14,12 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import SERVERS
 from app.core.runtime import DB_AVAILABLE, EducationData, User, get_db, logger, session_store
+from app.models import EducationSyncSnapshot
 from app.services.education_sync import auto_crawl_and_store
 from app.security import enforce_username_isolation
 
 router = APIRouter(tags=["认证与同步"])
+SYNC_REUSE_TTL_HOURS = 12
 
 
 def select_server(username: str) -> str:
@@ -145,14 +148,30 @@ async def login(request: Request, background_tasks: BackgroundTasks):
                         user = db.query(User).filter(User.username == username).first()
                         if user:
                             user_id = user.id
+                            latest_snapshot = (
+                                db.query(EducationSyncSnapshot)
+                                .filter(
+                                    EducationSyncSnapshot.user_id == user.id,
+                                    EducationSyncSnapshot.status == "success",
+                                    EducationSyncSnapshot.is_active == True,
+                                )
+                                .order_by(EducationSyncSnapshot.created_at.desc())
+                                .first()
+                            )
                             data_count = db.query(EducationData).filter(EducationData.user_id == user.id).count()
-                            if data_count > 0:
+                            snapshot_fresh = False
+                            if latest_snapshot and latest_snapshot.created_at:
+                                created_at = latest_snapshot.created_at
+                                if getattr(created_at, "tzinfo", None) is None:
+                                    created_at = created_at.replace(tzinfo=timezone.utc)
+                                snapshot_fresh = created_at >= datetime.now(timezone.utc) - timedelta(hours=SYNC_REUSE_TTL_HOURS)
+                            if data_count > 0 and snapshot_fresh:
                                 needs_sync = False
                                 session_store.set_sync_status(
                                     username,
                                     {
                                         "status": "completed",
-                                        "message": f"使用已有数据（{data_count}条）",
+                                        "message": f"使用最近一次成功快照（{data_count}条）",
                                         "timestamp": time.time(),
                                         "cached": True,
                                     },

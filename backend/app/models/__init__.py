@@ -5,7 +5,7 @@
 from app.models.base import Base, engine, get_db
 from app.models.user import User
 from app.models.conversation import Conversation, Message
-from app.models.education_data import EducationData, Grade, Course
+from app.models.education_data import EducationData, EducationSyncSnapshot, Grade, Course
 
 # 创建所有表
 def create_tables():
@@ -20,6 +20,7 @@ __all__ = [
     "Conversation",
     "Message",
     "EducationData",
+    "EducationSyncSnapshot",
     "Grade",
     "Course",
 ]

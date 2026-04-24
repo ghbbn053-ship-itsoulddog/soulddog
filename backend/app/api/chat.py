@@ -14,7 +14,7 @@ import threading
 import re
 import time
 
-from app.models import get_db, User, Conversation, Message, EducationData
+from app.models import get_db, User, Conversation, Message, EducationData, EducationSyncSnapshot
 from app.services import get_model_provider_for_user, get_vector_store
 from app.services.model_provider import UnifiedModelProvider
 from app.services.education_normalizer import build_payload_from_education_data_record
@@ -190,12 +190,23 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
                     query_embedding = model_svc.generate_embedding(request.message)
                     if query_embedding:
                         filters = _infer_rag_filters(request.message)
+                        active_snapshot = (
+                            db.query(EducationSyncSnapshot)
+                            .filter(
+                                EducationSyncSnapshot.user_id == user.id,
+                                EducationSyncSnapshot.status == "success",
+                                EducationSyncSnapshot.is_active == True,
+                            )
+                            .order_by(EducationSyncSnapshot.created_at.desc())
+                            .first()
+                        )
                         context = vec_store.search(
                             user.id,
                             query_embedding,
                             top_k=8,
                             data_types=filters["data_types"],
                             semester=filters["semester"],
+                            sync_key=active_snapshot.sync_key if active_snapshot else "",
                         )
                 except Exception as e:
                     logger.warning(f"向量检索失败: {e}")

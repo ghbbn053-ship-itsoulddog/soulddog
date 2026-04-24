@@ -2,7 +2,7 @@
 教务数据模型 - 存储爬虫抓取的数据
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Float
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Float, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.models.base import Base
@@ -45,6 +45,29 @@ class EducationData(Base):
     
     # 关系
     user = relationship("User", back_populates="education_data")
+
+
+class EducationSyncSnapshot(Base):
+    """教务同步快照表 - 保留每次同步的原始/标准化结果与状态"""
+    __tablename__ = "education_sync_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    username = Column(String(50), nullable=False, index=True, comment="学号冗余")
+    sync_key = Column(String(64), nullable=False, unique=True, index=True, comment="本次同步唯一键")
+    schema_version = Column(String(20), nullable=False, default="v2", comment="数据契约版本")
+    status = Column(String(20), nullable=False, default="pending", comment="pending/success/failed")
+    sync_source = Column(String(50), nullable=False, default="auto_login", comment="auto_login/manual/tool_refresh")
+    is_active = Column(Boolean, nullable=False, default=False, comment="是否当前激活快照")
+    crawl_success = Column(Boolean, nullable=False, default=False)
+    store_success = Column(Boolean, nullable=False, default=False)
+    vector_success = Column(Boolean, nullable=False, default=False)
+    summary = Column(JSON, default=dict, comment="计数摘要")
+    raw_payload = Column(JSON, default=dict, comment="原始爬取数据")
+    normalized_payload = Column(JSON, default=dict, comment="标准化数据")
+    error_message = Column(Text, nullable=True, comment="失败信息")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
 class Grade(Base):

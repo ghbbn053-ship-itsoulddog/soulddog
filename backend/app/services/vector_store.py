@@ -18,6 +18,18 @@ import math
 logger = logging.getLogger(__name__)
 
 
+def _normalize_metadata_payload(value: Any) -> Dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value or "{}")
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
 class VectorStore:
     """Milvus 向量存储服务"""
     
@@ -108,9 +120,15 @@ class VectorStore:
                 # 获取该用户的所有文本
                 existing_results = self.collection.query(
                     expr=f"user_id == {user_id}",
-                    output_fields=["text"]
+                    output_fields=["text", "metadata"]
                 )
-                existing_texts = {item['text'] for item in existing_results}
+                existing_texts = {
+                    (
+                        item.get("text"),
+                        str(_normalize_metadata_payload(item.get("metadata")).get("sync_key", "")),
+                    )
+                    for item in existing_results
+                }
                 logger.info(f"📊 用户 {user_id} 已有 {len(existing_texts)} 条数据")
             except Exception as e:
                 logger.warning(f"⚠️ 查询已有数据失败: {str(e)}")
@@ -122,14 +140,13 @@ class VectorStore:
             new_metadatas = []
             
             for i, text in enumerate(texts):
-                if text not in existing_texts:
+                metadata = metadatas[i] if metadatas and i < len(metadatas) else {}
+                sync_key = str((metadata or {}).get("sync_key", ""))
+                if (text, sync_key) not in existing_texts:
                     new_texts.append(text)
                     new_embeddings.append(embeddings[i])
                     new_sources.append(sources[i])
-                    if metadatas:
-                        new_metadatas.append(metadatas[i])
-                    else:
-                        new_metadatas.append({})
+                    new_metadatas.append(metadata)
             
             if not new_texts:
                 logger.info(f"ℹ️ 用户 {user_id} 没有新数据需要添加")
@@ -164,6 +181,7 @@ class VectorStore:
         top_k: int = 5,
         data_types: Optional[List[str]] = None,
         semester: str = "",
+        sync_key: str = "",
     ) -> List[Dict]:
         """搜索相似文档"""
         if not self.available:
@@ -204,6 +222,10 @@ class VectorStore:
                         hit_sem = str(metadata.get("semester", "")).strip()
                         if hit_sem and hit_sem != semester:
                             continue
+                    if sync_key:
+                        hit_sync_key = str(metadata.get("sync_key", "")).strip()
+                        if hit_sync_key != sync_key:
+                            continue
                     hits.append({
                         "id": hit.id,
                         "text": hit.entity.get("text"),
@@ -219,7 +241,7 @@ class VectorStore:
             logger.error(f"❌ 搜索失败: {str(e)}")
             return []
     
-    def delete_user_data(self, user_id: int):
+    def delete_user_data(self, user_id: int, exclude_sync_key: Optional[str] = None):
         """删除用户的所有数据"""
         if not self.available:
             logger.warning("⚠️ Milvus 不可用，跳过删除")
@@ -236,10 +258,28 @@ class VectorStore:
             
             # 加载 Collection 到内存
             self.collection.load()
-            
-            self.collection.delete(expr=f"user_id == {user_id}")
-            self.collection.flush()
-            logger.info(f"✅ 删除用户 {user_id} 的所有向量数据")
+
+            if not exclude_sync_key:
+                self.collection.delete(expr=f"user_id == {user_id}")
+                self.collection.flush()
+                logger.info(f"✅ 删除用户 {user_id} 的所有向量数据")
+                return
+
+            rows = self.collection.query(
+                expr=f"user_id == {user_id}",
+                output_fields=["id", "metadata"],
+            )
+            removable_ids = []
+            for row in rows:
+                metadata = _normalize_metadata_payload(row.get("metadata"))
+                row_sync_key = str(metadata.get("sync_key", "")).strip()
+                if row_sync_key != exclude_sync_key:
+                    removable_ids.append(str(row.get("id")))
+
+            if removable_ids:
+                self.collection.delete(expr=f"id in [{','.join(removable_ids)}]")
+                self.collection.flush()
+            logger.info(f"✅ 删除用户 {user_id} 的旧向量数据: {len(removable_ids)} 条")
             
         except Exception as e:
             logger.error(f"❌ 删除数据失败: {str(e)}")
@@ -342,6 +382,7 @@ class TxtaiVectorStore:
         top_k: int = 5,
         data_types: Optional[List[str]] = None,
         semester: str = "",
+        sync_key: str = "",
     ) -> List[Dict]:
         candidates: List[Dict[str, Any]] = []
         for r in self._rows:
@@ -355,6 +396,10 @@ class TxtaiVectorStore:
             if semester:
                 hit_sem = str(meta.get("semester", "")).strip()
                 if hit_sem and hit_sem != semester:
+                    continue
+            if sync_key:
+                hit_sync_key = str(meta.get("sync_key", "")).strip()
+                if hit_sync_key != sync_key:
                     continue
             score = self._cosine(query_embedding, r.get("embedding") or [])
             if score < 0:
@@ -373,9 +418,18 @@ class TxtaiVectorStore:
         logger.info(f"✅ TxtaiStore 搜索完成，找到 {len(hits)} 条相关文档")
         return hits
 
-    def delete_user_data(self, user_id: int):
+    def delete_user_data(self, user_id: int, exclude_sync_key: Optional[str] = None):
         before = len(self._rows)
-        self._rows = [r for r in self._rows if int(r.get("user_id", -1)) != int(user_id)]
+        self._rows = [
+            r for r in self._rows
+            if not (
+                int(r.get("user_id", -1)) == int(user_id)
+                and (
+                    exclude_sync_key is None
+                    or str((r.get("metadata") or {}).get("sync_key", "")).strip() != exclude_sync_key
+                )
+            )
+        ]
         removed = before - len(self._rows)
         self._save()
         logger.info(f"✅ TxtaiStore 删除用户 {user_id} 向量数据: {removed} 条")

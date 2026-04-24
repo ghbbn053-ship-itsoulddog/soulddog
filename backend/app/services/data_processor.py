@@ -4,7 +4,7 @@
 
 import json
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 from app.services.education_normalizer import normalize_education_payload
 
@@ -146,7 +146,14 @@ class DataProcessor:
             db.rollback()
             return False
 
-    def vectorize_and_store(self, user_id: int, username: str, raw_data: Dict) -> bool:
+    def vectorize_and_store(
+        self,
+        user_id: int,
+        username: str,
+        raw_data: Dict,
+        sync_key: Optional[str] = None,
+        schema_version: Optional[str] = None,
+    ) -> bool:
         """
         将爬取数据分块、向量化、存入 Milvus
         
@@ -176,20 +183,26 @@ class DataProcessor:
             if not vs.collection:
                 vs.create_collection(dim=1536)
 
-            # 2. 删除该用户的旧向量数据
-            vs.delete_user_data(user_id)
+            common_metadata = {}
+            if sync_key:
+                common_metadata["sync_key"] = sync_key
+            if schema_version:
+                common_metadata["schema_version"] = schema_version
 
-            # 3. 数据分块
-            chunks = self.chunk_education_data(raw_data, username)
+            # 2. 数据分块
+            chunks = self.chunk_education_data(raw_data, username, common_metadata=common_metadata)
             if not chunks:
                 logger.warning("【向量化】无数据可向量化")
                 return False
 
             logger.info(f"【向量化】共 {len(chunks)} 个数据块待向量化")
 
-            # 3. 批量向量化（每批 10 个，避免超时）
+            # 3. 先完整生成新批次向量，再切换批次，避免生成阶段失败时清空旧数据
             batch_size = 10
-            total_stored = 0
+            pending_texts: List[str] = []
+            pending_sources: List[str] = []
+            pending_embeddings: List[List[float]] = []
+            pending_metadatas: List[Dict] = []
 
             for i in range(0, len(chunks), batch_size):
                 batch = chunks[i:i + batch_size]
@@ -210,28 +223,46 @@ class DataProcessor:
                 # 过滤掉全零向量的条目
                 valid_indices = [j for j, e in enumerate(embeddings) if any(v != 0.0 for v in e)]
                 if valid_indices:
-                    valid_texts = [texts[j] for j in valid_indices]
-                    valid_embeddings = [embeddings[j] for j in valid_indices]
-                    valid_sources = [sources[j] for j in valid_indices]
-                    valid_metadatas = [metadatas[j] for j in valid_indices]
+                    pending_texts.extend(texts[j] for j in valid_indices)
+                    pending_embeddings.extend(embeddings[j] for j in valid_indices)
+                    pending_sources.extend(sources[j] for j in valid_indices)
+                    pending_metadatas.extend(metadatas[j] for j in valid_indices)
 
-                    vs.add_documents(
-                        user_id=user_id,
-                        texts=valid_texts,
-                        embeddings=valid_embeddings,
-                        sources=valid_sources,
-                        metadatas=valid_metadatas,
-                    )
-                    total_stored += len(valid_indices)
+            if not pending_texts:
+                logger.warning("【向量化】所有分块都未生成有效向量")
+                return False
 
-            logger.info(f"【向量化】成功存入 {total_stored} 个向量到 Milvus")
+            inserted_ids = vs.add_documents(
+                user_id=user_id,
+                texts=pending_texts,
+                embeddings=pending_embeddings,
+                sources=pending_sources,
+                metadatas=pending_metadatas,
+            )
+            if not inserted_ids:
+                logger.warning("【向量化】新批次写入失败或无有效新增数据")
+                return False
+
+            if sync_key:
+                vs.delete_user_data(user_id, exclude_sync_key=sync_key)
+            else:
+                logger.warning("【向量化】未提供 sync_key，将删除该用户全部旧向量")
+                vs.delete_user_data(user_id)
+
+            logger.info(f"【向量化】成功写入并切换 {len(inserted_ids)} 个向量")
             return True
 
         except Exception as e:
             logger.error(f"【向量化】失败: {str(e)}")
             return False
 
-    def chunk_education_data(self, raw_data: Dict, username: str) -> List[Dict]:
+    def _merge_common_metadata(self, metadata: Dict, common_metadata: Optional[Dict]) -> Dict:
+        merged = dict(metadata or {})
+        if common_metadata:
+            merged.update(common_metadata)
+        return merged
+
+    def chunk_education_data(self, raw_data: Dict, username: str, common_metadata: Optional[Dict] = None) -> List[Dict]:
         """
         将教务数据分块，每块是一个适合向量检索的文本单元
         
@@ -257,7 +288,10 @@ class DataProcessor:
             chunks.append({
                 "text": text,
                 "source": "个人信息",
-                "metadata": {"type": "personal_info", "data_type": "personal_info"},
+                "metadata": self._merge_common_metadata(
+                    {"type": "personal_info", "data_type": "personal_info"},
+                    common_metadata,
+                ),
             })
 
         # === 2. 成绩 — 每门课 1 chunk ===
@@ -279,12 +313,15 @@ class DataProcessor:
             chunks.append({
                 "text": text,
                 "source": "成绩",
-                "metadata": {
-                    "type": "grade",
-                    "data_type": "grade",
-                    "course": name,
-                    "semester": grade.get("开课学期", ""),
-                },
+                "metadata": self._merge_common_metadata(
+                    {
+                        "type": "grade",
+                        "data_type": "grade",
+                        "course": name,
+                        "semester": grade.get("开课学期", ""),
+                    },
+                    common_metadata,
+                ),
             })
 
         # 成绩统计
@@ -313,11 +350,16 @@ class DataProcessor:
             chunks.append({
                 "text": text,
                 "source": "成绩统计",
-                "metadata": {"type": "grade_stats", "data_type": "grade_stats"},
+                "metadata": self._merge_common_metadata(
+                    {"type": "grade_stats", "data_type": "grade_stats"},
+                    common_metadata,
+                ),
             })
 
         # === 3. 课表 — 按天分组 ===
-        schedule = normalized["课表信息"]["课程列表"]
+        schedule_info = normalized["课表信息"]
+        schedule = schedule_info["课程列表"]
+        schedule_semester = str(schedule_info.get("学期", "")).strip()
         if schedule:
             # 按星期分组
             day_courses = {}
@@ -342,12 +384,15 @@ class DataProcessor:
                 chunks.append({
                     "text": text,
                     "source": "课表",
-                    "metadata": {
-                        "type": "schedule",
-                        "data_type": "schedule",
-                        "day": day,
-                        "semester": courses[0].get("学期", "") if courses else "",
-                    },
+                    "metadata": self._merge_common_metadata(
+                        {
+                            "type": "schedule",
+                            "data_type": "schedule",
+                            "day": day,
+                            "semester": schedule_semester or (courses[0].get("学期", "") if courses else ""),
+                        },
+                        common_metadata,
+                    ),
                 })
 
         # === 4. 培养方案 — 按学期分组 ===
@@ -380,11 +425,14 @@ class DataProcessor:
                     chunks.append({
                         "text": text,
                         "source": "培养方案",
-                        "metadata": {
-                            "type": "training_plan",
-                            "data_type": "training_plan",
-                            "semester": semester,
-                        },
+                        "metadata": self._merge_common_metadata(
+                            {
+                                "type": "training_plan",
+                                "data_type": "training_plan",
+                                "semester": semester,
+                            },
+                            common_metadata,
+                        ),
                     })
 
             # 基本信息和学分统计
@@ -398,7 +446,10 @@ class DataProcessor:
                 chunks.append({
                     "text": text,
                     "source": "培养方案",
-                    "metadata": {"type": "training_plan_summary", "data_type": "training_plan_summary"},
+                    "metadata": self._merge_common_metadata(
+                        {"type": "training_plan_summary", "data_type": "training_plan_summary"},
+                        common_metadata,
+                    ),
                 })
 
         # === 5. 学业进度 ===
@@ -444,11 +495,16 @@ class DataProcessor:
             chunks.append({
                 "text": text,
                 "source": "学业进度",
-                "metadata": {"type": "academic_progress", "data_type": "academic_progress"},
+                "metadata": self._merge_common_metadata(
+                    {"type": "academic_progress", "data_type": "academic_progress"},
+                    common_metadata,
+                ),
             })
 
         # === 6. 考试安排 — 每门考试 1 chunk ===
-        exams = normalized["考试安排"]["考试列表"]
+        exam_info = normalized["考试安排"]
+        exams = exam_info["考试列表"]
+        exam_semester = str(exam_info.get("学期", "")).strip()
         for exam in exams:
             name = exam.get("课程名称", exam.get("course_name", ""))
             if not name:
@@ -462,12 +518,15 @@ class DataProcessor:
             chunks.append({
                 "text": text,
                 "source": "考试安排",
-                "metadata": {
-                    "type": "exam",
-                    "data_type": "exam",
-                    "course": name,
-                    "semester": exam.get("学期", exam.get("开课学期", "")),
-                },
+                "metadata": self._merge_common_metadata(
+                    {
+                        "type": "exam",
+                        "data_type": "exam",
+                        "course": name,
+                        "semester": exam_semester or exam.get("学期", exam.get("开课学期", "")),
+                    },
+                    common_metadata,
+                ),
             })
 
         logger.info(f"【分块】共生成 {len(chunks)} 个数据块")
