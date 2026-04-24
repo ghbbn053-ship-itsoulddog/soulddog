@@ -1064,103 +1064,120 @@ class JwxtScraper:
             }
 
             # 查找课程表格 - 以表头字段为锚点，兼容“课程类别/课程模块”两种变体
-            progress_table = None
+            progress_tables = []
             expected_headers = ["课程性质", "课程代码", "课程名称", "学分", "已获学分"]
             for table_idx, table in enumerate(soup.find_all('table')):
                 text = table.get_text(" ", strip=True)
                 if all(header in text for header in expected_headers):
-                    progress_table = table
+                    progress_tables.append((table_idx, table))
                     logger.info(f"【学业进度调试】通过表头匹配找到表格{table_idx}")
-                    break
-            
-            if progress_table:
-                expanded_rows = self._expand_table_rows(progress_table)
-                logger.info(f"【学业进度调试】学业进度表格共有 {len(expanded_rows)} 行")
-                page_text = soup.get_text(" ", strip=True)
 
-                # 先从标题提取总学分，再从表头做动态列映射
+            if progress_tables:
+                page_text = soup.get_text(" ", strip=True).replace('\xa0', ' ')
+                page_text = " ".join(page_text.split())
+
+                # 先从标题提取总学分，再从多张表合并课程与已获学分
                 import re
                 credit_match = re.search(r'需修读总学分\s*[:：]?\s*(\d+(?:\.\d+)?)', page_text)
                 if credit_match:
                     progress_data["总学分要求"] = float(credit_match.group(1))
                     logger.info(f"【学业进度调试】提取总学分要求: {progress_data['总学分要求']}")
 
-                headers = []
-                header_index = -1
-                for idx, values in enumerate(expanded_rows):
-                    normalized = [value.replace('\xa0', ' ').strip() for value in values if value.strip()]
-                    if normalized and "课程代码" in normalized and "课程名称" in normalized:
-                        headers = normalized
-                        header_index = idx
-                        break
+                total_earned = 0.0
+                seen_courses = set()
 
-                if headers:
-                    logger.info(f"【学业进度调试】识别表头: {headers}")
+                for table_idx, progress_table in progress_tables:
+                    expanded_rows = self._expand_table_rows(progress_table)
+                    logger.info(f"【学业进度调试】表格{table_idx}共有 {len(expanded_rows)} 行")
 
-                for row_idx, values in enumerate(expanded_rows):
-                    if row_idx <= header_index:
-                        continue
+                    headers = []
+                    header_index = -1
+                    for idx, values in enumerate(expanded_rows):
+                        normalized = [value.replace('\xa0', ' ').strip() for value in values if value.strip()]
+                        if normalized and "课程代码" in normalized and "课程名称" in normalized:
+                            headers = normalized
+                            header_index = idx
+                            break
 
-                    values = [value.replace('\xa0', ' ').strip() for value in values]
-                    if not any(values):
-                        continue
+                    if headers:
+                        logger.info(f"【学业进度调试】表格{table_idx}识别表头: {headers}")
 
-                    logger.info(f"【学业进度调试】第{row_idx}行有 {len(values)} 个单元格")
+                    table_earned = None
+                    for row_idx, values in enumerate(expanded_rows):
+                        if row_idx <= header_index:
+                            continue
 
-                    row_text = ''.join(value for value in values if value)
-                    if '合计' in row_text:
-                        logger.info(f"【学业进度调试】找到合计行，{len(values)}个单元格")
-                        non_empty_values = [value for value in values if value]
-                        earned_text = non_empty_values[-1].strip() if non_empty_values else ""
-                        if earned_text:
-                            try:
-                                progress_data["已获学分"] = float(earned_text)
-                                logger.info(f"【学业进度调试】从合计行提取已获学分: {progress_data['已获学分']}")
-                            except Exception as e:
-                                logger.warning(f"【学业进度调试】合计行解析失败: {str(e)}")
-                        continue
+                        values = [value.replace('\xa0', ' ').strip() for value in values]
+                        if not any(values):
+                            continue
 
-                    row_map = {}
-                    if headers and len(values) >= len(headers):
-                        row_map = dict(zip(headers, values[:len(headers)]))
-                    else:
-                        code_idx = next((i for i, value in enumerate(values) if re.fullmatch(r"[A-Za-z0-9]{8,}", value)), -1)
-                        if code_idx >= 0 and code_idx + 3 < len(values):
-                            row_map = {
-                                "课程类别": values[code_idx - 2].strip() if code_idx - 2 >= 0 else "",
-                                "课程性质": values[code_idx - 1].strip() if code_idx - 1 >= 0 else "",
-                                "课程代码": values[code_idx].strip(),
-                                "课程名称": values[code_idx + 1].strip() if code_idx + 1 < len(values) else "",
-                                "学分": values[code_idx + 2].strip() if code_idx + 2 < len(values) else "",
-                                "建议修读学期": values[code_idx + 3].strip() if code_idx + 3 < len(values) else "",
-                                "免听、免修": values[code_idx + 4].strip() if code_idx + 4 < len(values) else "",
-                                "已获学分": values[code_idx + 5].strip() if code_idx + 5 < len(values) else "",
-                            }
+                        logger.info(f"【学业进度调试】表格{table_idx}第{row_idx}行有 {len(values)} 个单元格")
 
-                    if not row_map:
-                        continue
+                        row_text = ''.join(value for value in values if value)
+                        if '合计' in row_text:
+                            logger.info(f"【学业进度调试】表格{table_idx}找到合计行，{len(values)}个单元格")
+                            non_empty_values = [value for value in values if value]
+                            earned_text = non_empty_values[-1].strip() if non_empty_values else ""
+                            if earned_text:
+                                try:
+                                    table_earned = float(earned_text)
+                                    logger.info(f"【学业进度调试】表格{table_idx}合计已获学分: {table_earned}")
+                                except Exception as e:
+                                    logger.warning(f"【学业进度调试】表格{table_idx}合计解析失败: {str(e)}")
+                            continue
 
-                    module_or_category = row_map.get("课程模块", "") or row_map.get("课程类别", "")
-                    course_name = row_map.get("课程名称", "")
-                    course_code = row_map.get("课程代码", "")
-                    if not course_name and not course_code:
-                        continue
+                        row_map = {}
+                        if headers and len(values) >= len(headers):
+                            row_map = dict(zip(headers, values[:len(headers)]))
+                        else:
+                            code_idx = next((i for i, value in enumerate(values) if re.fullmatch(r"[A-Za-z0-9]{8,}", value)), -1)
+                            if code_idx >= 0 and code_idx + 3 < len(values):
+                                row_map = {
+                                    "课程类别": values[code_idx - 2].strip() if code_idx - 2 >= 0 else "",
+                                    "课程性质": values[code_idx - 1].strip() if code_idx - 1 >= 0 else "",
+                                    "课程代码": values[code_idx].strip(),
+                                    "课程名称": values[code_idx + 1].strip() if code_idx + 1 < len(values) else "",
+                                    "学分": values[code_idx + 2].strip() if code_idx + 2 < len(values) else "",
+                                    "建议修读学期": values[code_idx + 3].strip() if code_idx + 3 < len(values) else "",
+                                    "免听、免修": values[code_idx + 4].strip() if code_idx + 4 < len(values) else "",
+                                    "已获学分": values[code_idx + 5].strip() if code_idx + 5 < len(values) else "",
+                                }
 
-                    course_data = {
-                        "课程类别": module_or_category,
-                        "课程模块": row_map.get("课程模块", module_or_category),
-                        "课程性质": row_map.get("课程性质", values[0].strip() if len(values) > 0 else ""),
-                        "课程代码": course_code,
-                        "课程名称": course_name,
-                        "学分": row_map.get("学分", values[3].strip() if len(values) > 3 else ""),
-                        "建议修读学期": row_map.get("建议修读学期", values[4].strip() if len(values) > 4 else ""),
-                        "免听免修": row_map.get("免听、免修", row_map.get("免听免修", values[5].strip() if len(values) > 5 else "")),
-                        "模块应修学分": row_map.get("模块应修学分", ""),
-                        "已获学分": row_map.get("已获学分", next((value for value in reversed(values) if value), "")),
-                    }
+                        if not row_map:
+                            continue
 
-                    progress_data["课程列表"].append(course_data)
-                    logger.info(f"【学业进度调试】成功解析第{row_idx}行: {course_data.get('课程名称', '未知')}")
+                        module_or_category = row_map.get("课程模块", "") or row_map.get("课程类别", "")
+                        course_name = row_map.get("课程名称", "")
+                        course_code = row_map.get("课程代码", "")
+                        if not course_name and not course_code:
+                            continue
+
+                        dedupe_key = (course_code, course_name)
+                        if dedupe_key in seen_courses:
+                            continue
+                        seen_courses.add(dedupe_key)
+
+                        course_data = {
+                            "课程类别": module_or_category,
+                            "课程模块": row_map.get("课程模块", module_or_category),
+                            "课程性质": row_map.get("课程性质", values[0].strip() if len(values) > 0 else ""),
+                            "课程代码": course_code,
+                            "课程名称": course_name,
+                            "学分": row_map.get("学分", values[3].strip() if len(values) > 3 else ""),
+                            "建议修读学期": row_map.get("建议修读学期", values[4].strip() if len(values) > 4 else ""),
+                            "免听免修": row_map.get("免听、免修", row_map.get("免听免修", values[5].strip() if len(values) > 5 else "")),
+                            "模块应修学分": row_map.get("模块应修学分", ""),
+                            "已获学分": row_map.get("已获学分", next((value for value in reversed(values) if value), "")),
+                        }
+
+                        progress_data["课程列表"].append(course_data)
+                        logger.info(f"【学业进度调试】成功解析表格{table_idx}第{row_idx}行: {course_data.get('课程名称', '未知')}")
+
+                    if table_earned is not None:
+                        total_earned += table_earned
+
+                if total_earned > 0:
+                    progress_data["已获学分"] = total_earned
 
                 # 计算还需学分
                 if progress_data["总学分要求"] > 0:
