@@ -82,6 +82,20 @@ def _extract_building_name(location: str) -> str:
     return text
 
 
+def _join_natural_text(parts: List[str]) -> str:
+    return "，".join([part.strip("，。 ") for part in parts if part and part.strip("，。 ")])
+
+
+def _format_examples(items: List[str], limit: int = 8) -> str:
+    cleaned = [str(item).strip() for item in items if str(item).strip()]
+    if not cleaned:
+        return ""
+    unique_items = list(dict.fromkeys(cleaned))
+    shown = unique_items[:limit]
+    suffix = "等" if len(unique_items) > limit else ""
+    return "、".join(shown) + suffix
+
+
 def _build_grounded_answer(question: str, normalized_payload: dict) -> Optional[str]:
     personal = normalized_payload.get("个人信息", {}) or {}
     schedule_info = normalized_payload.get("课表信息", {}) or {}
@@ -89,20 +103,24 @@ def _build_grounded_answer(question: str, normalized_payload: dict) -> Optional[
     semester = (schedule_info.get("学期", "") or "").strip()
 
     if _is_identity_question(question):
-        lines = ["已按当前登录学号的结构化数据回答："]
-        if personal.get("name"):
-            lines.append(f"姓名：{personal.get('name')}")
-        if personal.get("student_id"):
-            lines.append(f"学号：{personal.get('student_id')}")
-        if personal.get("department"):
-            lines.append(f"学院：{personal.get('department')}")
+        sentence_parts = []
+        if personal.get("name") and personal.get("student_id"):
+            sentence_parts.append(f"按当前教务数据，你是{personal.get('name')}，学号 {personal.get('student_id')}")
+        elif personal.get("name"):
+            sentence_parts.append(f"按当前教务数据，姓名是 {personal.get('name')}")
+        elif personal.get("student_id"):
+            sentence_parts.append(f"按当前教务数据，学号是 {personal.get('student_id')}")
+
         if personal.get("major"):
-            lines.append(f"专业：{personal.get('major')}")
+            sentence_parts.append(f"专业是 {personal.get('major')}")
         if personal.get("class"):
-            lines.append(f"班级：{personal.get('class')}")
-        if len(lines) > 1:
-            lines.append("以上内容仅来自当前教务数据，不补充未验证信息。")
-            return "\n".join(lines)
+            sentence_parts.append(f"班级是 {personal.get('class')}")
+        if personal.get("department"):
+            sentence_parts.append(f"学院字段当前记录为 {personal.get('department')}")
+
+        natural_summary = _join_natural_text(sentence_parts)
+        if natural_summary:
+            return f"{natural_summary}。以上内容只复述当前已同步的教务字段，不补充未验证信息。"
 
     if _is_location_question(question):
         if not schedule_courses:
@@ -112,20 +130,25 @@ def _build_grounded_answer(question: str, normalized_payload: dict) -> Optional[
         buildings = [_extract_building_name(loc) for loc in locations if _extract_building_name(loc)]
         building_counter = Counter(buildings)
         unique_locations = list(dict.fromkeys(locations))
+        location_examples = _format_examples(unique_locations, limit=8)
+        building_examples = _format_examples(
+            [f"{name}（{count}次）" for name, count in building_counter.most_common(5)],
+            limit=5,
+        )
 
-        lines = []
-        if semester:
-            lines.append(f"当前课表学期：{semester}")
-        lines.append("当前教务课表中可直接确认的是教室/楼栋信息：")
-        for loc in unique_locations[:20]:
-            lines.append(f"- {loc}")
-        if building_counter:
-            lines.append("楼栋统计：")
-            for name, count in building_counter.most_common(10):
-                lines.append(f"- {name}：{count}次")
-        lines.append("注意：当前数据只显示教室/楼栋名称，不包含“广州校区/佛山校区”字段。")
-        lines.append("因此不能仅凭楼名推断校区，也不能补充导航、签到、WiFi、开放时间等未验证信息。")
-        return "\n".join(lines)
+        opening = f"按当前课表记录，{semester} 能直接确认的是教室和楼栋信息" if semester else "按当前课表记录，能直接确认的是教室和楼栋信息"
+        detail_parts = []
+        if location_examples:
+            detail_parts.append(f"目前出现过的上课地点包括 {location_examples}")
+        if building_examples:
+            detail_parts.append(f"出现较多的楼栋有 {building_examples}")
+        detail_text = "；".join(detail_parts) if detail_parts else "但当前没有可读的地点明细"
+
+        return (
+            f"{opening}，{detail_text}。"
+            "不过现有数据没有明确的“广州校区/佛山校区”字段，"
+            "所以我不能仅凭楼名去判断校区，也不会补充导航、签到、WiFi、开放时间这类未验证信息。"
+        )
 
     return None
 
