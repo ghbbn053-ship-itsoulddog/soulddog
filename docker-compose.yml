@@ -118,10 +118,6 @@ services:
       - ./frontend/components.json:/app/components.json
       # 排除 node_modules，使用容器内的
       - /app/node_modules
-      # Next 配置了 distDir='dist'，开发模式必须排除输出目录，否则会触发热更新自循环
-      - /app/dist
-      # TypeScript incremental 会写入 tsbuildinfo，若被宿主监听会触发 Fast Refresh 自循环
-      - /app/tsconfig.tsbuildinfo
       - /app/.next
 
   backend:
