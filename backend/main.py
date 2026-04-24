@@ -18,6 +18,7 @@ from app.core.observability import (
 )
 from app.api import chat
 from app.api import mcp as mcp_router
+from app.api import workspace as workspace_router
 from app.api.auth_sync import router as auth_sync_router
 from app.api.education import router as education_router
 from app.api.options import router as options_router
@@ -77,6 +78,7 @@ app.include_router(skills_router)
 app.include_router(agents_router)
 app.include_router(intake_router)
 app.include_router(composition_router)
+app.include_router(workspace_router.router)
 app.include_router(chat.router)
 app.include_router(mcp_router.router)
 

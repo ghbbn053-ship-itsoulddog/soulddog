@@ -18,7 +18,8 @@ import {
   LogOut,
   Settings,
   Blocks,
-  BrainCircuit
+  BrainCircuit,
+  Database
 } from "lucide-react";
 
 interface ToolCall {
@@ -688,6 +689,13 @@ export default function ChatPage() {
             >
               <Wrench className="w-4 h-4" />
               MCP 工具
+            </button>
+            <button
+              onClick={() => router.push("/workspace")}
+              className="col-span-2 flex items-center justify-center gap-1.5 py-2 px-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition text-sm text-gray-700"
+            >
+              <Database className="w-4 h-4" />
+              工作区知识库
             </button>
             <button
               onClick={() => router.push("/composition")}
