@@ -161,6 +161,15 @@ class JwxtScraper:
                 card_text = card_soup.get_text()
                 import re
 
+                def extract_labeled_value(text: str, labels, next_labels):
+                    label_pattern = "|".join(re.escape(label) for label in labels)
+                    next_pattern = "|".join(re.escape(label) for label in next_labels)
+                    pattern = rf"(?:{label_pattern})[：:]\s*(.+?)(?=(?:{next_pattern})[：:]|$)"
+                    match = re.search(pattern, text, re.S)
+                    if match:
+                        return " ".join(match.group(1).split()).strip()
+                    return ""
+
                 # 优先按学籍卡片表格键值抽取，避免正则截断“计算机科学与技术”这类值
                 detail_map = {}
                 for table in card_soup.find_all('table'):
@@ -196,19 +205,25 @@ class JwxtScraper:
                     or department
                 )
 
-                # 表格未命中时再退回正则
-                if not major:
-                    major_match = re.search(r'专业[：:]\s*([^\s：:\n]{2,30})', card_text)
-                    if major_match:
-                        major = major_match.group(1).strip()
+                # 表格未命中或结果明显过短时，再退回更稳的标签提取
+                if not major or len(major) <= 4:
+                    major = extract_labeled_value(
+                        card_text,
+                        ["专业名称", "所学专业", "专业"],
+                        ["班级名称", "班级", "行政班", "学院名称", "学院", "院系", "系别", "学号", "姓名", "入学时间", "学制", "培养层次"]
+                    ) or major
                 if not class_name:
-                    class_match = re.search(r'班级[：:]\s*([^\s：:\n]{2,30})', card_text)
-                    if class_match:
-                        class_name = class_match.group(1).strip()
+                    class_name = extract_labeled_value(
+                        card_text,
+                        ["班级名称", "行政班", "班级"],
+                        ["学院名称", "学院", "院系", "系别", "专业名称", "专业", "学号", "姓名", "入学时间", "学制"]
+                    ) or class_name
                 if not department:
-                    dept_match = re.search(r'(?:学院|院系)[：:]\s*([^\s：:\n]{2,40})', card_text)
-                    if dept_match:
-                        department = dept_match.group(1).strip()
+                    department = extract_labeled_value(
+                        card_text,
+                        ["学院名称", "学院", "院系", "系别"],
+                        ["专业名称", "专业", "班级名称", "班级", "行政班", "学号", "姓名", "入学时间", "学制"]
+                    ) or department
 
                 logger.info(f"【个人信息调试】专业匹配: {major if major else '未找到'}")
                 logger.info(f"【个人信息调试】班级匹配: {class_name if class_name else '未找到'}")
@@ -918,7 +933,6 @@ class JwxtScraper:
 
                     cells = row.find_all("td")
                     values = [cell.get_text(" ", strip=True).replace("\xa0", " ").strip() for cell in cells]
-                    values = [value for value in values if value]
                     if not values:
                         continue
 
@@ -931,12 +945,13 @@ class JwxtScraper:
                     if len(suffix) < 12:
                         continue
 
-                    if len(prefix) >= 1:
-                        current_category = prefix[0]
-                    if len(prefix) >= 2:
-                        current_nature = prefix[1]
-                    if len(prefix) >= 3:
-                        current_module = prefix[2]
+                    non_empty_prefix = [value for value in prefix if value]
+                    if len(non_empty_prefix) >= 1:
+                        current_category = non_empty_prefix[0]
+                    if len(non_empty_prefix) >= 2:
+                        current_nature = non_empty_prefix[1]
+                    if len(non_empty_prefix) >= 3:
+                        current_module = non_empty_prefix[2]
 
                     course = {
                         "课程类别": current_category,
@@ -1032,16 +1047,13 @@ class JwxtScraper:
             if progress_table:
                 rows = progress_table.find_all('tr')
                 logger.info(f"【学业进度调试】学业进度表格共有 {len(rows)} 行")
+                page_text = soup.get_text(" ", strip=True)
 
                 # 先从标题提取总学分，再从表头做动态列映射
-                for row_idx, row in enumerate(rows):
-                    th_cells = row.find_all('th')
-                    th_texts = [th.get_text(" ", strip=True).replace('\xa0', ' ').strip() for th in th_cells]
-                    for text in th_texts:
-                        import re
-                        credit_match = re.search(r'需修读总学分[:：]\s*(\d+(?:\.\d+)?)', text)
-                        if credit_match:
-                            progress_data["总学分要求"] = float(credit_match.group(1))
+                import re
+                credit_match = re.search(r'需修读总学分[:：]\s*(\d+(?:\.\d+)?)', page_text)
+                if credit_match:
+                    progress_data["总学分要求"] = float(credit_match.group(1))
 
                 header_row = None
                 headers = []
@@ -1065,13 +1077,13 @@ class JwxtScraper:
                         continue
 
                     values = [cell.get_text(" ", strip=True).replace('\xa0', ' ').strip() for cell in cells]
-                    values = [value for value in values]
                     logger.info(f"【学业进度调试】第{row_idx}行有 {len(values)} 个单元格")
 
-                    row_text = ''.join(values)
+                    row_text = ''.join(value for value in values if value)
                     if '合计' in row_text:
                         logger.info(f"【学业进度调试】找到合计行，{len(values)}个单元格")
-                        earned_text = values[-1].strip() if values else ""
+                        non_empty_values = [value for value in values if value]
+                        earned_text = non_empty_values[-1].strip() if non_empty_values else ""
                         if earned_text:
                             try:
                                 progress_data["已获学分"] = float(earned_text)
@@ -1080,7 +1092,19 @@ class JwxtScraper:
                                 logger.warning(f"【学业进度调试】合计行解析失败: {str(e)}")
                         continue
 
-                    if headers and len(values) >= len(headers):
+                    code_idx = next((i for i, value in enumerate(values) if re.fullmatch(r"\d{8}", value)), -1)
+                    if code_idx >= 0 and code_idx + 3 < len(values):
+                        row_map = {
+                            "课程类别": values[code_idx - 2].strip() if code_idx - 2 >= 0 else "",
+                            "课程性质": values[code_idx - 1].strip() if code_idx - 1 >= 0 else "",
+                            "课程代码": values[code_idx].strip(),
+                            "课程名称": values[code_idx + 1].strip() if code_idx + 1 < len(values) else "",
+                            "学分": values[code_idx + 2].strip() if code_idx + 2 < len(values) else "",
+                            "建议修读学期": values[code_idx + 3].strip() if code_idx + 3 < len(values) else "",
+                            "免听、免修": values[code_idx + 4].strip() if code_idx + 4 < len(values) else "",
+                            "已获学分": values[code_idx + 5].strip() if code_idx + 5 < len(values) else "",
+                        }
+                    elif headers and len(values) >= len(headers):
                         row_map = dict(zip(headers, values[:len(headers)]))
                     else:
                         row_map = {}
@@ -1091,13 +1115,14 @@ class JwxtScraper:
                         continue
 
                     course_data = {
+                        "课程类别": row_map.get("课程类别", ""),
                         "课程性质": row_map.get("课程性质", values[0].strip() if len(values) > 0 else ""),
                         "课程代码": course_code or (values[1].strip() if len(values) > 1 else ""),
                         "课程名称": course_name or (values[2].strip() if len(values) > 2 else ""),
                         "学分": row_map.get("学分", values[3].strip() if len(values) > 3 else ""),
                         "建议修读学期": row_map.get("建议修读学期", values[4].strip() if len(values) > 4 else ""),
                         "免听免修": row_map.get("免听、免修", values[5].strip() if len(values) > 5 else ""),
-                        "已获学分": row_map.get("已获学分", values[-1].strip() if values else ""),
+                        "已获学分": row_map.get("已获学分", next((value for value in reversed(values) if value), "")),
                     }
 
                     if not course_data["课程名称"] and course_data["课程代码"]:
