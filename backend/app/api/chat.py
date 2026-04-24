@@ -154,13 +154,17 @@ def _build_grounded_answer(question: str, normalized_payload: dict) -> Optional[
     return None
 
 
-def _build_workspace_context(db: Session, username: str, question: str) -> List[dict]:
+def _build_workspace_context(db: Session, username: str, question: str, session_store=None) -> List[dict]:
     try:
         svc = get_workspace_knowledge_service()
         workspaces = svc.list_workspaces(db, username)
         if not workspaces:
             return []
-        workspace = workspaces[0]
+        selected_id = None
+        if session_store:
+            pref = session_store.get_user_workspace_preference(username) or {}
+            selected_id = pref.get("workspace_id")
+        workspace = next((item for item in workspaces if item.id == selected_id), None) or workspaces[0]
         hits = svc.search_workspace(db, username, workspace.id, question, top_k=5)
         return hits or []
     except Exception as e:
@@ -295,7 +299,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
         if not ai_result or not ai_result.get("success"):
             edu_data = db.query(EducationData).filter(EducationData.user_id == user.id).first()
             context = []
-            workspace_context = _build_workspace_context(db, request.username, request.message)
+            workspace_context = _build_workspace_context(db, request.username, request.message, session_store=session_store)
             normalized_payload = None
             if edu_data:
                 try:
@@ -650,7 +654,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
         if skill_context:
             edu_context = f"{edu_context}\n\n{skill_context}" if edu_context else skill_context
 
-        workspace_context = _build_workspace_context(db, request.username, request.message)
+        workspace_context = _build_workspace_context(db, request.username, request.message, session_store=session_store)
         if workspace_context:
             workspace_parts = []
             for idx, item in enumerate(workspace_context[:5], start=1):

@@ -33,6 +33,7 @@ class SessionStore:
         self._sync_status: Dict[str, Dict[str, Any]] = {}
         self._auth_sessions: Dict[str, Dict[str, Any]] = {}
         self._model_preferences: Dict[str, Dict[str, Any]] = {}
+        self._workspace_preferences: Dict[str, Dict[str, Any]] = {}
 
         self._connect_redis()
 
@@ -217,6 +218,23 @@ class SessionStore:
         if self.redis_available:
             return self._redis_get_json(f"model_pref:{username}")
         return self._model_preferences.get(username)
+
+    # ===== Workspace Preferences =====
+    def set_user_workspace_preference(self, username: str, preference: Dict[str, Any], ttl: int = 30 * 24 * 3600):
+        payload = {
+            "workspace_id": preference.get("workspace_id"),
+            "workspace_name": preference.get("workspace_name", ""),
+            "updated_at": time.time(),
+        }
+        if self.redis_available:
+            self._redis_set_json(f"workspace_pref:{username}", payload, ttl)
+        else:
+            self._workspace_preferences[username] = payload
+
+    def get_user_workspace_preference(self, username: str) -> Optional[Dict[str, Any]]:
+        if self.redis_available:
+            return self._redis_get_json(f"workspace_pref:{username}")
+        return self._workspace_preferences.get(username)
 
 
 _session_store_singleton: Optional[SessionStore] = None

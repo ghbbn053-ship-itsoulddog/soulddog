@@ -14,6 +14,8 @@ import os
 from typing import Any, Dict, List
 
 from app.services import get_model_provider_for_user
+from app.core.runtime import get_db
+from app.services.workspace_knowledge import get_workspace_knowledge_service
 
 logger = logging.getLogger(__name__)
 
@@ -39,21 +41,22 @@ class AgentRuntimeService:
 
     def run(self, username: str, message: str, framework: str, session_store) -> Dict[str, Any]:
         fw = (framework or "openai_agents").strip().lower()
+        workspace_context = self._build_workspace_context(username, message, session_store)
         if fw == "openai_agents":
-            result = self._run_openai_agents(message)
+            result = self._run_openai_agents(message, workspace_context)
             if result.get("success"):
                 return result
             logger.warning("openai_agents 不可用，降级统一模型层: %s", result.get("message"))
-            return self._fallback_chat(username, message, session_store, fw, result.get("message", ""))
+            return self._fallback_chat(username, message, session_store, fw, result.get("message", ""), workspace_context)
 
         if fw == "langgraph":
-            result = self._run_langgraph(message)
+            result = self._run_langgraph(message, workspace_context)
             if result.get("success"):
                 return result
             logger.warning("langgraph 不可用或执行失败，降级统一模型层: %s", result.get("message"))
-            return self._fallback_chat(username, message, session_store, fw, result.get("message", ""))
+            return self._fallback_chat(username, message, session_store, fw, result.get("message", ""), workspace_context)
 
-        return self._fallback_chat(username, message, session_store, fw, "未知 framework")
+        return self._fallback_chat(username, message, session_store, fw, "未知 framework", workspace_context)
 
     @staticmethod
     def _has_openai_agents() -> bool:
@@ -63,7 +66,33 @@ class AgentRuntimeService:
     def _has_langgraph() -> bool:
         return importlib.util.find_spec("langgraph") is not None
 
-    def _run_openai_agents(self, message: str) -> Dict[str, Any]:
+    def _build_workspace_context(self, username: str, message: str, session_store) -> str:
+        db = None
+        try:
+            db = next(get_db())
+            svc = get_workspace_knowledge_service()
+            workspaces = svc.list_workspaces(db, username)
+            if not workspaces:
+                return ""
+            selected_id = None
+            if session_store:
+                pref = session_store.get_user_workspace_preference(username) or {}
+                selected_id = pref.get("workspace_id")
+            workspace = next((item for item in workspaces if item.id == selected_id), None) or workspaces[0]
+            hits = svc.search_workspace(db, username, workspace.id, message, top_k=4)
+            if not hits:
+                return ""
+            return "\n".join(
+                [f"[{idx}] {item.get('title', '未知标题')}: {item.get('content', '')}" for idx, item in enumerate(hits, start=1)]
+            )
+        except Exception as e:
+            logger.warning("AgentRuntime 工作区知识加载失败: %s", e)
+            return ""
+        finally:
+            if db:
+                db.close()
+
+    def _run_openai_agents(self, message: str, workspace_context: str = "") -> Dict[str, Any]:
         if not self._has_openai_agents():
             return {"success": False, "message": "openai-agents 未安装"}
         if not os.getenv("OPENAI_API_KEY"):
@@ -76,6 +105,7 @@ class AgentRuntimeService:
                 instructions=(
                     "你是校园AI助手，优先准确、简洁回答。"
                     "涉及具体教务数据时明确指出需要调用本系统工具链。"
+                    f"\n\n以下是当前工作区知识摘要：\n{workspace_context}" if workspace_context else ""
                 ),
             )
 
@@ -99,7 +129,7 @@ class AgentRuntimeService:
         except Exception as e:
             return {"success": False, "message": f"openai_agents 运行失败: {e}"}
 
-    def _run_langgraph(self, message: str) -> Dict[str, Any]:
+    def _run_langgraph(self, message: str, workspace_context: str = "") -> Dict[str, Any]:
         if not self._has_langgraph():
             return {"success": False, "message": "langgraph 未安装"}
         if not os.getenv("OPENAI_API_KEY"):
@@ -119,6 +149,7 @@ class AgentRuntimeService:
                 prompt = (
                     "你是校园AI助手，回答简洁准确。"
                     "如果问题涉及具体教务数据，明确提示需要调用本系统教务工具。\\n\\n"
+                    f"当前工作区知识：{workspace_context}\\n\\n"
                     f"用户问题：{state.get('user_input', '')}"
                 )
                 ai_msg = llm.invoke(prompt)
@@ -147,9 +178,13 @@ class AgentRuntimeService:
             return {"success": False, "message": f"langgraph 运行失败: {e}"}
 
     @staticmethod
-    def _fallback_chat(username: str, message: str, session_store, framework: str, reason: str) -> Dict[str, Any]:
+    def _fallback_chat(username: str, message: str, session_store, framework: str, reason: str, workspace_context: str = "") -> Dict[str, Any]:
         model_svc = get_model_provider_for_user(username, session_store)
-        result = model_svc.chat([{"role": "user", "content": message}])
+        messages = []
+        if workspace_context:
+            messages.append({"role": "system", "content": f"当前工作区知识：\n{workspace_context}"})
+        messages.append({"role": "user", "content": message})
+        result = model_svc.chat(messages)
         if result.get("success"):
             return {
                 "success": True,

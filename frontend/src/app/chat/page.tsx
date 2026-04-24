@@ -49,6 +49,14 @@ interface ProviderItem {
   default_model: string;
 }
 
+interface WorkspaceItem {
+  id: number;
+  slug: string;
+  name: string;
+  description?: string;
+  is_default: boolean;
+}
+
 export default function ChatPage() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -59,6 +67,8 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [username, setUsername] = useState("");
   const [providers, setProviders] = useState<ProviderItem[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
+  const [workspaceId, setWorkspaceId] = useState<number | null>(null);
   const [provider, setProvider] = useState("qwen");
   const [model, setModel] = useState("");
   const [reasoningMode, setReasoningMode] = useState("standard");
@@ -146,6 +156,41 @@ export default function ChatPage() {
       // ignore
     }
   }, [API_BASE]);
+
+  const fetchWorkspacePrefs = useCallback(async (uname: string) => {
+    try {
+      const [workspaceRes, prefRes] = await Promise.all([
+        fetch(`${API_BASE}/api/workspace/${encodeURIComponent(uname)}`, { credentials: "include" }),
+        fetch(`${API_BASE}/api/workspace-preference/${encodeURIComponent(uname)}`, { credentials: "include" }),
+      ]);
+      const workspaceJson = workspaceRes.ok ? await workspaceRes.json() : null;
+      const prefJson = prefRes.ok ? await prefRes.json() : null;
+      const items: WorkspaceItem[] = workspaceJson?.workspaces || [];
+      setWorkspaces(items);
+      const selected = prefJson?.workspace_id || items[0]?.id || null;
+      setWorkspaceId(selected);
+    } catch {
+      // ignore
+    }
+  }, [API_BASE]);
+
+  const updateWorkspacePreference = useCallback(async (nextWorkspaceId: number, nextWorkspaceName: string) => {
+    if (!username) return;
+    try {
+      await fetch(`${API_BASE}/api/workspace-preference`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          username,
+          workspace_id: nextWorkspaceId,
+          workspace_name: nextWorkspaceName,
+        }),
+      });
+    } catch {
+      // ignore
+    }
+  }, [API_BASE, username]);
 
   // 获取对话历史
   const fetchHistory = useCallback(async (conversationId: number, uname: string = username) => {
@@ -525,6 +570,7 @@ export default function ChatPage() {
         setUsername(authUsername);
         localStorage.setItem("username", authUsername);
         fetchModelPrefs(authUsername);
+        fetchWorkspacePrefs(authUsername);
 
         const migratedKey = getConversationStorageKey(authUsername);
         const oldConversationId = localStorage.getItem("current_conversation_id");
@@ -581,7 +627,7 @@ export default function ChatPage() {
     return () => {
       mounted = false;
     };
-  }, [API_BASE, router, fetchModelPrefs]);
+  }, [API_BASE, router, fetchModelPrefs, fetchWorkspacePrefs]);
 
   // 当 username 变化时加载对话列表
   useEffect(() => {
@@ -927,6 +973,26 @@ export default function ChatPage() {
         <div className="bg-white/80 backdrop-blur-xl border-t border-gray-200/50 p-4">
           <div className="max-w-3xl mx-auto">
             <div className="mb-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <label className="group rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition hover:border-blue-300 hover:shadow-md sm:col-span-3">
+                <div className="mb-1 text-[11px] font-semibold tracking-wide text-slate-400">WORKSPACE</div>
+                <select
+                  value={workspaceId ?? ""}
+                  onChange={(e) => {
+                    const nextId = Number(e.target.value || 0);
+                    setWorkspaceId(nextId || null);
+                    const nextWorkspace = workspaces.find((item) => item.id === nextId);
+                    if (nextWorkspace) {
+                      updateWorkspacePreference(nextWorkspace.id, nextWorkspace.name);
+                    }
+                  }}
+                  disabled={isLoading || workspaces.length === 0}
+                  className="h-7 w-full border-0 bg-transparent p-0 text-sm font-semibold text-slate-700 focus:outline-none disabled:opacity-60"
+                >
+                  {workspaces.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+              </label>
               <label className="group rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition hover:border-blue-300 hover:shadow-md">
                 <div className="mb-1 text-[11px] font-semibold tracking-wide text-slate-400">PROVIDER</div>
                 <select
