@@ -12,6 +12,8 @@ from app.models.platform import (
     KnowledgeDocument,
     KnowledgeChunk,
     KnowledgeRelation,
+    SkillManifest,
+    MCPServerManifest,
 )
 
 # 创建所有表
@@ -35,4 +37,6 @@ __all__ = [
     "KnowledgeDocument",
     "KnowledgeChunk",
     "KnowledgeRelation",
+    "SkillManifest",
+    "MCPServerManifest",
 ]

@@ -121,3 +121,45 @@ class KnowledgeRelation(Base):
     metadata_json = Column(JSON, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+
+class SkillManifest(Base):
+    __tablename__ = "skill_manifests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_username = Column(String(50), nullable=False, index=True)
+    name = Column(String(150), nullable=False)
+    version = Column(String(50), nullable=True)
+    description = Column(Text, nullable=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+    triggers = Column(JSON, default=list)
+    tools = Column(JSON, default=list)
+    source_type = Column(String(30), nullable=False, default="yaml")
+    source_ref = Column(String(500), nullable=True)
+    metadata_json = Column(JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("owner_username", "name", name="uq_skill_manifest_owner_name"),
+    )
+
+
+class MCPServerManifest(Base):
+    __tablename__ = "mcp_server_manifests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_username = Column(String(50), nullable=False, index=True)
+    name = Column(String(150), nullable=False)
+    description = Column(Text, nullable=True)
+    kind = Column(String(30), nullable=False, default="python")
+    enabled = Column(Boolean, nullable=False, default=True)
+    tool_schema = Column(JSON, default=dict)
+    source_type = Column(String(30), nullable=False, default="registry")
+    source_ref = Column(String(500), nullable=True)
+    metadata_json = Column(JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("owner_username", "name", name="uq_mcp_manifest_owner_name"),
+    )

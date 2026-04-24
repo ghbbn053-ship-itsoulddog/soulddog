@@ -335,6 +335,7 @@ class WorkspaceKnowledgeService:
                         {
                             "document_id": meta.get("document_id"),
                             "title": meta.get("title") or hit.get("source") or "未知文档",
+                            "text": hit.get("text", ""),
                             "content": hit.get("text", ""),
                             "score": float(hit.get("score", 0.0)),
                             "chunk_index": meta.get("chunk_index", 0),
@@ -364,6 +365,7 @@ class WorkspaceKnowledgeService:
             {
                 "document_id": doc.id,
                 "title": doc.title,
+                "text": (doc.summary or doc.content_text or "")[:400],
                 "content": (doc.summary or doc.content_text or "")[:400],
                 "score": float(score),
                 "chunk_index": 0,

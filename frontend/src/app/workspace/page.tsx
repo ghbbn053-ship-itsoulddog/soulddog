@@ -38,6 +38,24 @@ type SearchResult = {
   source: string;
 };
 
+type PlatformSkill = {
+  id: number;
+  name: string;
+  version?: string;
+  description?: string;
+  enabled: boolean;
+  triggers: string[];
+  tools: Array<{ name?: string }>;
+};
+
+type PlatformMcp = {
+  id: number;
+  name: string;
+  description?: string;
+  kind: string;
+  enabled: boolean;
+};
+
 export default function WorkspacePage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -48,6 +66,8 @@ export default function WorkspacePage() {
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [platformSkills, setPlatformSkills] = useState<PlatformSkill[]>([]);
+  const [platformMcpTools, setPlatformMcpTools] = useState<PlatformMcp[]>([]);
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<number | null>(null);
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceDesc, setWorkspaceDesc] = useState("");
@@ -85,6 +105,17 @@ export default function WorkspacePage() {
     setGraph(json?.graph || null);
   };
 
+  const refreshPlatformObjects = async (uname: string) => {
+    const [skillsRes, mcpRes] = await Promise.all([
+      fetch(`${API_BASE}/api/platform/${encodeURIComponent(uname)}/skills`, { credentials: "include" }),
+      fetch(`${API_BASE}/api/platform/${encodeURIComponent(uname)}/mcp`, { credentials: "include" }),
+    ]);
+    const skillsJson = skillsRes.ok ? await skillsRes.json() : null;
+    const mcpJson = mcpRes.ok ? await mcpRes.json() : null;
+    setPlatformSkills(skillsJson?.skills || []);
+    setPlatformMcpTools(mcpJson?.mcp_tools || []);
+  };
+
   useEffect(() => {
     const run = async () => {
       try {
@@ -97,6 +128,7 @@ export default function WorkspacePage() {
         const uname = String(me.username);
         setUsername(uname);
         await refreshWorkspaces(uname);
+        await refreshPlatformObjects(uname);
       } catch {
         router.replace("/chat");
       } finally {
@@ -428,6 +460,53 @@ export default function WorkspacePage() {
                       </div>
                     ))}
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
+              <div className="rounded-[28px] border border-slate-200/80 bg-white/85 p-5 shadow-[0_20px_80px_-35px_rgba(15,23,42,0.35)] backdrop-blur">
+                <div className="flex items-center gap-2 text-slate-900">
+                  <Blocks className="h-4 w-4" />
+                  <h2 className="text-base font-semibold">平台 Skills</h2>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {platformSkills.length === 0 && <div className="text-sm text-slate-500">暂无 Skill manifest</div>}
+                  {platformSkills.slice(0, 8).map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-medium text-slate-900">{item.name}</div>
+                        <div className={`rounded-full px-2 py-0.5 text-[11px] ${item.enabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
+                          {item.enabled ? "enabled" : "disabled"}
+                        </div>
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">{item.description || "无描述"}</div>
+                      <div className="mt-2 text-[11px] text-slate-400">
+                        triggers={item.triggers?.join(" / ") || "-"} · tools={(item.tools || []).map((tool) => tool?.name || "-").join(", ")}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-slate-200/80 bg-white/85 p-5 shadow-[0_20px_80px_-35px_rgba(15,23,42,0.35)] backdrop-blur">
+                <div className="flex items-center gap-2 text-slate-900">
+                  <Database className="h-4 w-4" />
+                  <h2 className="text-base font-semibold">平台 MCP</h2>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {platformMcpTools.length === 0 && <div className="text-sm text-slate-500">暂无 MCP manifest</div>}
+                  {platformMcpTools.slice(0, 10).map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-medium text-slate-900">{item.name}</div>
+                        <div className="rounded-full bg-white px-2 py-0.5 text-[11px] uppercase tracking-wide text-slate-500">
+                          {item.kind}
+                        </div>
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">{item.description || "无描述"}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

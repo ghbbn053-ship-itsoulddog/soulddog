@@ -19,6 +19,7 @@ from app.models import get_db, User, Conversation, Message, EducationData, Educa
 from app.services import get_model_provider_for_user, get_vector_store
 from app.services.model_provider import UnifiedModelProvider
 from app.services.education_normalizer import build_payload_from_education_data_record
+from app.services.workspace_knowledge import get_workspace_knowledge_service
 from app.services.skill_router import build_skill_prompt_hint
 from app.security import enforce_username_isolation
 from app.core.observability import (
@@ -153,6 +154,20 @@ def _build_grounded_answer(question: str, normalized_payload: dict) -> Optional[
     return None
 
 
+def _build_workspace_context(db: Session, username: str, question: str) -> List[dict]:
+    try:
+        svc = get_workspace_knowledge_service()
+        workspaces = svc.list_workspaces(db, username)
+        if not workspaces:
+            return []
+        workspace = workspaces[0]
+        hits = svc.search_workspace(db, username, workspace.id, question, top_k=5)
+        return hits or []
+    except Exception as e:
+        logger.warning(f"工作区知识检索失败: {e}")
+        return []
+
+
 # ============ 数据模型 ============
 
 class ChatRequest(BaseModel):
@@ -280,6 +295,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
         if not ai_result or not ai_result.get("success"):
             edu_data = db.query(EducationData).filter(EducationData.user_id == user.id).first()
             context = []
+            workspace_context = _build_workspace_context(db, request.username, request.message)
             normalized_payload = None
             if edu_data:
                 try:
@@ -321,11 +337,17 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
                 except Exception as e:
                     logger.warning(f"向量检索失败: {e}")
             
+            merged_context = []
             if context:
+                merged_context.extend(context)
+            if workspace_context:
+                merged_context.extend(workspace_context)
+
+            if merged_context:
                 logger.info(f"【Chat】用户 {request.username} 使用 RAG 模式")
                 ai_result = model_svc.chat_with_rag(
                     question=request.message,
-                    context=context,
+                    context=merged_context,
                     conversation_history=history[:-1] if len(history) > 1 else None
                 )
             elif getattr(model_svc, "available", False):
@@ -627,6 +649,16 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
 
         if skill_context:
             edu_context = f"{edu_context}\n\n{skill_context}" if edu_context else skill_context
+
+        workspace_context = _build_workspace_context(db, request.username, request.message)
+        if workspace_context:
+            workspace_parts = []
+            for idx, item in enumerate(workspace_context[:5], start=1):
+                workspace_parts.append(
+                    f"工作区知识[{idx}]：{item.get('title', '未知标题')} - {item.get('content', '')}"
+                )
+            workspace_text = "\n".join(workspace_parts)
+            edu_context = f"{edu_context}\n\n{workspace_text}" if edu_context else workspace_text
         
         # 7. 流式生成AI回复（先回包，再在流内执行工具调用/模型调用）
         async def generate():
