@@ -13,6 +13,7 @@ import asyncio
 import threading
 import re
 import time
+from collections import Counter
 
 from app.models import get_db, User, Conversation, Message, EducationData, EducationSyncSnapshot
 from app.services import get_model_provider_for_user, get_vector_store
@@ -56,6 +57,77 @@ def _infer_rag_filters(question: str) -> dict:
         semester = m.group(1)
 
     return {"data_types": data_types, "semester": semester}
+
+
+def _is_identity_question(question: str) -> bool:
+    q = (question or "").strip()
+    keywords = ["你是谁", "我是谁", "个人信息", "我的信息", "我的学号", "我的专业", "我的班级", "我的学院"]
+    return any(k in q for k in keywords)
+
+
+def _is_location_question(question: str) -> bool:
+    q = (question or "").strip()
+    keywords = ["哪里上课", "在哪上课", "上课地点", "教室", "校区", "广州校区", "佛山校区", "三水校区", "在哪里上课"]
+    return any(k in q for k in keywords)
+
+
+def _extract_building_name(location: str) -> str:
+    text = (location or "").strip()
+    if not text:
+        return ""
+    for sep in ["(", "（", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]:
+        idx = text.find(sep)
+        if idx > 0:
+            return text[:idx].strip()
+    return text
+
+
+def _build_grounded_answer(question: str, normalized_payload: dict) -> Optional[str]:
+    personal = normalized_payload.get("个人信息", {}) or {}
+    schedule_info = normalized_payload.get("课表信息", {}) or {}
+    schedule_courses = schedule_info.get("课程列表", []) or []
+    semester = (schedule_info.get("学期", "") or "").strip()
+
+    if _is_identity_question(question):
+        lines = ["已按当前登录学号的结构化数据回答："]
+        if personal.get("name"):
+            lines.append(f"姓名：{personal.get('name')}")
+        if personal.get("student_id"):
+            lines.append(f"学号：{personal.get('student_id')}")
+        if personal.get("department"):
+            lines.append(f"学院：{personal.get('department')}")
+        if personal.get("major"):
+            lines.append(f"专业：{personal.get('major')}")
+        if personal.get("class"):
+            lines.append(f"班级：{personal.get('class')}")
+        if len(lines) > 1:
+            lines.append("以上内容仅来自当前教务数据，不补充未验证信息。")
+            return "\n".join(lines)
+
+    if _is_location_question(question):
+        if not schedule_courses:
+            return "当前缓存课表中没有可用的上课地点数据，无法判断上课地点或校区。"
+
+        locations = [str(c.get("地点", "")).strip() for c in schedule_courses if str(c.get("地点", "")).strip()]
+        buildings = [_extract_building_name(loc) for loc in locations if _extract_building_name(loc)]
+        building_counter = Counter(buildings)
+        unique_locations = list(dict.fromkeys(locations))
+
+        lines = []
+        if semester:
+            lines.append(f"当前课表学期：{semester}")
+        lines.append("当前教务课表中可直接确认的是教室/楼栋信息：")
+        for loc in unique_locations[:20]:
+            lines.append(f"- {loc}")
+        if building_counter:
+            lines.append("楼栋统计：")
+            for name, count in building_counter.most_common(10):
+                lines.append(f"- {name}：{count}次")
+        lines.append("注意：当前数据只显示教室/楼栋名称，不包含“广州校区/佛山校区”字段。")
+        lines.append("因此不能仅凭楼名推断校区，也不能补充导航、签到、WiFi、开放时间等未验证信息。")
+        return "\n".join(lines)
+
+    return None
 
 
 # ============ 数据模型 ============
@@ -185,6 +257,21 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
         if not ai_result or not ai_result.get("success"):
             edu_data = db.query(EducationData).filter(EducationData.user_id == user.id).first()
             context = []
+            normalized_payload = None
+            if edu_data:
+                try:
+                    normalized_payload = build_payload_from_education_data_record(edu_data)
+                    grounded_answer = _build_grounded_answer(request.message, normalized_payload)
+                    if grounded_answer:
+                        ai_result = {
+                            "success": True,
+                            "content": grounded_answer,
+                            "sources": ["grounded_structured_data"],
+                            "tool_calls": [],
+                            "usage": {},
+                        }
+                except Exception as e:
+                    logger.warning(f"结构化直答构建失败: {e}")
             if edu_data and vec_store.available and getattr(model_svc, "available", False):
                 try:
                     query_embedding = model_svc.generate_embedding(request.message)
@@ -457,6 +544,33 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
             edu_data = db.query(EducationData).filter(EducationData.user_id == user.id).first()
             if edu_data:
                 normalized = build_payload_from_education_data_record(edu_data)
+                grounded_answer = _build_grounded_answer(request.message, normalized)
+                if grounded_answer:
+                    async def grounded_stream():
+                        yield f"data: {json.dumps({'conversation_id': conversation.id, 'done': False})}\n\n"
+                        if trace_id:
+                            yield f"data: {json.dumps({'trace_id': trace_id, 'done': False})}\n\n"
+                        yield f"data: {json.dumps({'content': grounded_answer, 'done': False})}\n\n"
+                        ai_msg = Message(
+                            conversation_id=conversation.id,
+                            role="assistant",
+                            content=grounded_answer,
+                            message_meta={"sources": ["grounded_structured_data"]},
+                        )
+                        db.add(ai_msg)
+                        db.commit()
+                        yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id})}\n\n"
+
+                    return StreamingResponse(
+                        grounded_stream(),
+                        media_type="text/event-stream",
+                        headers={
+                            "Cache-Control": "no-cache, no-transform",
+                            "Connection": "keep-alive",
+                            "X-Accel-Buffering": "no",
+                            "Content-Encoding": "identity",
+                        }
+                    )
                 context_parts = []
                 if normalized["个人信息"]:
                     context_parts.append(f"个人信息：{json.dumps(normalized['个人信息'], ensure_ascii=False)}")
