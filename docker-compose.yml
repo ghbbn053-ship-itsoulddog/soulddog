@@ -118,6 +118,8 @@ services:
       - ./frontend/components.json:/app/components.json
       # 排除 node_modules，使用容器内的
       - /app/node_modules
+      # Next 配置了 distDir='dist'，开发模式必须排除输出目录，否则会触发热更新自循环
+      - /app/dist
       - /app/.next
 
   backend:
