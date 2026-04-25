@@ -9,7 +9,6 @@ import {
   ChevronRight,
   GraduationCap,
   Loader2,
-  MessageSquare,
   RefreshCcw,
   Sparkles,
 } from "lucide-react";
@@ -19,7 +18,6 @@ import { WorkbenchBadge, WorkbenchShell } from "@/components/workspace/workbench
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 type WorkspaceItem = {
   id: number;
@@ -27,12 +25,6 @@ type WorkspaceItem = {
   name: string;
   description?: string;
   is_default: boolean;
-};
-
-type Conversation = {
-  id: number;
-  title: string;
-  created_at: string;
 };
 
 type ScheduleCourse = Record<string, unknown>;
@@ -93,7 +85,6 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState("");
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [schedule, setSchedule] = useState<ScheduleCourse[]>([]);
   const [educationStatus, setEducationStatus] = useState<EducationStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -117,9 +108,8 @@ export default function HomePage() {
         if (!mounted) return;
         setUsername(uname);
 
-        const [workspaceRes, convRes, scheduleRes, statusRes] = await Promise.all([
+        const [workspaceRes, scheduleRes, statusRes] = await Promise.all([
           fetch(`${API_BASE}/api/workspace/${encodeURIComponent(uname)}`, { credentials: "include" }),
-          fetch(`${API_BASE}/api/chat/conversations/${encodeURIComponent(uname)}`, { credentials: "include" }),
           fetch(`${API_BASE}/api/schedule/db?username=${encodeURIComponent(uname)}`, { credentials: "include" }),
           fetch(`${API_BASE}/api/education/status?username=${encodeURIComponent(uname)}`, { credentials: "include" }),
         ]);
@@ -127,12 +117,10 @@ export default function HomePage() {
         if (!mounted) return;
 
         const workspaceJson = workspaceRes.ok ? await workspaceRes.json() : null;
-        const convJson = convRes.ok ? await convRes.json() : [];
         const scheduleJson = scheduleRes.ok ? await scheduleRes.json() : null;
         const statusJson = statusRes.ok ? await statusRes.json() : null;
 
         setWorkspaces(workspaceJson?.workspaces || []);
-        setConversations(Array.isArray(convJson) ? convJson : []);
         setSchedule(scheduleJson?.data?.课程列表 || scheduleJson?.data || []);
         setEducationStatus(statusJson || null);
       } catch {
@@ -198,13 +186,13 @@ export default function HomePage() {
       footer={<PlatformSidebarFooter username={username} detail="当前登录用户" />}
       topActions={
         <>
-          <Button variant="outline" onClick={() => router.push(featuredWorkspace ? `/workspace/${featuredWorkspace.id}` : "/workspace")}>学习工作区</Button>
+          <Button variant="outline" onClick={() => router.push(featuredWorkspace ? `/workspace/${featuredWorkspace.id}` : "/workspace")}>进入工作区</Button>
           <Button onClick={() => router.push("/chat")}>快速会话</Button>
         </>
       }
     >
       <div className="grid gap-4">
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
           <Card className="bg-white/90">
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
@@ -293,99 +281,91 @@ export default function HomePage() {
           </Card>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
           <Card className="bg-white/90">
             <CardHeader>
               <div className="flex items-center gap-2">
                 <GraduationCap className="h-4 w-4 text-slate-500" />
                 <div>
                   <CardTitle className="text-base">学习工作区</CardTitle>
-                  <CardDescription>工作区是文档、知识和平台能力的统一容器。</CardDescription>
+                  <CardDescription>把知识库、组合编排和对话验证放在一个地方做闭环。</CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {featuredWorkspace ? (
-                <Card className="shadow-none">
-                  <CardContent className="space-y-2 p-4">
-                    <div className="text-sm font-medium text-slate-900">{featuredWorkspace.name}</div>
-                    <div className="text-xs text-slate-500">{featuredWorkspace.description || featuredWorkspace.slug}</div>
-                    {featuredWorkspace.is_default && <Badge variant="secondary">默认工作区</Badge>}
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card className="border-dashed shadow-none">
-                  <CardContent className="p-6 text-sm text-slate-500">暂无工作区</CardContent>
-                </Card>
-              )}
-              <Button onClick={() => router.push("/schedule")}>
-                完整课表
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </CardContent>
-          </Card>
+            <CardContent className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+              <div className="space-y-4">
+                {featuredWorkspace ? (
+                  <Card className="shadow-none">
+                    <CardContent className="space-y-3 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-base font-semibold text-slate-900">{featuredWorkspace.name}</div>
+                        {featuredWorkspace.is_default ? <Badge variant="secondary">默认工作区</Badge> : null}
+                      </div>
+                      <div className="text-sm leading-6 text-slate-600">
+                        {featuredWorkspace.description || featuredWorkspace.slug}
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <Card className="bg-[hsl(var(--muted))] shadow-none">
+                          <CardContent className="p-4">
+                            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">知识沉淀</div>
+                            <div className="mt-2 text-2xl font-semibold text-slate-950">知识库</div>
+                            <div className="mt-1 text-xs text-slate-500">文档、片段、引用都在这里收口</div>
+                          </CardContent>
+                        </Card>
+                        <Card className="bg-[hsl(var(--muted))] shadow-none">
+                          <CardContent className="p-4">
+                            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">验证方式</div>
+                            <div className="mt-2 text-2xl font-semibold text-slate-950">对话</div>
+                            <div className="mt-1 text-xs text-slate-500">直接在工作区里做问答验证</div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className="border-dashed shadow-none">
+                    <CardContent className="p-6 text-sm text-slate-500">暂无工作区</CardContent>
+                  </Card>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => router.push(featuredWorkspace ? `/workspace/${featuredWorkspace.id}` : "/workspace")}>
+                    打开工作区
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" onClick={() => router.push("/knowledge")}>
+                    打开知识库
+                  </Button>
+                </div>
+              </div>
 
-          <Card className="bg-white/90">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-slate-500" />
-                <div>
-                  <CardTitle className="text-base">学习状态</CardTitle>
-                  <CardDescription>当前先使用轻量统计面板，后续可切真实学习日志。</CardDescription>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-slate-500" />
+                  <div>
+                    <div className="text-base font-semibold text-slate-900">学习状态</div>
+                    <div className="text-sm text-slate-500">首页先给你一个简洁版，不再单独占一整块。</div>
+                  </div>
+                </div>
+                <div className="grid gap-3">
+                  <Card className="bg-[hsl(var(--muted))] shadow-none">
+                    <CardContent className="p-4">
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">今日学习</div>
+                      <div className="mt-2 text-3xl font-semibold text-slate-950">{Math.max(schedule.length, 1) * 5} 分钟</div>
+                      <div className="mt-1 text-xs text-slate-500">按当前缓存课表和平台访问做轻量估算</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-[hsl(var(--muted))] shadow-none">
+                    <CardContent className="p-4">
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">课业密度</div>
+                      <div className="mt-2 text-3xl font-semibold text-slate-950">{schedule.length}</div>
+                      <div className="mt-1 text-xs text-slate-500">当前缓存到的课程条目数</div>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2">
-              <Card className="bg-[hsl(var(--muted))] shadow-none">
-                <CardContent className="p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">今日学习</div>
-                  <div className="mt-2 text-3xl font-semibold text-slate-950">{conversations.length * 5} 分钟</div>
-                </CardContent>
-              </Card>
-              <Card className="bg-[hsl(var(--muted))] shadow-none">
-                <CardContent className="p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">提问次数</div>
-                  <div className="mt-2 text-3xl font-semibold text-slate-950">{conversations.length}</div>
-                </CardContent>
-              </Card>
             </CardContent>
           </Card>
         </div>
-
-        <Card className="bg-white/90">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-slate-500" />
-              <div>
-                <CardTitle className="text-base">最近对话</CardTitle>
-                <CardDescription>便于从首页直接回到近期上下文。</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-56 pr-3">
-              <div className="space-y-3">
-                {conversations.length === 0 ? (
-                  <div className="text-sm text-slate-500">暂无最近对话</div>
-                ) : (
-                  conversations.slice(0, 8).map((item) => (
-                    <Card key={item.id} className="shadow-none">
-                      <CardContent className="flex items-center justify-between gap-3 p-4">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-slate-900">{item.title}</div>
-                          <div className="mt-1 text-xs text-slate-500">{new Date(item.created_at).toLocaleString("zh-CN")}</div>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => router.push("/chat")}>
-                          打开
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
       </div>
     </WorkbenchShell>
   );

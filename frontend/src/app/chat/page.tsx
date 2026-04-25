@@ -21,13 +21,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
-  Blocks,
   Bot,
   BrainCircuit,
-  Database,
   GraduationCap,
   History,
-  Home,
   Loader2,
   LogOut,
   Menu,
@@ -36,7 +33,6 @@ import {
   Plus,
   Save,
   Send,
-  Settings,
   Sparkles,
   Trash2,
   User,
@@ -193,14 +189,11 @@ export default function ChatPage() {
   const [username, setUsername] = useState("");
   const [providers, setProviders] = useState<ProviderItem[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
-  const [composition, setComposition] = useState<CompositionData | null>(null);
   const [workspaceId, setWorkspaceId] = useState<number | null>(null);
   const [provider, setProvider] = useState("qwen");
   const [model, setModel] = useState("");
   const [reasoningMode, setReasoningMode] = useState("standard");
   const [showThinking, setShowThinking] = useState(false);
-  const [executionMode, setExecutionMode] = useState("chat");
-  const [agentFramework, setAgentFramework] = useState("openai_agents");
   const [initialLoading, setInitialLoading] = useState(true);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveTargetWorkspaceId, setSaveTargetWorkspaceId] = useState<number | null>(null);
@@ -333,7 +326,6 @@ export default function ChatPage() {
         const selected = selectedWorkspace?.id || null;
         setWorkspaceId(selected);
         setSaveTargetWorkspaceId(selected);
-        setComposition(compositionJson?.data || null);
         if (requestedWorkspace && requestedWorkspace.id !== prefJson?.workspace_id) {
           await updateWorkspacePreference(requestedWorkspace.id, requestedWorkspace.name, uname);
         }
@@ -343,21 +335,17 @@ export default function ChatPage() {
     [API_BASE, requestedWorkspaceId, updateWorkspacePreference]
   );
 
-  const currentWorkspace = useMemo(
-    () => workspaces.find((item) => item.id === workspaceId) || null,
-    [workspaces, workspaceId]
+  const modelOptions = useMemo(
+    () =>
+      providers.flatMap((item) =>
+        item.models.map((modelName) => ({
+          key: `${item.provider}::${modelName}`,
+          provider: item.provider,
+          model: modelName,
+        }))
+      ),
+    [providers]
   );
-
-  const compositionPreview = useMemo(() => {
-    const skillNames = composition?.skills || [];
-    const mcpNames = composition?.mcp_tools || [];
-    return {
-      skillsCount: skillNames.length,
-      mcpCount: mcpNames.length,
-      skillsText: skillNames.slice(0, 3).join(", "),
-      mcpText: mcpNames.slice(0, 3).join(", "),
-    };
-  }, [composition]);
 
   const fetchHistory = useCallback(
     async (conversationId: number, uname: string = username) => {
@@ -433,8 +421,8 @@ export default function ChatPage() {
             override_model: model,
             reasoning_mode: reasoningMode,
             show_thinking: showThinking,
-            execution_mode: executionMode,
-            agent_framework: agentFramework,
+            execution_mode: "chat",
+            agent_framework: "openai_agents",
           }),
         });
         if (!res.ok) {
@@ -497,8 +485,8 @@ export default function ChatPage() {
           override_model: model,
           reasoning_mode: reasoningMode,
           show_thinking: showThinking,
-          execution_mode: executionMode,
-          agent_framework: agentFramework,
+          execution_mode: "chat",
+          agent_framework: "openai_agents",
         }),
       });
       clearTimeout(timeoutId);
@@ -929,7 +917,7 @@ export default function ChatPage() {
 
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 z-50 flex w-80 flex-col border-r border-[hsl(var(--border))] bg-white/95 backdrop-blur-xl transition-transform duration-200 lg:static lg:translate-x-0",
+            "fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col border-r border-[hsl(var(--border))] bg-white/95 backdrop-blur-xl transition-transform duration-200 lg:static lg:translate-x-0",
             sidebarOpen ? "translate-x-0" : "-translate-x-full"
           )}
         >
@@ -961,26 +949,9 @@ export default function ChatPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <Button variant="outline" className="justify-start" onClick={() => router.push("/")}>
-                <Home className="h-4 w-4" />
-                首页
-              </Button>
-              <Button variant="outline" className="justify-start" onClick={() => router.push("/workspace")}>
-                <Database className="h-4 w-4" />
-                工作区
-              </Button>
-              <Button variant="outline" className="justify-start" onClick={() => router.push("/skills")}>
-                <Blocks className="h-4 w-4" />
-                Skills
-              </Button>
-              <Button variant="outline" className="justify-start" onClick={() => router.push("/mcp")}>
-                <Wrench className="h-4 w-4" />
-                MCP
-              </Button>
-              <Button variant="outline" className="col-span-2 justify-start" onClick={() => router.push("/settings/models")}>
-                <Settings className="h-4 w-4" />
-                模型设置
-              </Button>
+              <div className="col-span-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-6 text-slate-500">
+                快速会话只保留新建、保存到工作区和历史。Skill、MCP、模型配置统一去平台页管理。
+              </div>
             </div>
           </div>
 
@@ -1064,117 +1035,15 @@ export default function ChatPage() {
                 </Button>
                 <div>
                   <div className="text-sm font-semibold text-slate-900">快速会话</div>
-                  <div className="text-xs text-slate-500">模型切换、流式输出、保存到工作区</div>
+                  <div className="text-xs text-slate-500">保留干净的问答界面和流式输出，复杂配置放到别处。</div>
                 </div>
               </div>
               <Badge variant="success">在线</Badge>
             </div>
-            <div className="border-t border-[hsl(var(--border))] px-4 py-3 md:px-6">
-              <div className="grid gap-3 lg:grid-cols-5">
-                <label className="space-y-1.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Workspace</span>
-                  <select
-                    value={workspaceId ?? ""}
-                    onChange={(e) => {
-                      const nextId = Number(e.target.value || 0);
-                      setWorkspaceId(nextId || null);
-                      setSaveTargetWorkspaceId(nextId || null);
-                      const nextWorkspace = workspaces.find((item) => item.id === nextId);
-                      if (nextWorkspace) {
-                        updateWorkspacePreference(nextWorkspace.id, nextWorkspace.name);
-                        router.replace(`/chat?workspace_id=${nextWorkspace.id}`, { scroll: false });
-                      } else {
-                        router.replace("/chat", { scroll: false });
-                      }
-                    }}
-                    disabled={isLoading || workspaces.length === 0}
-                    className={selectorClassName}
-                  >
-                    {workspaces.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="space-y-1.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Provider</span>
-                  <select
-                    value={provider}
-                    onChange={(e) => {
-                      const p = e.target.value;
-                      setProvider(p);
-                      const defaultModel = providers.find((x) => x.provider === p)?.default_model || "";
-                      setModel(defaultModel);
-                    }}
-                    disabled={isLoading}
-                    className={selectorClassName}
-                  >
-                    {providers.map((p) => (
-                      <option key={p.provider} value={p.provider}>
-                        {p.provider}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="space-y-1.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Model</span>
-                  <select value={model} onChange={(e) => setModel(e.target.value)} disabled={isLoading} className={selectorClassName}>
-                    {(providers.find((p) => p.provider === provider)?.models || []).map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="space-y-1.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Mode</span>
-                  <select value={reasoningMode} onChange={(e) => setReasoningMode(e.target.value)} disabled={isLoading} className={selectorClassName}>
-                    <option value="standard">标准模式</option>
-                    <option value="thinking">推理模式</option>
-                    <option value="deep">深度推理</option>
-                  </select>
-                </label>
-                <label className="space-y-1.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Execution</span>
-                  <select value={executionMode} onChange={(e) => setExecutionMode(e.target.value)} disabled={isLoading} className={selectorClassName}>
-                    <option value="chat">Chat</option>
-                    <option value="agent">Agent Runtime</option>
-                  </select>
-                </label>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
-                <Badge variant="outline">workspace: {currentWorkspace?.name || "未选择"}</Badge>
-                {currentWorkspace?.id ? (
-                  <Button variant="outline" size="sm" onClick={() => router.push(`/workspace/${currentWorkspace.id}`)}>
-                    <Database className="h-4 w-4" />
-                    打开工作区
-                  </Button>
-                ) : null}
-                <Badge variant="outline">skills: {compositionPreview.skillsCount}{compositionPreview.skillsText ? ` · ${compositionPreview.skillsText}` : ""}</Badge>
-                <Badge variant="outline">mcp: {compositionPreview.mcpCount}{compositionPreview.mcpText ? ` · ${compositionPreview.mcpText}` : ""}</Badge>
-                <Badge variant="outline">agent: {executionMode === "agent" ? agentFramework : "chat"}</Badge>
-                <Button variant={showThinking ? "default" : "outline"} size="sm" onClick={() => setShowThinking((v) => !v)}>
-                  <BrainCircuit className="h-4 w-4" />
-                  思考流
-                </Button>
-              </div>
-              {executionMode === "agent" && (
-                <div className="mt-3 max-w-sm">
-                  <label className="space-y-1.5">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Agent Framework</span>
-                    <select value={agentFramework} onChange={(e) => setAgentFramework(e.target.value)} disabled={isLoading} className={selectorClassName}>
-                      <option value="openai_agents">OpenAI Agents SDK</option>
-                      <option value="langgraph">LangGraph</option>
-                    </select>
-                  </label>
-                </div>
-              )}
-            </div>
           </header>
 
           <div className="flex-1 overflow-hidden">
-            <ScrollArea className="h-[calc(100vh-19rem)] md:h-[calc(100vh-18rem)]">
+            <ScrollArea className="h-[calc(100vh-10rem)] md:h-[calc(100vh-9.5rem)]">
               {initialLoading ? (
                 <div className="flex min-h-[60vh] items-center justify-center">
                   <div className="flex flex-col items-center gap-3 text-sm text-slate-500">
@@ -1196,13 +1065,13 @@ export default function ChatPage() {
                   </Card>
                 </div>
               ) : messages.length === 0 ? (
-                <div className="mx-auto flex min-h-[60vh] max-w-4xl flex-col items-center justify-center px-4 py-12 text-center">
+                <div className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-4 py-12 text-center">
                   <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-sm">
                     <Bot className="h-10 w-10" />
                   </div>
-                  <h2 className="text-3xl font-semibold tracking-tight text-slate-950">快速会话</h2>
+                  <h2 className="text-2xl font-semibold tracking-tight text-slate-950">快速会话</h2>
                   <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-                    当前页面服务于快问快答，但依然保留模型切换、推理模式、流式输出和保存到工作区能力。
+                    这里专注快问快答。模型从输入框旁边选，问完可以直接保存到工作区。
                   </p>
                   <div className="mt-8 grid w-full max-w-2xl gap-3 sm:grid-cols-2">
                     {quickQuestions.map((question) => (
@@ -1221,7 +1090,7 @@ export default function ChatPage() {
                   </div>
                 </div>
               ) : (
-                <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-6 md:px-6">
+                <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 md:px-6">
                   {messages.map((msg) => (
                     <div key={msg.id} className={cn("flex gap-3", msg.role === "user" && "flex-row-reverse")}>
                       <div
@@ -1355,7 +1224,7 @@ export default function ChatPage() {
           </div>
 
           <div className="border-t border-[hsl(var(--border))] bg-white/85 p-4 backdrop-blur-xl md:px-6">
-            <div className="mx-auto max-w-4xl">
+            <div className="mx-auto max-w-5xl">
               <Card>
                 <CardContent className="p-4">
                   <Textarea
@@ -1369,9 +1238,35 @@ export default function ChatPage() {
                   />
                   <div className="mt-3 flex items-center justify-between gap-3">
                     <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline">{provider || "provider"}</Badge>
-                      <Badge variant="outline">{model || "model"}</Badge>
-                      <Badge variant="outline">{reasoningMode}</Badge>
+                      <select
+                        value={model && provider ? `${provider}::${model}` : ""}
+                        onChange={(e) => {
+                          const selected = modelOptions.find((item) => item.key === e.target.value);
+                          if (!selected) return;
+                          setProvider(selected.provider);
+                          setModel(selected.model);
+                        }}
+                        disabled={isLoading || modelOptions.length === 0}
+                        className={selectorClassName}
+                      >
+                        {modelOptions.map((item) => (
+                          <option key={item.key} value={item.key}>
+                            {item.model}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        type="button"
+                        variant={showThinking ? "default" : "outline"}
+                        onClick={() => {
+                          setShowThinking((prev) => !prev);
+                          setReasoningMode((prev) => (prev === "standard" ? "thinking" : "standard"));
+                        }}
+                        disabled={isLoading}
+                      >
+                        <BrainCircuit className="h-4 w-4" />
+                        思考模式
+                      </Button>
                     </div>
                     <Button onClick={sendMessage} disabled={!username || !input.trim() || isLoading}>
                       {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

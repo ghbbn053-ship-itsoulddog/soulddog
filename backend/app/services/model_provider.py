@@ -128,6 +128,7 @@ class LiteLLMProvider(BaseProvider):
             kwargs["api_key"] = self.api_key
         if self.api_base:
             kwargs["api_base"] = self.api_base
+            kwargs["base_url"] = self.api_base
         return kwargs
 
     def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7) -> Dict[str, Any]:

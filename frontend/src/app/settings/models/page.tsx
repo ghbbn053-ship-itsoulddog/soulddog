@@ -18,9 +18,11 @@ import { Input } from "@/components/ui/input";
 
 type ProviderItem = {
   provider: string;
+  display_name?: string;
   models: string[];
   default_model: string;
   supports_custom_endpoint?: boolean;
+  supports_custom_model?: boolean;
   supports_reasoning?: boolean;
 };
 
@@ -131,9 +133,9 @@ export default function ModelsSettingsPage() {
         </WorkbenchBadge>
       }
       title="模型设置"
-      description="按账号保存 Provider、Model、推理模式和自定义 API 入口。这里的设置会直接作用于快速会话和工作区对话。"
+      description="按账号保存模型接入方式。这里支持现成模型选择，也支持通过 URL、API Key 和自定义模型名接入 OpenAI 兼容模型。"
       sidebarTitle="模型偏好"
-      sidebarDescription="统一提供模型选择、推理模式和思考流开关。"
+      sidebarDescription="把模型接入收口到这一页，聊天页只保留模型名称选择和思考模式。"
       sidebarHeader={<PlatformSidebarHeader />}
       navItems={createPlatformNav("models")}
       footer={<PlatformSidebarFooter username={username} detail="模型设置账号" />}
@@ -161,11 +163,11 @@ export default function ModelsSettingsPage() {
           </Card>
         ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-          <WorkbenchSection title="基础配置" description="保持页面结构清晰，避免把模型选择藏起来。">
+        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+          <WorkbenchSection title="模型导入" description="先选接入方式，再决定是用预置模型还是自定义模型名。">
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2">
-                <div className="text-sm font-medium text-slate-900">Provider</div>
+                <div className="text-sm font-medium text-slate-900">接入方式</div>
                 <select
                   className="h-11 w-full rounded-xl border border-[hsl(var(--border))] bg-white px-3 text-sm outline-none ring-0"
                   value={provider}
@@ -178,14 +180,14 @@ export default function ModelsSettingsPage() {
                 >
                   {providers.map((item) => (
                     <option key={item.provider} value={item.provider}>
-                      {item.provider}
+                      {item.display_name || item.provider}
                     </option>
                   ))}
                 </select>
               </label>
 
               <label className="space-y-2">
-                <div className="text-sm font-medium text-slate-900">Model</div>
+                <div className="text-sm font-medium text-slate-900">模型名称</div>
                 <select
                   className="h-11 w-full rounded-xl border border-[hsl(var(--border))] bg-white px-3 text-sm outline-none ring-0"
                   value={model}
@@ -199,14 +201,25 @@ export default function ModelsSettingsPage() {
                 </select>
               </label>
 
+              {providerMeta?.supports_custom_model ? (
+                <label className="space-y-2 md:col-span-2">
+                  <div className="text-sm font-medium text-slate-900">自定义模型名</div>
+                  <Input
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    placeholder="例如：gpt-4.1-mini / claude-3-7-sonnet / deepseek-chat / ollama/llama3.1"
+                  />
+                </label>
+              ) : null}
+
               {providerMeta?.supports_custom_endpoint ? (
                 <>
                   <label className="space-y-2 md:col-span-2">
-                    <div className="text-sm font-medium text-slate-900">Base URL</div>
+                    <div className="text-sm font-medium text-slate-900">API Base URL</div>
                     <Input
                       value={apiBase}
                       onChange={(e) => setApiBase(e.target.value)}
-                      placeholder="https://api.openai.com/v1"
+                      placeholder="例如：https://api.openai.com/v1 或 http://127.0.0.1:11434/v1"
                     />
                   </label>
                   <label className="space-y-2 md:col-span-2">
@@ -243,14 +256,23 @@ export default function ModelsSettingsPage() {
             </div>
           </WorkbenchSection>
 
-          <WorkbenchSection title="当前摘要" description="给用户一个清晰的当前配置总览。">
+          <WorkbenchSection title="接入摘要" description="确认当前到底接的是哪个模型、哪个地址。">
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
-                <Badge variant="outline">{provider || "provider"}</Badge>
+                <Badge variant="outline">{providerMeta?.display_name || provider || "provider"}</Badge>
                 <Badge variant="outline">{model || "model"}</Badge>
                 <Badge variant="secondary">{reasoningMode}</Badge>
                 <Badge variant={showThinking ? "success" : "outline"}>{showThinking ? "思考流开启" : "思考流关闭"}</Badge>
               </div>
+              {providerMeta?.supports_custom_endpoint ? (
+                <Card className="border-slate-200 bg-slate-50 shadow-none">
+                  <CardContent className="space-y-2 p-4 text-sm text-slate-600">
+                    <div className="text-slate-900">自定义接入信息</div>
+                    <div>Base URL: {apiBase || "未填写"}</div>
+                    <div>API Key: {apiKeyMasked || (apiKey ? "本次将写入新 key" : "未填写")}</div>
+                  </CardContent>
+                </Card>
+              ) : null}
               <Card className="border-slate-200 bg-slate-50 shadow-none">
                 <CardContent className="space-y-2 p-4 text-sm text-slate-600">
                   <div className="flex items-center gap-2 text-slate-900">

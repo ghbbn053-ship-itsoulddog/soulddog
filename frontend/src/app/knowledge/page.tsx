@@ -82,6 +82,11 @@ export default function KnowledgePage() {
   const [selectedDocId, setSelectedDocId] = useState(0);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [textFilename, setTextFilename] = useState("notes.md");
+  const [textContent, setTextContent] = useState("");
+  const [textAuthority, setTextAuthority] = useState("user");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadAuthority, setUploadAuthority] = useState("user");
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
@@ -197,6 +202,62 @@ export default function KnowledgePage() {
     }
   };
 
+  const saveTextDoc = async () => {
+    if (!username || !workspaceId || saving || !textFilename.trim() || !textContent.trim()) return;
+    setSaving(true);
+    setMsg("");
+    try {
+      const res = await fetch(`${API_BASE}/api/workspace/documents/text`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          username,
+          workspace_id: workspaceId,
+          filename: textFilename.trim(),
+          content: textContent,
+          authority_level: textAuthority,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.success) throw new Error(json?.detail || `入库失败(${res.status})`);
+      setTextContent("");
+      await refreshKnowledge(username, workspaceId);
+      setMsg("文本已入库");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "文本入库失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const uploadDocument = async () => {
+    if (!username || !workspaceId || saving || !uploadFile) return;
+    setSaving(true);
+    setMsg("");
+    try {
+      const formData = new FormData();
+      formData.append("username", username);
+      formData.append("workspace_id", String(workspaceId));
+      formData.append("authority_level", uploadAuthority);
+      formData.append("document_file", uploadFile);
+      const res = await fetch(`${API_BASE}/api/workspace/documents/upload`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.success) throw new Error(json?.detail || `上传失败(${res.status})`);
+      setUploadFile(null);
+      await refreshKnowledge(username, workspaceId);
+      setMsg("文件已上传并开始入库整理");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "上传失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return <div className="p-6 text-sm text-slate-500">加载中...</div>;
   }
@@ -236,6 +297,57 @@ export default function KnowledgePage() {
           <WorkbenchStatCard label="Chunks" value={stats?.knowledge_units || 0} hint={`relations ${stats?.relations || 0}`} />
           <WorkbenchStatCard label="Tokens" value={stats?.total_tokens || 0} hint="知识体量估算" />
         </div>
+
+        <WorkbenchSection title="快速入库" description="只保留最直接的入口：输入文本或选择文件，然后统一入库整理。">
+          <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="space-y-3">
+              <Input value={textFilename} onChange={(e) => setTextFilename(e.target.value)} placeholder="例如：规则整理.md" />
+              <div className="flex flex-wrap gap-2">
+                {["user", "school", "system"].map((level) => (
+                  <Button
+                    key={level}
+                    type="button"
+                    size="sm"
+                    variant={textAuthority === level ? "default" : "outline"}
+                    onClick={() => setTextAuthority(level)}
+                  >
+                    {level}
+                  </Button>
+                ))}
+              </div>
+              <Input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} className="bg-white" />
+              <div className="flex flex-wrap gap-2">
+                {["user", "school", "system"].map((level) => (
+                  <Button
+                    key={`upload-${level}`}
+                    type="button"
+                    size="sm"
+                    variant={uploadAuthority === level ? "default" : "outline"}
+                    onClick={() => setUploadAuthority(level)}
+                  >
+                    {level}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-3">
+              <textarea
+                value={textContent}
+                onChange={(e) => setTextContent(e.target.value)}
+                placeholder="直接输入要整理进知识库的内容，或者上面选择文件后点击入库整理。"
+                className="min-h-[180px] w-full rounded-xl border border-[hsl(var(--border))] bg-white px-3 py-3 text-sm outline-none"
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => void saveTextDoc()} disabled={saving || !textContent.trim()}>
+                  入库整理
+                </Button>
+                <Button variant="outline" onClick={() => void uploadDocument()} disabled={saving || !uploadFile}>
+                  上传文件入库
+                </Button>
+              </div>
+            </div>
+          </div>
+        </WorkbenchSection>
 
         {msg ? (
           <Card className="border-slate-200 bg-slate-50 shadow-none">

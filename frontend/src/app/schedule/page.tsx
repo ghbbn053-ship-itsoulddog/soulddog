@@ -6,7 +6,6 @@ import { CalendarDays, ChevronLeft, ChevronRight, RefreshCcw } from "lucide-reac
 
 import { PlatformSidebarFooter, PlatformSidebarHeader, createPlatformNav } from "@/components/workspace/app-sidebar";
 import { WorkbenchBadge, WorkbenchSection, WorkbenchShell } from "@/components/workspace/workbench-shell";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -68,6 +67,52 @@ function detectPeriodLabel(value: string) {
     return single[1];
   }
   return raw || "未分配";
+}
+
+function parseWeekTokens(value: string) {
+  const text = (value || "").replace(/\s+/g, "");
+  if (!text) return [];
+  const normalized = text
+    .replace(/第/g, "")
+    .replace(/周次?/g, "")
+    .replace(/单周/g, "|odd")
+    .replace(/双周/g, "|even");
+
+  return normalized
+    .split(/[，,；;]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function matchesWeek(value: string, weekIndex: number) {
+  const tokens = parseWeekTokens(value);
+  if (tokens.length === 0) return true;
+
+  for (const token of tokens) {
+    const odd = token.includes("|odd");
+    const even = token.includes("|even");
+    const cleaned = token.replace(/\|odd|\|even/g, "");
+
+    let matched = false;
+    const range = cleaned.match(/^(\d+)-(\d+)$/);
+    if (range) {
+      const start = Number(range[1]);
+      const end = Number(range[2]);
+      matched = weekIndex >= start && weekIndex <= end;
+    } else {
+      const single = cleaned.match(/^(\d+)$/);
+      if (single) {
+        matched = weekIndex === Number(single[1]);
+      }
+    }
+
+    if (!matched) continue;
+    if (odd && weekIndex % 2 === 0) continue;
+    if (even && weekIndex % 2 !== 0) continue;
+    return true;
+  }
+
+  return false;
 }
 
 function getFreshnessMeta(status: EducationStatus | null) {
@@ -140,6 +185,10 @@ export default function SchedulePage() {
   const grid = useMemo(() => {
     const map = new Map<string, ScheduleCourse[]>();
     for (const course of courses) {
+      const weeks = extractText(course, ["周次", "weeks"]);
+      if (weeks && !matchesWeek(weeks, weekIndex)) {
+        continue;
+      }
       const weekday = normalizeWeekday(extractText(course, ["星期", "weekday"]));
       const period = detectPeriodLabel(extractText(course, ["节次", "period", "上课时间"]));
       const key = `${weekday}__${period}`;
@@ -148,7 +197,7 @@ export default function SchedulePage() {
       map.set(key, existing);
     }
     return map;
-  }, [courses]);
+  }, [courses, weekIndex]);
 
   const handleRefresh = async () => {
     if (!username || refreshing) return;
@@ -207,30 +256,25 @@ export default function SchedulePage() {
       }
     >
       <div className="grid gap-4">
-        <WorkbenchSection title="课表状态" description="缓存读取状态与基础控制。">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap gap-2">
-              <Badge variant={freshness.badge}>{freshness.label}</Badge>
-              <Badge variant="outline">学期 {semester || "未知"}</Badge>
-              <Badge variant="outline">当前周 第 {weekIndex} 周</Badge>
-              <Badge variant="outline">课程数 {courses.length}</Badge>
-            </div>
-            <div className="flex gap-2">
+        <WorkbenchSection
+          title="周视图课表"
+          description={`学期 ${semester || "未知"} · ${freshness.label} · 当前第 ${weekIndex} 周`}
+          actions={
+            <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => setWeekIndex((prev) => Math.max(1, prev - 1))}>
                 <ChevronLeft className="h-4 w-4" />
                 上一周
               </Button>
+              <div className="min-w-[96px] text-center text-sm font-medium text-slate-700">第 {weekIndex} 周</div>
               <Button variant="outline" size="sm" onClick={() => setWeekIndex((prev) => prev + 1)}>
                 下一周
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-          </div>
-        </WorkbenchSection>
-
-        <WorkbenchSection title="周视图课表" description="当前为稳定版网格视图，优先保证缓存读取和布局质量。">
+          }
+        >
           <div className="overflow-x-auto">
-            <div className="min-w-[980px] rounded-2xl border border-slate-200 bg-white">
+            <div className="min-w-[940px] rounded-2xl border border-slate-200 bg-white">
               <div className="grid grid-cols-[88px_repeat(7,minmax(0,1fr))] border-b border-slate-200 bg-slate-50/80 text-sm font-medium text-slate-700">
                 <div className="border-r border-slate-200 px-4 py-3">节次</div>
                 {WEEKDAYS.map((day) => (
@@ -248,16 +292,16 @@ export default function SchedulePage() {
                   {WEEKDAYS.map((day) => {
                     const items = grid.get(`${day}__${period}`) || [];
                     return (
-                      <div key={`${day}-${period}`} className="min-h-[128px] border-r border-slate-200 p-3 last:border-r-0">
+                      <div key={`${day}-${period}`} className="min-h-[108px] border-r border-slate-200 p-2.5 last:border-r-0">
                         <div className="space-y-2">
                           {items.length === 0 ? (
-                            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-3 py-4 text-center text-xs text-slate-400">
+                            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-3 py-3 text-center text-xs text-slate-400">
                               暂无课程
                             </div>
                           ) : (
                             items.map((item, index) => (
                               <Card key={`${day}-${period}-${index}`} className="border-blue-100 bg-blue-50/70 shadow-none">
-                                <CardContent className="space-y-2 p-3">
+                                <CardContent className="space-y-1.5 p-3">
                                   <div className="text-sm font-medium text-slate-900">
                                     {extractText(item, ["课程名称", "课程名", "课程"]) || "未命名课程"}
                                   </div>

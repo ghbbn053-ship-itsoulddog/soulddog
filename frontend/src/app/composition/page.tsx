@@ -54,6 +54,14 @@ type PlatformMcp = {
   };
 };
 
+type WorkspaceItem = {
+  id: number;
+  slug: string;
+  name: string;
+  description?: string;
+  is_default: boolean;
+};
+
 export default function CompositionPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -63,22 +71,50 @@ export default function CompositionPage() {
   const [data, setData] = useState<CompositionData | null>(null);
   const [platformSkills, setPlatformSkills] = useState<PlatformSkill[]>([]);
   const [platformMcpTools, setPlatformMcpTools] = useState<PlatformMcp[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
+  const [workspaceId, setWorkspaceId] = useState<number | null>(null);
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
 
   const refresh = async (uname: string) => {
-    const [compositionRes, skillsRes, mcpRes] = await Promise.all([
+    const [compositionRes, skillsRes, mcpRes, workspaceRes, prefRes] = await Promise.all([
       fetch(`${API_BASE}/api/composition/${encodeURIComponent(uname)}`, { credentials: "include" }),
       fetch(`${API_BASE}/api/platform/${encodeURIComponent(uname)}/skills`, { credentials: "include" }),
       fetch(`${API_BASE}/api/platform/${encodeURIComponent(uname)}/mcp`, { credentials: "include" }),
+      fetch(`${API_BASE}/api/workspace/${encodeURIComponent(uname)}`, { credentials: "include" }),
+      fetch(`${API_BASE}/api/workspace-preference/${encodeURIComponent(uname)}`, { credentials: "include" }),
     ]);
     const compositionJson = compositionRes.ok ? await compositionRes.json() : null;
     const skillsJson = skillsRes.ok ? await skillsRes.json() : null;
     const mcpJson = mcpRes.ok ? await mcpRes.json() : null;
+    const workspaceJson = workspaceRes.ok ? await workspaceRes.json() : null;
+    const prefJson = prefRes.ok ? await prefRes.json() : null;
     setData(compositionJson?.data || null);
     setPlatformSkills(skillsJson?.skills || []);
     setPlatformMcpTools(mcpJson?.mcp_tools || []);
+    const workspaceItems: WorkspaceItem[] = workspaceJson?.workspaces || [];
+    setWorkspaces(workspaceItems);
+    const preferredWorkspace =
+      workspaceItems.find((item) => item.id === prefJson?.workspace_id) ||
+      workspaceItems[0] ||
+      null;
+    setWorkspaceId(preferredWorkspace?.id || null);
+  };
+
+  const updateWorkspacePreference = async (uname: string, nextWorkspaceId: number) => {
+    const nextWorkspace = workspaces.find((item) => item.id === nextWorkspaceId);
+    if (!nextWorkspace) return;
+    await fetch(`${API_BASE}/api/workspace-preference`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        username: uname,
+        workspace_id: nextWorkspace.id,
+        workspace_name: nextWorkspace.name,
+      }),
+    });
   };
 
   useEffect(() => {
@@ -227,8 +263,16 @@ export default function CompositionPage() {
     if (enabledSkillDetails.length > 0 && enabledMcpDetails.length > 0) {
       items.push("当前已经具备组合基础，可以直接进工作区或聊天页验证 tool trace 和知识命中。");
     }
+    if (!workspaceId) {
+      items.push("先绑定一个工作区，再去做知识导入和对话验证，不要让编排脱离上下文。");
+    }
     return items.slice(0, 3);
-  }, [enabledMcpDetails.length, enabledSkillDetails.length]);
+  }, [enabledMcpDetails.length, enabledSkillDetails.length, workspaceId]);
+
+  const currentWorkspace = useMemo(
+    () => workspaces.find((item) => item.id === workspaceId) || null,
+    [workspaces, workspaceId]
+  );
 
   if (loading) {
     return <div className="p-6 text-sm text-slate-500">加载中...</div>;
@@ -257,14 +301,18 @@ export default function CompositionPage() {
           <Button variant="outline" onClick={() => router.push("/mcp")}>
             MCP 管理
           </Button>
+          <Button onClick={() => router.push(workspaceId ? `/workspace/${workspaceId}` : "/workspace")}>
+            打开工作区
+          </Button>
         </>
       }
     >
       <div className="grid gap-4">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <WorkbenchStatCard label="Skill" value={skillList.length} hint="平台已注册 Skill" />
           <WorkbenchStatCard label="MCP" value={mcpList.length} hint="平台可编排 MCP" />
           <WorkbenchStatCard label="Owner" value={data?.owner || username || "-"} hint="当前组合主体" />
+          <WorkbenchStatCard label="Workspace" value={currentWorkspace?.name || "-"} hint="当前绑定的验证工作区" />
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
@@ -295,6 +343,36 @@ export default function CompositionPage() {
                 </CardContent>
               </Card>
             </div>
+            <div className="mt-4 space-y-2">
+              <div className="text-sm font-medium text-slate-900">绑定工作区</div>
+              <div className="flex flex-wrap gap-2">
+                <select
+                  value={workspaceId ?? ""}
+                  onChange={async (e) => {
+                    const nextId = Number(e.target.value || 0);
+                    setWorkspaceId(nextId || null);
+                    if (nextId && username) {
+                      await updateWorkspacePreference(username, nextId);
+                    }
+                  }}
+                  className="h-10 min-w-[220px] rounded-xl border border-[hsl(var(--border))] bg-white px-3 text-sm outline-none"
+                >
+                  {workspaces.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+                <Button variant="outline" onClick={() => router.push(workspaceId ? `/knowledge?workspace_id=${workspaceId}` : "/knowledge")}>
+                  <LibraryBig className="h-4 w-4" />
+                  这个工作区的知识库
+                </Button>
+                <Button variant="outline" onClick={() => router.push(workspaceId ? `/chat?workspace_id=${workspaceId}` : "/chat")}>
+                  <Bot className="h-4 w-4" />
+                  这个工作区的聊天验证
+                </Button>
+              </div>
+            </div>
           </WorkbenchSection>
 
           <WorkbenchSection
@@ -302,13 +380,13 @@ export default function CompositionPage() {
             description="这块的目的是把 Skill / MCP / 工作区 / 聊天 串起来，而不是只做开关页。"
             actions={
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => router.push("/knowledge")}>
+                <Button size="sm" variant="outline" onClick={() => router.push(workspaceId ? `/knowledge?workspace_id=${workspaceId}` : "/knowledge")}>
                   <LibraryBig className="h-4 w-4" />
                   知识库管理台
                 </Button>
-                <Button size="sm" onClick={() => router.push("/chat")}>
+                <Button size="sm" onClick={() => router.push(workspaceId ? `/workspace/${workspaceId}` : "/workspace")}>
                   <Bot className="h-4 w-4" />
-                  进入聊天验证
+                  进入工作区验证
                 </Button>
               </div>
             }

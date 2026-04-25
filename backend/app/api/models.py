@@ -31,13 +31,16 @@ async def get_available_models():
         "providers": [
             {
                 "provider": "qwen",
+                "display_name": "通义千问",
                 "models": ["qwen-plus", "qwen-max", "qwen-turbo"],
                 "default_model": os.getenv("QWEN_MODEL", "qwen-plus"),
                 "supports_custom_endpoint": False,
+                "supports_custom_model": False,
                 "supports_reasoning": False,
             },
             {
                 "provider": "litellm",
+                "display_name": "OpenAI 兼容接入",
                 "models": [
                     "gpt-4o",
                     "claude-3-5-sonnet",
@@ -47,6 +50,7 @@ async def get_available_models():
                 ],
                 "default_model": os.getenv("LITELLM_MODEL", "qwen-plus"),
                 "supports_custom_endpoint": True,
+                "supports_custom_model": True,
                 "supports_reasoning": True,
             },
         ],
