@@ -27,6 +27,7 @@ async def list_platform_skills(username: str, http_request: Request, db: Session
                 "description": row.description,
                 "enabled": row.enabled,
                 "triggers": row.triggers or [],
+                "input_schema": (row.metadata_json or {}).get("input_schema", {}),
                 "tools": row.tools or [],
             }
             for row in rows

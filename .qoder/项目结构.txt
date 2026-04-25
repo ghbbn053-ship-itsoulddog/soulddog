@@ -1,0 +1,280 @@
+📋 项目完整描述与配置文档
+🎯 项目概述
+项目名称：校园AI助手系统 (Edu AI Assistant / SouldDog)项目定位：基于教务系统数据爬取 + AI大语言模型的校园智能问答系统，支持课表查询、成绩查询、培养方案解析、考试安排等教务数据的智能问答。
+🔗 GitHub 推送地址
+plaintext
+https://github.com/ghbbn053-ship-itsoulddog/soulddog.git
+标准推送命令：
+bash
+git push origin main
+🏗️ 技术栈
+前端
+框架：Next.js 16.1.1 (App Router)
+核心：React 19.2.3
+语言：TypeScript 5
+UI组件：shadcn/ui (基于 Radix UI)
+样式：Tailwind CSS 4
+包管理器：pnpm（严禁使用 npm/yarn）
+运行端口：5000
+后端
+框架：FastAPI 0.115.6
+语言：Python 3.11+
+ASGI服务器：Uvicorn 0.32.1
+运行端口：8000
+AI/ML
+大模型：通义千问 (qwen-plus) via DashScope
+向量数据库：Milvus v2.4.1
+RAG框架：LangChain 0.3.14
+MCP协议：mcp 1.6.0 (Model Context Protocol)
+数据存储
+关系数据库：PostgreSQL 15 (端口 5432)
+缓存：Redis 7 (端口 6379)
+对象存储：MinIO (端口 9000/9001)
+元数据存储：etcd v3.5.5 (端口 2379)
+📁 项目目录结构
+plaintext
+soulddog/
+├── backend/                    # 后端FastAPI服务
+│   ├── app/
+│   │   ├── api/               # API路由
+│   │   │   ├── chat.py        # 聊天API（流式输出、会话管理）
+│   │   │   └── education.py   # 教务数据API
+│   │   ├── models/            # 数据库模型
+│   │   │   ├── base.py
+│   │   │   ├── conversation.py
+│   │   │   ├── education_data.py
+│   │   │   └── user.py
+│   │   └── services/          # 业务逻辑
+│   │       ├── qwen_service.py   # AI服务（工具调用、RAG）
+│   │       └── vector_store.py   # 向量数据库操作
+│   ├── scraper.py             # 教务系统爬虫（核心）
+│   ├── main.py                # FastAPI入口
+│   ├── requirements.txt       # Python依赖
+│   └── Dockerfile
+│
+├── frontend/                   # 前端Next.js应用
+│   ├── src/
+│   │   ├── app/               # 页面路由
+│   │   │   ├── chat/page.tsx  # 聊天界面
+│   │   │   ├── login/page.tsx # 登录页面
+│   │   │   └── page.tsx       # 首页
+│   │   └── components/ui/     # shadcn/ui组件库
+│   ├── package.json
+│   ├── Dockerfile.dev         # 开发模式Dockerfile
+│   └── next.config.ts
+│
+├── scripts/                    # 脚本
+│   ├── build.sh
+│   ├── dev.sh
+│   ├── prepare.sh
+│   └── start.sh
+│
+├── docker-compose.yml          # Docker编排配置
+├── .gitignore
+└── package.json
+🐳 Docker Compose 配置
+服务清单（共7个容器）
+服务	镜像	端口	说明
+postgres	postgres:15-alpine	5432	关系数据库
+redis	redis:7-alpine	6379	缓存服务
+etcd	quay.io/coreos/etcd:v3.5.5	2379	元数据存储
+minio	minio/minio	9000/9001	对象存储
+milvus	milvusdb/milvus:v2.4.1	19530/9091	向量数据库
+frontend	自定义构建	5000	Next.js前端
+backend	自定义构建	8000	FastAPI后端
+Volume 挂载配置
+前端：
+yaml
+volumes:
+  - ./frontend/src:/app/src
+  - ./frontend/public:/app/public
+  - ./frontend/package.json:/app/package.json
+  - ./frontend/next.config.ts:/app/next.config.ts
+  - ./frontend/tsconfig.json:/app/tsconfig.json
+  - ./frontend/postcss.config.mjs:/app/postcss.config.mjs
+  - ./frontend/components.json:/app/components.json
+  - /app/node_modules          # 排除，使用容器内
+  - /app/.next                 # 排除，使用容器内
+后端：
+yaml
+volumes:
+  - ./backend:/app             # 整个backend目录挂载
+热重载配置
+后端启动命令：
+bash
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+前端环境变量：
+yaml
+WATCHPACK_POLLING=true         # 启用文件轮询监听
+💻 双环境部署配置
+Windows 开发环境
+项目路径：
+plaintext
+C:\Users\ASUS\Desktop\智能体构建\project_20260404_235124
+启动方式：
+powershell
+# 方式1：使用启动脚本
+.\start.bat
+
+# 方式2：直接docker compose
+docker compose up -d
+
+# 访问地址
+前端：http://localhost:5000
+后端：http://localhost:8000
+后端API文档：http://localhost:8000/docs
+代码修改后：
+powershell
+# 只需重启服务（热重载自动生效）
+docker compose restart backend frontend
+
+# 不需要重新构建！（除非修改Dockerfile或依赖）
+Git推送（需配置代理）：
+powershell
+# 配置代理（根据代理工具端口修改）
+git config --global http.proxy http://127.0.0.1:7890
+git config --global https.proxy http://127.0.0.1:7890
+
+# 推送代码
+git push origin main
+
+# 取消代理（可选）
+git config --global --unset http.proxy
+git config --global --unset https.proxy
+Linux 服务器环境
+项目路径：
+plaintext
+/home/aiuser/soulddog
+用户：aiuser访问地址（假设服务器IP为 192.168.88.100）：
+plaintext
+前端：http://192.168.88.100:5000
+后端：http://192.168.88.100:8000
+代码同步流程：
+bash
+# 1. 进入项目目录
+cd ~/soulddog
+
+# 2. 拉取最新代码
+git pull origin main
+
+# 3. 清理root权限的Python缓存（如果有权限错误）
+sudo rm -rf backend/app/api/__pycache__/
+sudo rm -rf backend/app/services/__pycache__/
+sudo rm -rf backend/__pycache__/
+
+# 4. 重启服务（热重载）
+docker compose restart backend frontend
+
+# 5. 查看日志
+docker logs backend --tail 30
+docker logs frontend --tail 30
+
+# 6. 检查服务状态
+docker compose ps
+首次部署或修改Dockerfile/依赖时：
+bash
+# 停止旧服务
+docker compose down
+
+# 重新构建并启动
+docker compose up -d --build
+
+# 查看日志
+docker compose logs -f
+🔧 关键环境变量
+后端环境变量
+bash
+# 数据库
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=campus_ai
+
+# 缓存
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# 向量数据库
+MILVUS_HOST=milvus
+MILVUS_PORT=19530
+
+# AI模型
+QWEN_API_KEY=sk-6c8dc750b9744c9cb60ce0eb7fcfce0e
+QWEN_MODEL=qwen-plus
+
+# 教务系统
+EDUCATION_SYSTEM_URL=https://jwxt.gdufe.edu.cn  # 示例
+
+# JWT认证
+JWT_SECRET_KEY=your-secret-key-change-in-production
+
+# CORS
+CORS_ORIGINS=["http://localhost:3000"]
+前端环境变量
+bash
+NEXT_PUBLIC_API_URL=/api     # API代理路径
+🚀 常用操作命令
+代码修改后（日常开发）
+bash
+# Windows (PowerShell)
+docker compose restart backend frontend
+
+# Linux (bash)
+docker compose restart backend frontend
+查看日志
+bash
+# 后端日志
+docker logs backend -f --tail 50
+
+# 前端日志
+docker logs frontend -f --tail 50
+
+# 所有服务日志
+docker compose logs -f
+重启单个服务
+bash
+docker compose restart backend
+docker compose restart frontend
+完全重新部署
+bash
+docker compose down
+docker compose up -d --build
+清理Docker缓存（磁盘空间不足时）
+bash
+docker system prune -a --volumes
+⚠️ 重要注意事项
+热重载规则
+✅ 只需 restart：修改 Python/TypeScript 代码文件
+❌ 需要 --build：修改 Dockerfile、requirements.txt、package.json
+❌ 需要 --build：添加新的依赖包
+✅ 自动生效：代码保存后几秒内自动重新加载
+Git同步规则
+⚠️ Linux服务器必须手动 git pull（Docker不会自动拉取）
+⚠️ 推送前需配置代理（Windows网络受限）
+⚠️ 不要提交：__pycache__/、*.pyc、.next/、node_modules/
+包管理器
+✅ 前端必须使用 pnpm
+❌ 严禁使用 npm 或 yarn
+数据库迁移
+PostgreSQL 表结构变更需执行 ALTER TABLE 或重建
+Milvus Collection 需确保加载状态
+📌 核心功能模块
+教务系统爬虫 (scraper.py)
+登录（验证码识别）
+课表解析（按学期）
+成绩查询（按学期）
+培养方案解析
+考试安排查询
+AI智能问答 (chat.py, qwen_service.py)
+流式输出（SSE）
+工具调用（function calling）
+RAG检索增强
+会话记忆（localStorage持久化）
+前端界面 (page.tsx)
+聊天界面（Markdown渲染）
+登录页面
+响应式设计
+初始加载状态防闪烁
+文档生成时间：2026-04-13
+最后更新 commit：74b970e

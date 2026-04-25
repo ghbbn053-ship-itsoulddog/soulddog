@@ -4,6 +4,7 @@
 **本文档引用的文件**
 - [main.py](file://backend/main.py)
 - [scraper.py](file://backend/scraper.py)
+- [education.py](file://backend/app/api/education.py)
 - [education_data.py](file://backend/app/models/education_data.py)
 - [education_options.py](file://backend/education_options.py)
 - [qwen_service.py](file://backend/app/services/qwen_service.py)
@@ -16,11 +17,12 @@
 
 ## 更新摘要
 **所做更改**
-- 新增训练计划查询工具，支持学期过滤功能
-- 增强了结构化数据返回机制
-- 完善了培养方案数据的学期维度支持
-- 更新了AI助手的培养方案查询接口描述
-- 增强了调试日志功能，包括HTML长度验证和表格分析
+- 新增表格展开机制支持，使用 `_expand_table_rows()` 方法处理 rowspan/colspan 属性
+- 改进培养方案解析逻辑，采用更灵活的课程代码识别机制
+- 课程代码识别采用更灵活的正则表达式 `[A-Za-z0-9]{8,}`
+- 消除手动rowspan管理需求，提高表格解析稳定性
+- 增强课程代码识别和验证机制
+- 优化调试日志功能，包括HTML长度验证和表格分析
 
 ## 目录
 1. [简介](#简介)
@@ -40,13 +42,15 @@
 本API主要功能包括：
 - 获取个人培养方案的完整信息
 - 解析培养方案中的课程要求和学分要求
-- **新增**：支持按学期进行精确筛选
-- **新增**：提供结构化的数据返回格式
+- **新增**：基于表格展开机制的rowspan/colspan自动处理
+- **新增**：基于8位数字课程代码模式的动态列定位
+- **新增**：消除rowspan手动管理，提高解析稳定性
+- **新增**：增强的课程代码识别和验证机制
 - 支持培养方案与实际课程安排的关联分析
 - **新增**：智能处理HTML表格rowspan属性，确保课程类别、性质、模块信息的准确解析
 - **新增**：增强的调试日志功能，包括URL跟踪、响应状态监控、HTML长度验证和表格分析
 
-**更新** 本次更新重点关注新增的训练计划查询工具和学期过滤功能，显著提升了培养方案查询的灵活性和实用性
+**更新** 本次更新重点关注培养方案解析逻辑的重构，引入了基于表格展开机制的rowspan/colspan自动处理，以及基于课程代码8位数字模式的动态列定位机制，显著提升了表格解析的稳定性和准确性。
 
 ## 项目结构
 
@@ -134,14 +138,19 @@ participant Client as 客户端应用
 participant API as FastAPI接口
 participant Qwen as AI助手服务
 participant Scraper as JwxtScraper
+participant TableExpander as 表格展开器
 participant EduSystem as 教务系统
 Client->>API : GET /api/training-plan/my?username=学号
 API->>API : 验证用户登录状态
 API->>Scraper : 创建爬虫实例
 Scraper->>EduSystem : 访问培养方案页面
 EduSystem-->>Scraper : 返回HTML内容
-Scraper->>Scraper : 解析HTML数据含rowspan处理
-Scraper->>Scraper : 验证课程代码格式8位数字
+Scraper->>Scraper : 基于表格展开机制解析表格
+Scraper->>TableExpander : _expand_table_rows()
+TableExpander-->>Scraper : 返回展开后的规则二维数组
+Scraper->>Scraper : 基于8位数字课程代码解析表格
+Scraper->>Scraper : 动态定位课程列位置
+Scraper->>Scraper : 验证课程代码格式
 Scraper-->>API : 返回培养方案数据
 API-->>Client : 返回JSON响应
 Note over Client,EduSystem : 异步数据处理流程
@@ -356,6 +365,274 @@ F --> G
 - [education_options.py:69-86](file://backend/education_options.py#L69-L86)
 - [education_options.py:58-66](file://backend/education_options.py#L58-L66)
 
+### 表格展开机制详解
+
+**新增** 系统现在集成了强大的表格展开机制，使用 `_expand_table_rows()` 方法自动处理HTML表格中的rowspan和colspan属性
+
+#### _expand_table_rows方法实现
+
+该方法将包含rowspan/colspan属性的HTML表格转换为规则的二维数组，消除了手动rowspan管理的需求：
+
+```python
+def _expand_table_rows(self, table) -> List[List[str]]:
+    """
+    将包含 rowspan/colspan 的 HTML 表格展开成规则二维数组。
+    用于培养方案/学业进度这类强依赖列位置的页面解析。
+    """
+    expanded_rows: List[List[str]] = []
+    active_rowspans = {}
+
+    for row in table.find_all("tr"):
+        cells = row.find_all(["th", "td"])
+        if not cells:
+            continue
+
+        row_values: List[str] = []
+        col_idx = 0
+
+        def consume_active_spans() -> None:
+            nonlocal col_idx
+            while col_idx in active_rowspans:
+                span = active_rowspans[col_idx]
+                row_values.append(span["value"])
+                span["remaining"] -= 1
+                if span["remaining"] <= 0:
+                    del active_rowspans[col_idx]
+                col_idx += 1
+
+        consume_active_spans()
+
+        for cell in cells:
+            consume_active_spans()
+
+            text = cell.get_text(" ", strip=True).replace("\xa0", " ").strip()
+            rowspan = max(int(cell.get("rowspan", 1)), 1)
+            colspan = max(int(cell.get("colspan", 1)), 1)
+
+            for _ in range(colspan):
+                row_values.append(text)
+                if rowspan > 1:
+                    active_rowspans[col_idx] = {
+                        "value": text,
+                        "remaining": rowspan - 1,
+                    }
+                col_idx += 1
+
+        consume_active_spans()
+        expanded_rows.append(row_values)
+
+    return expanded_rows
+```
+
+#### 表格展开机制的工作原理
+
+```mermaid
+flowchart TD
+A[开始解析表格] --> B{遍历每一行}
+B --> C{遍历该行的每个单元格}
+C --> D{处理单元格的rowspan/colspan属性}
+D --> E[计算colspan次数]
+E --> F[将单元格文本重复colspan次]
+F --> G{rowspan > 1?}
+G --> |是| H[记录rowspan剩余次数]
+G --> |否| I[继续下一个单元格]
+H --> J[将rowspan文本复制到后续列]
+I --> K{还有更多单元格?}
+J --> K
+K --> |是| C
+K --> |否| L[处理下一行]
+L --> M[返回展开后的二维数组]
+```
+
+**图表来源**
+- [scraper.py:56-103](file://backend/scraper.py#L56-L103)
+
+#### 在培养方案解析中的应用
+
+在培养方案解析中，表格展开机制发挥着关键作用：
+
+```python
+# 查找目标表格
+target_table = soup.find("table", id="mxh")
+if target_table:
+    logger.info("找到 id='mxh' 课程表格")
+    expanded_rows = self._expand_table_rows(target_table)
+    
+    for values in expanded_rows:
+        # 现在可以安全地使用固定索引访问各列
+        course = {
+            "课程类别": clean_values[0],
+            "课程性质": clean_values[1],
+            "课程模块": clean_values[2],
+            "课程代码": clean_values[3],
+            "课程名称": clean_values[4],
+            "学分": clean_values[5],
+            # ... 其他字段
+        }
+```
+
+**更新** 通过表格展开机制，现在可以：
+- **自动处理rowspan**：无需手动跟踪rowspan状态
+- **保持列位置一致性**：展开后的表格具有固定的列索引
+- **简化解析逻辑**：可以直接使用固定索引访问字段
+- **提高解析稳定性**：不受rowspan嵌套复杂度影响
+
+**章节来源**
+- [scraper.py:56-103](file://backend/scraper.py#L56-L103)
+- [scraper.py:973](file://backend/scraper.py#L973)
+
+### 培养方案解析逻辑重构详解
+
+**更新** 本次更新重点介绍了培养方案解析逻辑的重构
+
+#### 基于8位数字课程代码的动态列定位
+
+新的解析逻辑引入了基于课程代码8位数字模式的动态列定位机制：
+
+```python
+# 查找课程代码的位置（8位数字模式）
+code_pattern = re.compile(r"[A-Za-z0-9]{8,}")
+code_idx = next((i for i, value in enumerate(values) if code_pattern.fullmatch(value)), -1)
+if code_idx < 0:
+    continue
+
+prefix = values[:code_idx]
+suffix = values[code_idx:]
+if len(suffix) < 12:
+    continue
+```
+
+这个机制的工作原理：
+- **模式识别**：使用正则表达式`[A-Za-z0-9]{8,}`识别8位及以上字符的课程代码
+- **动态定位**：根据课程代码在行中的位置动态确定各字段的列位置
+- **前缀处理**：课程代码前面的非空值自动识别为课程类别、性质、模块等信息
+- **后缀提取**：课程代码及其后的字段作为课程信息的标准序列
+
+**更新** 新的课程代码识别机制更加灵活：
+- **支持字母数字混合**：不再局限于纯数字，支持"A1B2C3D4"等格式
+- **最小长度8位**：确保识别的唯一性和准确性
+- **更强的鲁棒性**：能够处理各种课程代码格式
+
+#### 消除rowspan手动管理的需求
+
+**更新** 新的解析逻辑完全消除了rowspan手动管理的需求：
+
+```mermaid
+flowchart TD
+A[开始解析培养方案] --> B{展开表格}
+B --> C{查找课程代码位置}
+C --> |找到| D[提取前缀信息]
+C --> |未找到| E[跳过该行]
+D --> F[确定课程类别]
+D --> G[确定课程性质]
+D --> H[确定课程模块]
+F --> I[提取课程后缀字段]
+G --> I
+H --> I
+I --> J[构建课程对象]
+J --> K[添加到课程列表]
+E --> L[继续下一行]
+K --> M[解析完成]
+L --> B
+```
+
+**图表来源**
+- [scraper.py:976-1002](file://backend/scraper.py#L976-L1002)
+
+#### 课程代码识别和验证
+
+**更新** 新增了严格的课程代码识别和验证机制：
+
+```python
+# 8位数字课程代码识别
+code_pattern = re.compile(r"[A-Za-z0-9]{8,}")
+code_idx = next((i for i, value in enumerate(values) if code_pattern.fullmatch(value)), -1)
+if code_idx < 0:
+    continue
+
+# 课程代码验证
+if code_idx + 12 > len(values):
+    continue
+```
+
+这个验证确保：
+- **格式正确**：课程代码必须是8位及以上字符（支持字母数字混合）
+- **位置准确**：课程代码必须位于可识别的有效位置
+- **字段完整**：课程代码后必须有足够的字段支持完整的课程信息提取
+
+#### 前缀信息自动识别
+
+**更新** 新的解析逻辑能够自动识别课程类别、性质、模块等前缀信息：
+
+```python
+# 自动识别前缀信息
+non_empty_prefix = [value for value in prefix if value]
+if len(non_empty_prefix) >= 1:
+    current_category = non_empty_prefix[0]
+if len(non_empty_prefix) >= 2:
+    current_nature = non_empty_prefix[1]
+if len(non_empty_prefix) >= 3:
+    current_module = non_empty_prefix[2]
+```
+
+这个机制的工作原理：
+- **非空过滤**：过滤掉空值和空白字符
+- **顺序识别**：按照出现顺序自动识别课程类别、性质、模块
+- **动态更新**：每遇到新的课程代码就更新相应的前缀信息
+
+**章节来源**
+- [scraper.py:973-1002](file://backend/scraper.py#L973-L1002)
+- [scraper.py:1126-1138](file://backend/scraper.py#L1126-L1138)
+
+### 增强的调试日志功能
+
+**新增** 本次更新重点介绍了增强的调试日志功能
+
+#### URL跟踪和响应状态监控
+
+系统在培养方案查询过程中增加了详细的调试信息：
+
+```python
+logger.info(f"【培养方案调试】请求URL: {url}")
+logger.info(f"【培养方案调试】响应状态: {response.status_code}")
+logger.info(f"【培养方案调试】响应URL: {response.url}")
+html_text = self._fix_encoding(response)
+logger.info(f"【培养方案调试】HTML长度: {len(html_text)}")
+```
+
+#### HTML长度验证和表格分析
+
+系统提供了HTML内容长度验证和表格分析功能：
+
+```python
+# 保存HTML到文件用于调试
+with open('/tmp/debug_training_plan.html', 'w', encoding='utf-8') as f:
+    f.write(html_text)
+logger.info(f"【培养方案调试】HTML已保存到 /tmp/debug_training_plan.html")
+
+# 输出HTML前500字符用于调试
+logger.info(f"【培养方案调试】HTML前500字符: {html_text[:500]}")
+
+# 分析表格结构
+all_tables = soup.find_all('table')
+logger.info(f"【培养方案调试】找到 {len(all_tables)} 个表格")
+```
+
+#### 课程代码格式验证
+
+系统现在使用8位数字格式验证课程代码：
+
+```python
+# 验证课程代码格式（应该是8位及以上字符）
+code_pattern = re.compile(r"[A-Za-z0-9]{8,}")
+if not code_pattern.fullmatch(course_code):
+    continue
+```
+
+**章节来源**
+- [scraper.py:927-946](file://backend/scraper.py#L927-L946)
+- [scraper.py:981-983](file://backend/scraper.py#L981-L983)
+
 ### URL构造修复详解
 
 **更新** 本次更新重点修复了培养方案查询端点的URL构造逻辑
@@ -368,11 +645,11 @@ F --> G
 def get_my_training_plan(self) -> Dict:
     """
     获取"我的培养方案"（当前登录学生）
-     URL: /jsxsd/pyfa/pyfa_query
+     URL: /jsxsd/pyfa/pyfazd_query
     返回详细的培养方案，包括学期、课程代码、课程名称、学分等
     """
     try:
-        url = f"{self.base_url}pyfa/pyfa_query"
+        url = f"{self.base_url}pyfa/pyfazd_query"
         response = self.session.get(url, timeout=10)
         # ... 解析逻辑
     except Exception as e:
@@ -387,8 +664,8 @@ JwxtScraper类的初始化确保了正确的基础URL设置：
 def __init__(self, session: requests.Session = None, base_url: str = "http://jwxt.gdufe.edu.cn"):
     self.session = session or requests.Session()
     self.base_url = base_url
-    self.captcha_url = f"{base_url}/verifycode.servlet"
-    self.login_url = f"{base_url}/xk/LoginToXkLdap"
+    self.captcha_url = f"{self.base_url}verifycode.servlet"
+    self.login_url = f"{self.base_url}xk/LoginToXkLdap"
 ```
 
 #### API路由中的URL使用
@@ -418,8 +695,8 @@ async def get_my_training_plan_api(username: str):
 - 与教务系统预期的URL结构匹配
 
 **章节来源**
-- [scraper.py:695-696](file://backend/scraper.py#L695-L696)
-- [main.py:700-701](file://backend/main.py#L700-L701)
+- [scraper.py:927](file://backend/scraper.py#L927)
+- [main.py:104-118](file://backend/app/api/education.py#L104-L118)
 
 ### 学期过滤功能详解
 
@@ -464,143 +741,8 @@ elif func_name == "query_training_plan":
 - **进度跟踪**：便于跟踪不同学期的学习进展
 
 **章节来源**
-- [qwen_service.py:407-417](file://backend/app/services/qwen_service.py#L407-L417)
+- [qwen_service.py:452-464](file://backend/app/services/qwen_service.py#L452-L464)
 - [qwen_service.py:135-138](file://backend/app/services/qwen_service.py#L135-L138)
-
-### rowspan处理机制详解
-
-**新增** 本次更新重点介绍了rowspan处理机制的实现
-
-#### 倒计时变量系统
-
-为了正确处理HTML表格中的rowspan属性，系统引入了三个倒计时变量：
-
-```python
-# 初始化倒计时变量
-cat_rem = 0  # 课程类别倒计时
-nat_rem = 0  # 课程性质倒计时  
-mod_rem = 0  # 课程模块倒计时
-```
-
-这些变量的作用是：
-- **>0**：表示该列当前行仍被上方单元格占据
-- **=0**：表示需要从新的td单元格中读取新值
-
-#### 课程类别处理流程
-
-```mermaid
-flowchart TD
-A[开始处理课程类别] --> B{cat_rem > 0?}
-B --> |是| C[cat_rem -= 1]
-C --> D[保持当前课程类别]
-D --> E[继续处理下一个单元格]
-B --> |否| F{是否有rowspan属性?}
-F --> |是| G[cat_rem = int(rowspan) - 1]
-G --> H[更新current_category]
-H --> I[ci += 1]
-I --> E
-F --> |否| J[保持空值或上一个有效值]
-J --> E
-```
-
-**图表来源**
-- [scraper.py:684-691](file://backend/scraper.py#L684-L691)
-
-#### 课程性质和模块处理
-
-类似的处理逻辑适用于课程性质和课程模块：
-
-```python
-# 处理课程性质列
-if nat_rem > 0:
-    nat_rem -= 1
-else:
-    if ci < len(td_cells) and td_cells[ci].get('rowspan'):
-        nat_rem = int(td_cells[ci].get('rowspan')) - 1
-        current_nature = _clean_cell(td_cells[ci])
-        ci += 1
-
-# 处理课程模块列
-if mod_rem > 0:
-    mod_rem -= 1
-else:
-    if ci < len(td_cells) and td_cells[ci].get('rowspan'):
-        mod_rem = int(td_cells[ci].get('rowspan')) - 1
-        current_module = _clean_cell(td_cells[ci])
-        ci += 1
-```
-
-**图表来源**
-- [scraper.py:693-709](file://backend/scraper.py#L693-L709)
-
-#### 课程代码识别和验证
-
-**更新** 新增了课程代码识别和验证机制：
-
-```python
-try:
-    course_code = _clean_cell(course_cells[0])
-    if not course_code or len(course_code) < 5:
-        continue
-```
-
-这个验证确保：
-- 课程代码不能为空
-- 课程代码长度至少为5位字符
-- 避免将非课程代码的数据误认为课程代码
-
-**章节来源**
-- [scraper.py:665-668](file://backend/scraper.py#L665-L668)
-- [scraper.py:684-709](file://backend/scraper.py#L684-L709)
-- [scraper.py:716-719](file://backend/scraper.py#L716-L719)
-
-### 增强的调试日志功能
-
-**新增** 本次更新重点介绍了增强的调试日志功能
-
-#### URL跟踪和响应状态监控
-
-系统在培养方案查询过程中增加了详细的调试信息：
-
-```python
-logger.info(f"【培养方案调试】请求URL: {url}")
-logger.info(f"【培养方案调试】响应状态: {response.status_code}")
-logger.info(f"【培养方案调试】响应URL: {response.url}")
-html_text = self._fix_encoding(response)
-logger.info(f"【培养方案调试】HTML长度: {len(html_text)}")
-```
-
-#### HTML长度验证和表格分析
-
-系统提供了HTML内容长度验证和表格分析功能：
-
-```python
-# 保存HTML到文件用于调试
-with open('/tmp/debug_training_plan.html', 'w', encoding='utf-8') as f:
-    f.write(html_text)
-logger.info(f"【培养方案调试】HTML已保存到 /tmp/debug_training_plan.html")
-
-# 输出HTML前500字符用于调试
-logger.info(f"【培养方案调试】HTML前500字符: {html_text[:500]}")
-
-# 分析表格结构
-all_tables = soup.find_all('table')
-logger.info(f"【培养方案调试】找到 {len(all_tables)} 个表格")
-```
-
-#### 课程代码格式验证
-
-系统现在使用8位数字格式验证课程代码：
-
-```python
-# 验证课程代码格式（应该是8位数字）
-if not re.match(r'^\d{8}$', course_code):
-    continue
-```
-
-**章节来源**
-- [scraper.py:696-709](file://backend/scraper.py#L696-L709)
-- [scraper.py:734-735](file://backend/scraper.py#L734-L735)
 
 ## 依赖关系分析
 
@@ -717,9 +859,10 @@ C --> H
 | 培养方案为空 | 网页结构变化 | 更新解析规则 |
 | 学分统计错误 | 数据格式变化 | 检查正则表达式 |
 | 课程列表不完整 | 网页分页问题 | 实现分页处理 |
-| **新增** | **rowspan解析失败** | **检查倒计时变量逻辑** |
-| **新增** | **课程代码识别错误** | **验证课程代码长度** |
-| **新增** | **8位数字课程代码不匹配** | **确认课程代码格式** |
+| **新增** | **表格展开失败** | **检查rowspan/colspan处理** |
+| **新增** | **8位数字课程代码识别失败** | **检查正则表达式模式** |
+| **新增** | **动态列定位错误** | **验证课程代码位置** |
+| **新增** | **前缀信息识别不准确** | **检查非空值过滤逻辑** |
 | **新增** | **学期过滤无效** | **检查学期格式匹配** |
 
 #### 性能问题
@@ -741,12 +884,14 @@ C --> H
 5. **部署检查脚本**：验证服务器代码更新状态
 6. **真实HTML验证**：使用training_plan_real.html进行本地测试
 
-**更新** 针对rowspan处理机制、课程代码验证和学期过滤功能，新增了以下调试要点：
-- 验证倒计时变量cat_rem、nat_rem、mod_rem的正确更新
-- 检查rowspan属性的解析和计算逻辑
-- 确认课程代码识别和验证机制正常工作
+**更新** 针对培养方案解析逻辑重构，新增了以下调试要点：
+- 验证表格展开机制的正确性
+- 检查rowspan/colspan属性处理逻辑
+- 验证8位数字课程代码识别正则表达式的正确性
+- 检查动态列定位算法的准确性
+- 确认前缀信息自动识别机制的可靠性
 - 测试复杂表格结构下的数据完整性
-- 验证8位数字课程代码格式匹配
+- 验证课程代码格式验证机制的严格性
 - 测试学期过滤功能的正确性
 - 验证AI助手查询工具的参数传递
 
@@ -766,20 +911,19 @@ C --> H
 2. **实时更新**：直接从教务系统抓取最新数据
 3. **灵活扩展**：支持多种课程性质和学期组合
 4. **性能优化**：异步处理和缓存策略提升响应速度
-5. **rowspan处理**：智能解析复杂表格结构，确保数据准确性
+5. **智能解析**：基于表格展开机制的rowspan/colspan自动处理
 6. **增强调试**：完善的日志系统，便于问题诊断和性能监控
 7. **学期过滤**：新增的学期过滤功能，支持精确的课程查询
 8. **AI集成**：与AI助手无缝集成，提供自然语言查询体验
 
-**更新** 最重要的改进是新增的训练计划查询工具和学期过滤功能，显著提升了培养方案查询的实用性和灵活性：
-- 稳定的培养方案数据访问
-- 正确的基础URL拼接
-- 与教务系统预期的URL结构完全匹配
-- 智能处理HTML表格rowspan属性，解决复杂表格结构下的数据解析问题
-- 8位数字课程代码格式的准确定位和验证
-- 增强的调试日志功能，包括URL跟踪、响应状态监控、HTML长度验证和表格分析
-- 灵活的学期过滤机制，支持精确的课程查询
-- 结构化的数据返回格式，便于AI助手处理
+**更新** 最重要的改进是培养方案解析逻辑的重构，引入了基于表格展开机制的rowspan/colspan自动处理，以及基于课程代码8位数字模式的动态列定位机制：
+- **稳定性提升**：完全消除了rowspan手动管理的需求
+- **准确性增强**：基于8位数字课程代码的精确识别和验证
+- **解析优化**：自动识别课程类别、性质、模块等前缀信息
+- **调试增强**：完善的日志系统，包括URL跟踪、响应状态监控、HTML长度验证和表格分析
+- **灵活性提高**：支持各种复杂的表格结构，无需手动维护rowspan状态
+- **维护简化**：减少了手动rowspan管理的复杂性，降低了维护成本
+- **鲁棒性增强**：新的课程代码识别机制支持字母数字混合格式
 
 ### 未来改进方向
 
@@ -787,7 +931,7 @@ C --> H
 2. **缓存优化**：实现更智能的缓存策略
 3. **监控完善**：增加更详细的性能指标监控
 4. **错误处理**：提供更友好的错误提示信息
-5. **rowspan处理优化**：进一步优化rowspan解析算法，提升处理效率
+5. **解析算法优化**：进一步优化表格展开算法，提升处理效率
 6. **部署自动化**：完善部署检查脚本，确保代码更新的一致性
 7. **AI助手增强**：扩展AI助手的自然语言理解能力
 8. **移动端适配**：优化移动端的用户体验

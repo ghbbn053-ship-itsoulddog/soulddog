@@ -43,6 +43,19 @@ class SkillManager:
             raise ValueError("tools 必须为非空数组")
         if not isinstance(config.get("name"), str) or not config["name"].strip():
             raise ValueError("name 必须为非空字符串")
+        input_schema = config.get("input_schema")
+        if input_schema is not None:
+            if not isinstance(input_schema, dict):
+                raise ValueError("input_schema 必须是对象")
+            schema_type = str(input_schema.get("type", "")).strip().lower()
+            if schema_type and schema_type != "object":
+                raise ValueError("input_schema.type 当前仅支持 object")
+            props = input_schema.get("properties", {})
+            if props is not None and not isinstance(props, dict):
+                raise ValueError("input_schema.properties 必须是对象")
+            required = input_schema.get("required", [])
+            if required is not None and not isinstance(required, list):
+                raise ValueError("input_schema.required 必须是数组")
         for tool in config["tools"]:
             if not isinstance(tool, dict) or "name" not in tool:
                 raise ValueError("每个 tool 必须是对象且包含 name")
@@ -79,6 +92,7 @@ class SkillManager:
             "description": str(config.get("description", "")).strip(),
             "tools_count": len(config.get("tools", [])),
             "triggers": config.get("triggers", []),
+            "input_schema": config.get("input_schema") or {},
         }
 
     @staticmethod
@@ -145,6 +159,7 @@ class SkillManager:
                         "description": config.get("description", ""),
                         "enabled": bool(config.get("enabled", True)),
                         "triggers": config.get("triggers", []),
+                        "input_schema": config.get("input_schema", {}) or {},
                         "tools": config.get("tools", []),
                         "updated_at": config.get("updated_at"),
                     }

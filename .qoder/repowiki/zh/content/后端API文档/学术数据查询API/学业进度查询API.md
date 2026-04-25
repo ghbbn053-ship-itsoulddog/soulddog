@@ -7,7 +7,19 @@
 - [backend/education_options.py](file://backend/education_options.py)
 - [backend/app/models/education_data.py](file://backend/app/models/education_data.py)
 - [backend/app/api/education.py](file://backend/app/api/education.py)
+- [backend/test_academic_progress.py](file://backend/test_academic_progress.py)
+- [crawled_html/08_学业进度查询.html](file://crawled_html/08_学业进度查询.html)
+- [deep_crawl/depth_1/1__jsxsd_pyfa_xyjdcx.html](file://deep_crawl/depth_1/1__jsxsd_pyfa_xyjdcx.html)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 新增_extract_first_number辅助方法，专门用于从文本中提取数字
+- 改进_expand_table_rows方法，增强rowspan/colspan处理能力
+- 增强重复检测机制，使用set避免重复课程数据
+- 优化课程数据提取逻辑，支持"课程类别/课程模块"两种变体
+- 改进多表格处理能力，能够处理多个进度表格并合并数据
+- 增强错误处理和调试能力，提供详细的日志信息
 
 ## 目录
 1. [简介](#简介)
@@ -22,7 +34,7 @@
 
 ## 简介
 
-本API提供教务系统的学业进度查询功能，能够查询学生的主修和辅修学业完成情况。该系统基于爬虫技术从教务系统中抓取实时数据，为学生提供准确的学业进度统计信息。
+本API提供教务系统的学业进度查询功能，能够查询学生的主修和辅修学业完成情况。该系统基于爬虫技术从教务系统中抓取实时数据，为学生提供准确的学业进度统计信息。最新的版本采用了先进的表头驱动解析方法，显著提高了数据解析的准确性和稳定性，并新增了多种辅助方法来增强数据处理能力。
 
 ## 项目结构
 
@@ -227,7 +239,8 @@ Success --> End
         "学分": "4.0",
         "建议修读学期": "3",
         "免听免修": "否",
-        "已获学分": "4.0"
+        "已获学分": "4.0",
+        "模块应修学分": "8.0"
       }
     ]
   },
@@ -288,6 +301,210 @@ Actual3 --> Diff3
 
 **图表来源**
 - [backend/scraper.py:686-783](file://backend/scraper.py#L686-L783)
+
+### 表头驱动的表格解析算法
+
+**更新** 系统采用了全新的表头驱动解析方法，显著提高了表格识别的准确性：
+
+#### 表格识别逻辑
+
+```mermaid
+flowchart TD
+Start([开始解析]) --> FindTables["查找所有表格"]
+FindTables --> CheckHeaders["检查表头字段"]
+CheckHeaders --> MatchExpected{"匹配预期表头?"}
+MatchExpected --> |是| FoundTable["找到目标表格"]
+MatchExpected --> |否| NextTable["检查下一个表格"]
+NextTable --> CheckHeaders
+FoundTable --> ExtractHeader["提取表头信息"]
+ExtractHeader --> ParseRows["逐行解析数据"]
+ParseRows --> ExtractCredits["提取学分信息"]
+ExtractCredits --> CalculateStats["计算统计指标"]
+CalculateStats --> FormatResult["格式化输出"]
+FormatResult --> End([完成])
+```
+
+#### 预期表头组合
+
+系统使用以下预期表头组合来识别目标表格：
+- "课程性质"
+- "课程代码" 
+- "课程名称"
+- "学分"
+- "已获学分"
+
+#### 动态列映射机制
+
+当检测到标准表头时，系统会：
+1. 自动识别表头位置和顺序
+2. 建立动态列映射关系
+3. 处理不同布局表格的列偏移
+4. 提取合计行中的已获学分信息
+
+**章节来源**
+- [backend/scraper.py:1037-1136](file://backend/scraper.py#L1037-L1136)
+
+### 增强的辅助方法
+
+**更新** 系统新增了多个辅助方法来提升数据处理能力：
+
+#### 数字提取辅助方法
+
+```mermaid
+flowchart TD
+Start([开始提取]) --> NormalizeText["规范化文本"]
+NormalizeText --> SearchNumber["搜索数字模式"]
+SearchNumber --> NumberFound{"找到数字?"}
+NumberFound --> |是| ConvertFloat["转换为浮点数"]
+NumberFound --> |否| ReturnNone["返回None"]
+ConvertFloat --> Success["返回数字"]
+ReturnNone --> End([结束])
+Success --> End
+```
+
+#### 表格展开辅助方法
+
+```mermaid
+flowchart TD
+Start([开始展开]) --> InitVars["初始化变量"]
+InitVars --> IterateRows["遍历表格行"]
+IterateRows --> CheckCells["检查单元格"]
+CheckCells --> HandleRowspan["处理rowspan"]
+HandleRowspan --> HandleColspan["处理colspan"]
+HandleColspan --> AppendValues["追加展开值"]
+AppendValues --> NextCell["下一个单元格"]
+NextCell --> CheckCells
+CheckCells --> IterateRows
+IterateRows --> Done["返回展开后的表格"]
+Done --> End([结束])
+```
+
+**章节来源**
+- [backend/scraper.py:105-117](file://backend/scraper.py#L105-L117)
+- [backend/scraper.py:55-103](file://backend/scraper.py#L55-L103)
+
+### 模块应修学分字段支持
+
+**更新** 系统新增了对模块应修学分字段的支持，提供更详细的课程模块学分信息：
+
+#### 字段提取机制
+
+```mermaid
+flowchart TD
+Start([开始解析]) --> FindModuleHeader["查找模块应修学分表头"]
+FindModuleHeader --> CheckHeader{"存在模块应修学分?"}
+CheckHeader --> |是| ExtractModuleCredits["提取模块应修学分"]
+CheckHeader --> |否| UseAlternative["使用替代学分字段"]
+ExtractModuleCredits --> MapToCourse["映射到课程数据"]
+UseAlternative --> MapToCourse
+MapToCourse --> Complete["完成字段映射"]
+Complete --> End([结束])
+```
+
+#### 字段映射规则
+
+系统支持以下字段映射：
+- 直接匹配"模块应修学分"表头
+- 回退到"模块学分"或其他相关字段
+- 默认为空字符串以保持数据完整性
+
+**章节来源**
+- [backend/scraper.py:1157](file://backend/scraper.py#L1157)
+
+### 学分统计的标题提取机制
+
+**更新** 系统采用了双重学分提取策略：
+
+#### 标题提取流程
+
+```mermaid
+flowchart TD
+Start([开始提取]) --> GetPageText["获取页面文本"]
+GetPageText --> SearchPattern["搜索学分模式"]
+SearchPattern --> PatternFound{"找到学分信息?"}
+PatternFound --> |是| ExtractCredits["提取总学分要求"]
+PatternFound --> |否| DefaultZero["使用默认值0"]
+ExtractCredits --> ContinueParsing["继续解析表格"]
+DefaultZero --> ContinueParsing
+ContinueParsing --> End([完成])
+```
+
+#### 学分提取模式
+
+系统使用正则表达式模式来提取总学分要求：
+- `需修读总学分[:：]\s*(\d+(?:\.\d+)?)`
+- 支持中文冒号"："和英文冒号":"
+- 支持可选的小数点格式
+
+**章节来源**
+- [backend/scraper.py:1052-1056](file://backend/scraper.py#L1052-L1056)
+
+### 增强的错误处理机制
+
+**更新** 系统实现了多层次的错误处理和调试机制：
+
+#### 错误处理流程
+
+```mermaid
+flowchart TD
+Request[接收请求] --> ValidateParams["验证参数"]
+ValidateParams --> ParamsValid{"参数有效?"}
+ParamsValid --> |否| Return400["返回400错误"]
+ParamsValid --> |是| CheckAuth["检查认证状态"]
+CheckAuth --> AuthValid{"认证有效?"}
+AuthValid --> |否| Return401["返回401错误"]
+AuthValid --> |是| ProcessRequest["处理请求"]
+ProcessRequest --> Success{"处理成功?"}
+Success --> |否| LogError["记录错误日志"]
+LogError --> Return500["返回500错误"]
+Success --> |是| Return200["返回200成功"]
+Return400 --> End([结束])
+Return401 --> End
+Return500 --> End
+Return200 --> End
+```
+
+#### 调试信息记录
+
+系统在关键节点记录详细的调试信息：
+- HTML响应内容（前500字符）
+- 表格识别过程
+- 数据解析状态
+- 错误发生位置
+
+**章节来源**
+- [backend/scraper.py:1017-1025](file://backend/scraper.py#L1017-L1025)
+
+### 重复检测机制
+
+**更新** 系统实现了增强的重复检测机制，确保数据的唯一性：
+
+#### 重复检测流程
+
+```mermaid
+flowchart TD
+Start([开始解析]) --> CheckCourse["检查课程信息"]
+CheckCourse --> HasInfo{"有课程信息?"}
+HasInfo --> |否| Skip["跳过此行"]
+HasInfo --> |是| CreateKey["创建去重键"]
+CreateKey --> CheckDuplicate{"已在集合中?"}
+CheckDuplicate --> |是| Skip
+CheckDuplicate --> |否| AddToSet["添加到集合"]
+AddToSet --> ProcessCourse["处理课程数据"]
+Skip --> NextRow["下一行"]
+ProcessCourse --> NextRow
+NextRow --> Start
+```
+
+#### 去重策略
+
+系统使用课程代码和课程名称的组合作为去重键：
+- `(course_code, course_name)`
+- 避免重复课程的多次添加
+- 提高数据处理效率
+
+**章节来源**
+- [backend/scraper.py:1181-1184](file://backend/scraper.py#L1181-L1184)
 
 ## 依赖关系分析
 
@@ -404,5 +621,20 @@ Return200 --> End
 2. **完整性**: 支持主修和辅修两种修读类型的进度查询
 3. **易用性**: 提供简洁的API接口和标准化的数据格式
 4. **扩展性**: 模块化设计便于功能扩展和维护
+5. **稳定性**: 采用表头驱动解析方法，显著提高了数据解析的准确性
 
 通过该API，学生可以实时了解自己的学业进度，合理规划学习安排，提高学习效率。系统还支持与培养方案的对比分析，帮助学生更好地理解学习目标和要求。
+
+**最新改进**：
+- 采用表头驱动的表格识别算法，提高了对不同布局表格的适应性
+- 新增了基于预期表头组合的表格定位逻辑
+- 改进了学分统计的标题提取机制，增强了数据解析的可靠性
+- 增强了错误处理和调试能力，提升了系统的稳定性
+- 新增模块应修学分字段支持，提供更详细的课程模块学分信息
+- 优化课程数据提取的动态列映射机制，支持"课程类别/课程模块"两种变体
+- 新增_extract_first_number辅助方法，专门用于数字提取
+- 改进_expand_table_rows方法，增强rowspan/colspan处理能力
+- 增强重复检测机制，使用set避免重复课程数据
+- 优化多表格处理能力，能够处理多个进度表格并合并数据
+
+这些改进使得学业进度查询功能更加健壮和准确，能够更好地服务于广大学生群体。

@@ -6,6 +6,8 @@
 - [backend/app/api/chat.py](file://backend/app/api/chat.py)
 - [backend/app/services/vector_store.py](file://backend/app/services/vector_store.py)
 - [backend/app/services/qwen_service.py](file://backend/app/services/qwen_service.py)
+- [backend/app/services/data_processor.py](file://backend/app/services/data_processor.py)
+- [backend/app/services/education_sync.py](file://backend/app/services/education_sync.py)
 - [backend/app/models/education_data.py](file://backend/app/models/education_data.py)
 - [backend/app/models/conversation.py](file://backend/app/models/conversation.py)
 - [backend/app/models/user.py](file://backend/app/models/user.py)
@@ -14,6 +16,7 @@
 - [backend/education_options.py](file://backend/education_options.py)
 - [backend/test_scraper.py](file://backend/test_scraper.py)
 - [backend/test_login.py](file://backend/test_login.py)
+- [docs/CONTEXT-ENGINEERING-STRATEGY.md](file://docs/CONTEXT-ENGINEERING-STRATEGY.md)
 </cite>
 
 ## 目录
@@ -36,6 +39,7 @@ RAG架构的核心理念是将外部知识库与大语言模型相结合，通�
 - 提供准确的个性化回答
 - 支持多轮对话上下文记忆
 - 维护用户隐私和数据安全
+- **新增**：支持按数据类型和学期上下文的精确元数据过滤
 
 ## 项目结构
 
@@ -54,6 +58,7 @@ BE2[聊天API]
 BE3[数据爬取模块]
 BE4[AI服务模块]
 BE5[向量存储模块]
+BE6[数据处理器]
 end
 subgraph "数据层"
 DB1[PostgreSQL 数据库]
@@ -68,6 +73,7 @@ BE4 --> VS1
 BE2 --> DB1
 BE3 --> ES1
 BE4 --> DB1
+BE6 --> VS1
 ```
 
 **图表来源**
@@ -95,7 +101,7 @@ class VectorStore {
 +_connect()
 +create_collection(dim)
 +add_documents(user_id, texts, embeddings, sources, metadatas)
-+search(user_id, query_embedding, top_k)
++search(user_id, query_embedding, top_k, data_types, semester)
 +delete_user_data(user_id)
 +close()
 }
@@ -192,7 +198,6 @@ class EducationData {
 +JSON training_plan
 +JSON academic_progress
 +JSON exam_schedule
-+JSON execution_plan
 +JSON course_selection
 +DateTime last_updated
 +user
@@ -223,6 +228,7 @@ sequenceDiagram
 participant U as 用户
 participant API as 聊天API
 participant VS as 向量存储
+participant DP as 数据处理器
 participant QWEN as AI服务
 participant DB as 数据库
 participant ED as 教育数据
@@ -232,7 +238,9 @@ API->>ED : 检查用户是否有教育数据
 alt 用户有教育数据
 API->>QWEN : 生成查询向量
 QWEN-->>API : 返回向量嵌入
-API->>VS : 执行相似度检索
+API->>DP : 推断过滤条件
+DP-->>API : 返回data_types和semester
+API->>VS : 执行元数据过滤检索
 VS-->>API : 返回Top-K相关文档
 API->>QWEN : 调用RAG增强对话
 QWEN->>QWEN : 构建上下文提示词
@@ -259,24 +267,30 @@ API-->>U : 返回最终回答
 ```mermaid
 flowchart TD
 A[用户发送查询] --> B[生成查询向量]
-B --> C[向量相似度计算]
-C --> D[Top-K检索策略]
-D --> E[返回相关文档]
-F[查询向量生成] --> G[使用嵌入模型]
-G --> H[文本预处理]
-H --> I[向量标准化]
-I --> B
-J[相似度计算] --> K[COSINE距离]
-K --> L[余弦相似度]
-L --> C
-M[Top-K策略] --> N[按相似度排序]
-N --> O[选择前K个]
+B --> C[推断过滤条件]
+C --> D[数据类型过滤]
+D --> E[学期上下文过滤]
+E --> F[元数据过滤]
+F --> G[向量相似度计算]
+G --> H[Top-K检索策略]
+H --> I[返回相关文档]
+J[查询向量生成] --> K[使用嵌入模型]
+K --> L[文本预处理]
+L --> M[向量标准化]
+M --> B
+N[过滤条件推断] --> O[data_types参数]
 O --> D
+N --> P[semester参数]
+P --> E
+Q[元数据过滤] --> R[按data_type匹配]
+R --> S[按semester匹配]
+S --> F
 ```
 
 **图表来源**
 - [backend/app/services/vector_store.py:100-142](file://backend/app/services/vector_store.py#L100-L142)
 - [backend/app/services/qwen_service.py:144-173](file://backend/app/services/qwen_service.py#L144-L173)
+- [backend/app/api/chat.py:25-50](file://backend/app/api/chat.py#L25-L50)
 
 #### 2. 融合阶段（Fusion）
 
@@ -376,6 +390,7 @@ sequenceDiagram
 participant Client as 客户端
 participant API as ChatAPI
 participant DB as 数据库服务
+participant DP as 数据处理器
 participant VS as 向量存储
 participant QWEN as AI服务
 Client->>API : POST /api/chat/send
@@ -386,7 +401,9 @@ API->>DB : 获取历史对话(最近5轮)
 alt 用户有教育数据
 API->>QWEN : generate_embedding()
 QWEN-->>API : 返回向量
-API->>VS : search(top_k=5)
+API->>DP : _infer_rag_filters()
+DP-->>API : 返回过滤条件
+API->>VS : search(top_k=8, data_types, semester)
 VS-->>API : 返回相关文档
 API->>QWEN : chat_with_rag()
 QWEN-->>API : 返回增强回答
@@ -438,7 +455,6 @@ json schedule
 json training_plan
 json academic_progress
 json exam_schedule
-json execution_plan
 json course_selection
 datetime last_updated
 }
@@ -469,57 +485,113 @@ cos(θ) = (A · B) / (||A|| × ||B||)
 ```mermaid
 flowchart TD
 A[查询向量] --> B[批量相似度计算]
-B --> C[排序降序排列]
-C --> D[选择前K个]
-D --> E[返回结果]
-F[参数调优] --> G[top_k值选择]
-G --> H[K=3-10之间通常效果最佳]
-H --> I[根据数据量调整]
+B --> C[按相似度排序]
+C --> D[应用元数据过滤]
+D --> E[选择前K个]
+E --> F[返回结果]
+G[元数据过滤] --> H[data_types过滤]
+H --> I[semester过滤]
 I --> D
-J[性能优化] --> K[nprobe参数]
-K --> L[默认10，可根据数据量调整]
-L --> D
+J[参数调优] --> K[top_k值选择]
+K --> L[K=3-10之间通常效果最佳]
+L --> E
+M[性能优化] --> N[nprobe参数]
+N --> O[默认10，可根据数据量调整]
+O --> D
 ```
 
 **图表来源**
 - [backend/app/services/vector_store.py:109-122](file://backend/app/services/vector_store.py#L109-L122)
 
-### 上下文构建过程
+### 元数据过滤增强功能
 
-上下文构建是RAG架构中最重要的环节，负责将检索到的相关文档与用户历史对话融合。
+**新增** 系统现已支持按数据类型和学期上下文的精确元数据过滤。
 
-#### 文档筛选和排序
+#### 元数据过滤机制
 
 ```mermaid
-flowchart LR
-A[检索结果] --> B[相似度阈值过滤]
-B --> C[文档质量评估]
-C --> D[按相关性排序]
-D --> E[格式化输出]
-F[阈值设置] --> G[score >= 0.7]
-G --> B
-H[质量评估] --> I[文档完整性]
-I --> J[信息相关性]
-J --> K[去重处理]
-K --> C
+flowchart TD
+A[检索结果] --> B[解析元数据]
+B --> C{data_types参数存在?}
+C --> |是| D[提取hit_type]
+D --> E{hit_type在data_types中?}
+E --> |否| F[过滤掉该文档]
+E --> |是| G[保留该文档]
+C --> |否| H[跳过数据类型过滤]
+H --> I[检查semester参数]
+G --> I
+I --> J{semester参数存在?}
+J --> |是| K[提取hit_semester]
+K --> L{hit_semester匹配?}
+L --> |否| F
+L --> |是| M[保留该文档]
+J --> |否| N[跳过学期过滤]
+M --> O[添加到结果集]
+N --> O
+F --> P[继续下一个结果]
+O --> Q[格式化最终结果]
+P --> Q
 ```
 
 **图表来源**
-- [backend/app/services/vector_store.py:125-137](file://backend/app/services/vector_store.py#L125-L137)
+- [backend/app/services/vector_store.py:188-202](file://backend/app/services/vector_store.py#L188-L202)
 
-#### 格式化策略
+#### 过滤条件推断
 
-系统采用统一的上下文格式化模板：
-
+```mermaid
+flowchart TD
+A[用户问题] --> B[关键词匹配]
+B --> C{识别数据类型关键词}
+C --> |课表| D[添加schedule到data_types]
+C --> |成绩| E[添加grade到data_types]
+C --> |考试| F[添加exam到data_types]
+C --> |培养方案| G[添加training_plan到data_types]
+C --> |学业进度| H[添加academic_progress到data_types]
+C --> |个人信息| I[添加personal_info到data_types]
+B --> J[识别学期模式]
+J --> K{匹配20XX-20XX-X格式?}
+K --> |是| L[提取semester]
+K --> |否| M[保持空字符串]
+N[最终结果] --> O[返回{"data_types": [...], "semester": "..."}]
+D --> N
+E --> N
+F --> N
+G --> N
+H --> N
+I --> N
+L --> N
+M --> N
 ```
-【序号】文档内容
-来源: 文档来源
+
+**图表来源**
+- [backend/app/api/chat.py:25-50](file://backend/app/api/chat.py#L25-L50)
+
+#### 元数据结构设计
+
+系统在数据分块时为每个文档添加了丰富的元数据：
+
+```mermaid
+classDiagram
+class Metadata {
++string type
++string data_type
++string course
++string semester
++string day
++string teacher
++string category
++string nature
+}
+class Chunk {
++string text
++string source
++Metadata metadata
+}
+Chunk --> Metadata : "包含"
 ```
 
-这种格式化策略确保了：
-- 清晰的文档标识
-- 可追溯的信息来源
-- 标准化的呈现格式
+**图表来源**
+- [backend/app/services/data_processor.py:257-471](file://backend/app/services/data_processor.py#L257-L471)
 
 **章节来源**
 - [backend/app/api/chat.py:97-124](file://backend/app/api/chat.py#L97-L124)
@@ -539,16 +611,14 @@ A[FastAPI] --> B[Web框架]
 C[SQLAlchemy] --> D[ORM框架]
 E[DashScope] --> F[大模型服务]
 G[Milvus] --> H[向量数据库]
-end
-subgraph "辅助依赖"
-I[requests] --> J[HTTP客户端]
-K[beautifulsoup4] --> L[HTML解析]
-M[psycopg2] --> N[PostgreSQL驱动]
+I[BeautifulSoup4] --> J[HTML解析]
+K[Requests] --> L[HTTP客户端]
+M[Psycopg2] --> N[PostgreSQL驱动]
 end
 subgraph "开发依赖"
-O[pytest] --> P[测试框架]
-Q[black] --> R[代码格式化]
-S[docker] --> T[容器化]
+O[Pytest] --> P[测试框架]
+Q[Black] --> R[代码格式化]
+S[Docker] --> T[容器化]
 end
 ```
 
@@ -573,6 +643,8 @@ L --> N[models]
 O[main.py] --> A
 O --> L
 O --> P[education_options.py]
+Q[data_processor.py] --> R[vector_store.py]
+Q --> S[education_normalizer.py]
 ```
 
 **图表来源**
@@ -615,6 +687,9 @@ L --> D
 M[批量处理] --> N[批量插入]
 N --> O[批量查询]
 O --> E
+P[元数据过滤优化] --> Q[索引字段优化]
+Q --> R[metadata字段索引]
+R --> C
 ```
 
 ### 内存和存储优化
@@ -751,6 +826,7 @@ D --> J[压力测试]
 2. **知识时效性**: 实时从教务系统获取最新数据
 3. **个性化能力**: 支持每个学生的专属数据和对话历史
 4. **可扩展性**: 模块化设计便于功能扩展和维护
+5. **精确过滤**: **新增** 支持按数据类型和学期上下文的元数据精确过滤
 
 ### 架构特色
 
@@ -758,6 +834,7 @@ D --> J[压力测试]
 2. **灵活的检索策略**: 支持多种检索参数和过滤条件
 3. **强大的上下文管理**: 支持多轮对话和历史上下文记忆
 4. **完善的错误处理**: 全面的日志记录和错误恢复机制
+5. **智能过滤推断**: **新增** 自动识别用户查询中的过滤条件
 
 ### 未来发展方向
 
@@ -765,5 +842,6 @@ D --> J[压力测试]
 2. **性能提升**: 优化向量检索算法和数据库查询性能
 3. **功能扩展**: 支持更多类型的教务查询和业务场景
 4. **用户体验**: 改进界面设计和交互体验
+5. **过滤策略优化**: **新增** 支持更复杂的元数据组合过滤
 
-该RAG架构为智能教务系统提供了坚实的技术基础，能够有效提升学生的学习体验和教务管理效率。
+该RAG架构为智能教务系统提供了坚实的技术基础，能够有效提升学生的学习体验和教务管理效率。新增的元数据过滤功能进一步增强了系统的精确性和实用性，使AI助手能够更准确地理解和满足学生的多样化需求。

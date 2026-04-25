@@ -126,6 +126,8 @@ class DataProcessor:
                     training_plan=normalized.get("培养方案", {}),
                     academic_progress=normalized.get("学业进度", {}),
                     exam_schedule=exam_list,
+                    execution_plan=raw_data.get("执行计划", {}) or {},
+                    course_selection=raw_data.get("选课信息", {}) or {},
                 )
                 db.add(edu_data)
             else:
@@ -136,6 +138,8 @@ class DataProcessor:
                 edu_data.training_plan = normalized.get("培养方案", {})
                 edu_data.academic_progress = normalized.get("学业进度", {})
                 edu_data.exam_schedule = exam_list
+                edu_data.execution_plan = raw_data.get("执行计划", {}) or {}
+                edu_data.course_selection = raw_data.get("选课信息", {}) or {}
 
             db.commit()
             logger.info(f"【数据处理】用户 {username} 教务数据已保存到 PostgreSQL")

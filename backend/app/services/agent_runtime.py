@@ -1,4 +1,4 @@
-"""
+﻿"""
 Agent 运行时服务（框架可插拔）。
 
 当前策略：
@@ -11,10 +11,14 @@ from __future__ import annotations
 import importlib.util
 import logging
 import os
+import re
 from typing import Any, Dict, List
 
 from app.services import get_model_provider_for_user
 from app.core.runtime import get_db
+from app.services.composition_manager import get_composition_manager
+from app.services.mcp_registry import get_mcp_registry
+from app.services.platform_registry import get_platform_registry_service
 from app.services.workspace_knowledge import get_workspace_knowledge_service
 
 logger = logging.getLogger(__name__)
@@ -39,24 +43,30 @@ class AgentRuntimeService:
             },
         ]
 
-    def run(self, username: str, message: str, framework: str, session_store) -> Dict[str, Any]:
+    async def run(self, username: str, message: str, framework: str, session_store, workspace_id: int | None = None) -> Dict[str, Any]:
         fw = (framework or "openai_agents").strip().lower()
-        workspace_context = self._build_workspace_context(username, message, session_store)
+        runtime_context = self._build_runtime_context(username, message, session_store, workspace_id=workspace_id)
+        tool_context, tool_trace = await self._build_tool_context(username, message, runtime_context)
+        if tool_context:
+            runtime_context["tool_results"] = tool_context
+        system_context = self._render_runtime_context(runtime_context)
         if fw == "openai_agents":
-            result = self._run_openai_agents(message, workspace_context)
+            result = self._run_openai_agents(message, system_context)
             if result.get("success"):
+                result["tool_trace"] = tool_trace
                 return result
             logger.warning("openai_agents 不可用，降级统一模型层: %s", result.get("message"))
-            return self._fallback_chat(username, message, session_store, fw, result.get("message", ""), workspace_context)
+            return self._fallback_chat(username, message, session_store, fw, result.get("message", ""), system_context, tool_trace)
 
         if fw == "langgraph":
-            result = self._run_langgraph(message, workspace_context)
+            result = self._run_langgraph(message, system_context)
             if result.get("success"):
+                result["tool_trace"] = tool_trace
                 return result
             logger.warning("langgraph 不可用或执行失败，降级统一模型层: %s", result.get("message"))
-            return self._fallback_chat(username, message, session_store, fw, result.get("message", ""), workspace_context)
+            return self._fallback_chat(username, message, session_store, fw, result.get("message", ""), system_context, tool_trace)
 
-        return self._fallback_chat(username, message, session_store, fw, "未知 framework", workspace_context)
+        return self._fallback_chat(username, message, session_store, fw, "未知 framework", system_context, tool_trace)
 
     @staticmethod
     def _has_openai_agents() -> bool:
@@ -66,31 +76,219 @@ class AgentRuntimeService:
     def _has_langgraph() -> bool:
         return importlib.util.find_spec("langgraph") is not None
 
-    def _build_workspace_context(self, username: str, message: str, session_store) -> str:
+    def _build_runtime_context(self, username: str, message: str, session_store, workspace_id: int | None = None) -> Dict[str, Any]:
         db = None
         try:
             db = next(get_db())
-            svc = get_workspace_knowledge_service()
-            workspaces = svc.list_workspaces(db, username)
-            if not workspaces:
-                return ""
-            selected_id = None
-            if session_store:
+            workspace_svc = get_workspace_knowledge_service()
+            platform_svc = get_platform_registry_service()
+            composition = get_composition_manager().resolved(username)
+            workspaces = workspace_svc.list_workspaces(db, username)
+            context: Dict[str, Any] = {
+                "workspace": None,
+                "knowledge_hits": [],
+                "skills": [],
+                "mcp_tools": [],
+                "composition": composition,
+                "tool_results": [],
+            }
+            selected_id = workspace_id
+            if selected_id is None and session_store:
                 pref = session_store.get_user_workspace_preference(username) or {}
                 selected_id = pref.get("workspace_id")
-            workspace = next((item for item in workspaces if item.id == selected_id), None) or workspaces[0]
-            hits = svc.search_workspace(db, username, workspace.id, message, top_k=4)
-            if not hits:
-                return ""
-            return "\n".join(
-                [f"[{idx}] {item.get('title', '未知标题')}: {item.get('content', '')}" for idx, item in enumerate(hits, start=1)]
-            )
+            if workspaces:
+                workspace = next((item for item in workspaces if item.id == selected_id), None) or workspaces[0]
+                context["workspace"] = {
+                    "id": workspace.id,
+                    "name": workspace.name,
+                    "slug": workspace.slug,
+                }
+                context["knowledge_hits"] = workspace_svc.search_workspace(db, username, workspace.id, message, top_k=4)
+
+            skills = platform_svc.list_skills(db, username)
+            enabled_skill_names = set(composition.get("skills", []) or [])
+            context["skills"] = [
+                {
+                    "name": skill.name,
+                    "description": skill.description or "",
+                    "triggers": skill.triggers or [],
+                    "enabled": skill.name in enabled_skill_names,
+                    "tools": skill.tools or [],
+                }
+                for skill in skills
+                if skill.name in enabled_skill_names
+            ]
+
+            mcp_tools = platform_svc.list_mcp_tools(db, username)
+            enabled_mcp_names = set(composition.get("mcp_tools", []) or [])
+            context["mcp_tools"] = [
+                {
+                    "name": tool.name,
+                    "description": tool.description or "",
+                    "kind": tool.kind,
+                    "enabled": tool.name in enabled_mcp_names,
+                    "parameters": (tool.tool_schema or {}).get("parameters", {}),
+                }
+                for tool in mcp_tools
+                if tool.name in enabled_mcp_names
+            ]
+            return context
         except Exception as e:
-            logger.warning("AgentRuntime 工作区知识加载失败: %s", e)
-            return ""
+            logger.warning("AgentRuntime 平台上下文加载失败: %s", e)
+            return {
+                "workspace": None,
+                "knowledge_hits": [],
+                "skills": [],
+                "mcp_tools": [],
+                "composition": {},
+                "tool_results": [],
+            }
         finally:
             if db:
                 db.close()
+
+    @staticmethod
+    def _extract_candidate_values(message: str) -> Dict[str, str]:
+        semester_match = re.search(r"(20\d{2}-20\d{2}-[12])", message or "")
+        week_match = re.search(r"(第?\s*\d{1,2}\s*周)", message or "")
+        numeric_match = re.findall(r"\d{4,}", message or "")
+        values: Dict[str, str] = {}
+        if semester_match:
+            values["semester"] = semester_match.group(1)
+        if week_match:
+            values["week"] = re.sub(r"\s+", "", week_match.group(1))
+        if numeric_match:
+            values["numeric"] = numeric_match[0]
+        return values
+
+    def _map_tool_params(self, message: str, tool_name: str) -> Dict[str, Any]:
+        registry = get_mcp_registry()
+        schema = registry.get_tool_schema(tool_name) or {}
+        props = ((schema.get("inputSchema") or {}).get("properties") or {})
+        candidates = self._extract_candidate_values(message)
+        params: Dict[str, Any] = {}
+
+        for key in props.keys():
+            lowered = str(key).strip().lower()
+            if lowered in {"semester", "term", "xnxq"} and candidates.get("semester"):
+                params[key] = candidates["semester"]
+            elif lowered in {"week", "week_no"} and candidates.get("week"):
+                params[key] = candidates["week"]
+            elif lowered in {"student_id", "xh"} and candidates.get("numeric"):
+                params[key] = candidates["numeric"]
+        return params
+
+    async def _build_tool_context(self, username: str, message: str, runtime_context: Dict[str, Any]) -> tuple[List[Dict[str, str]], List[Dict[str, Any]]]:
+        skills = runtime_context.get("skills") or []
+        if not skills:
+            return [], []
+
+        registry = get_mcp_registry()
+        results: List[Dict[str, str]] = []
+        traces: List[Dict[str, Any]] = []
+        tried_tools = set()
+
+        for skill in skills:
+            tool_defs = skill.get("tools") or []
+            for tool_def in tool_defs:
+                if not isinstance(tool_def, dict):
+                    continue
+                tool_name = str(tool_def.get("name", "")).strip()
+                if not tool_name or tool_name in tried_tools or not registry.has_tool(tool_name):
+                    continue
+                tried_tools.add(tool_name)
+                mapped_params = self._map_tool_params(message, tool_name)
+                try:
+                    output = await registry.call_tool(tool_name, username, mapped_params)
+                except Exception as e:
+                    logger.warning("AgentRuntime 工具预调用失败 %s: %s", tool_name, e)
+                    traces.append(
+                        {
+                            "skill": str(skill.get("name", "")).strip() or "unknown",
+                            "tool": tool_name,
+                            "params": mapped_params,
+                            "status": "failed",
+                            "error": str(e),
+                        }
+                    )
+                    continue
+
+                rendered = str(output or "").strip()
+                if not rendered:
+                    traces.append(
+                        {
+                            "skill": str(skill.get("name", "")).strip() or "unknown",
+                            "tool": tool_name,
+                            "params": mapped_params,
+                            "status": "empty",
+                        }
+                    )
+                    continue
+                traces.append(
+                    {
+                        "skill": str(skill.get("name", "")).strip() or "unknown",
+                        "tool": tool_name,
+                        "params": mapped_params,
+                        "status": "success",
+                    }
+                )
+                results.append(
+                    {
+                        "skill": str(skill.get("name", "")).strip() or "unknown",
+                        "tool": tool_name,
+                        "content": rendered[:2400],
+                    }
+                )
+                if len(results) >= 3:
+                    return results, traces
+        return results, traces
+
+    @staticmethod
+    def _render_runtime_context(runtime_context: Dict[str, Any]) -> str:
+        workspace = runtime_context.get("workspace") or {}
+        knowledge_hits = runtime_context.get("knowledge_hits") or []
+        skills = runtime_context.get("skills") or []
+        mcp_tools = runtime_context.get("mcp_tools") or []
+        tool_results = runtime_context.get("tool_results") or []
+        sections: List[str] = []
+
+        if workspace:
+            sections.append(
+                "当前工作区："
+                f"{workspace.get('name', '未命名')} "
+                f"(id={workspace.get('id')}, slug={workspace.get('slug', '')})"
+            )
+
+        if skills:
+            lines = [
+                f"- {item.get('name')}: {item.get('description') or '无描述'}"
+                + (f" | triggers={','.join(item.get('triggers') or [])}" if item.get("triggers") else "")
+                for item in skills
+            ]
+            sections.append("当前启用 Skills：\n" + "\n".join(lines))
+
+        if mcp_tools:
+            lines = [
+                f"- {item.get('name')} ({item.get('kind', 'unknown')}): {item.get('description') or '无描述'}"
+                for item in mcp_tools
+            ]
+            sections.append("当前启用 MCP 工具：\n" + "\n".join(lines))
+
+        if knowledge_hits:
+            lines = [
+                f"[{idx}] {item.get('title', '未知标题')}: {item.get('content', '')}"
+                for idx, item in enumerate(knowledge_hits, start=1)
+            ]
+            sections.append("工作区相关知识：\n" + "\n".join(lines))
+
+        if tool_results:
+            lines = [
+                f"[skill={item.get('skill')} tool={item.get('tool')}]\n{item.get('content')}"
+                for item in tool_results
+            ]
+            sections.append("预调用工具结果：\n" + "\n\n".join(lines))
+
+        return "\n\n".join(section for section in sections if section).strip()
 
     def _run_openai_agents(self, message: str, workspace_context: str = "") -> Dict[str, Any]:
         if not self._has_openai_agents():
@@ -178,7 +376,7 @@ class AgentRuntimeService:
             return {"success": False, "message": f"langgraph 运行失败: {e}"}
 
     @staticmethod
-    def _fallback_chat(username: str, message: str, session_store, framework: str, reason: str, workspace_context: str = "") -> Dict[str, Any]:
+    def _fallback_chat(username: str, message: str, session_store, framework: str, reason: str, workspace_context: str = "", tool_trace: List[Dict[str, Any]] | None = None) -> Dict[str, Any]:
         model_svc = get_model_provider_for_user(username, session_store)
         messages = []
         if workspace_context:
@@ -192,12 +390,14 @@ class AgentRuntimeService:
                 "framework": f"{framework}:fallback_model_provider",
                 "fallback_reason": reason,
                 "usage": result.get("usage", {}),
+                "tool_trace": tool_trace or [],
             }
         return {
             "success": False,
             "message": result.get("message", "模型服务不可用"),
             "framework": f"{framework}:fallback_model_provider",
             "fallback_reason": reason,
+            "tool_trace": tool_trace or [],
         }
 
 

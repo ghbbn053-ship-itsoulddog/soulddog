@@ -19,10 +19,15 @@ from app.core.observability import (
 from app.api import chat
 from app.api import mcp as mcp_router
 from app.api import platform as platform_router
+from app.api import knowledge as knowledge_router
+from app.api import learning_status as learning_status_router
+from app.api import suggestions as suggestions_router
 from app.api import workspace as workspace_router
 from app.api import workspace_pref as workspace_pref_router
 from app.api.auth_sync import router as auth_sync_router
 from app.api.education import router as education_router
+from app.api.education_cache import router as education_cache_router
+from app.api.education_refresh import router as education_refresh_router
 from app.api.options import router as options_router
 from app.api.models import router as models_router
 from app.api.skills import router as skills_router
@@ -74,6 +79,8 @@ async def trace_and_metrics_middleware(request, call_next):
 # 业务路由
 app.include_router(auth_sync_router)
 app.include_router(education_router)
+app.include_router(education_cache_router)
+app.include_router(education_refresh_router)
 app.include_router(options_router)
 app.include_router(models_router)
 app.include_router(skills_router)
@@ -83,6 +90,9 @@ app.include_router(composition_router)
 app.include_router(workspace_router.router)
 app.include_router(workspace_pref_router.router)
 app.include_router(platform_router.router)
+app.include_router(knowledge_router.router)
+app.include_router(learning_status_router.router)
+app.include_router(suggestions_router.router)
 app.include_router(chat.router)
 app.include_router(mcp_router.router)
 

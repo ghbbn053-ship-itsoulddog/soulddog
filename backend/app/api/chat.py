@@ -1,4 +1,4 @@
-"""
+﻿"""
 对话 API - AI 聊天接口（支持 Function Calling）
 """
 
@@ -21,6 +21,7 @@ from app.services.model_provider import UnifiedModelProvider
 from app.services.education_normalizer import build_payload_from_education_data_record
 from app.services.workspace_knowledge import get_workspace_knowledge_service
 from app.services.skill_router import build_skill_prompt_hint
+from app.services.agent_runtime import get_agent_runtime
 from app.security import enforce_username_isolation
 from app.core.observability import (
     CHAT_STREAM_REQUESTS_TOTAL,
@@ -154,14 +155,14 @@ def _build_grounded_answer(question: str, normalized_payload: dict) -> Optional[
     return None
 
 
-def _build_workspace_context(db: Session, username: str, question: str, session_store=None) -> List[dict]:
+def _build_workspace_context(db: Session, username: str, question: str, session_store=None, workspace_id: int | None = None) -> List[dict]:
     try:
         svc = get_workspace_knowledge_service()
         workspaces = svc.list_workspaces(db, username)
         if not workspaces:
             return []
-        selected_id = None
-        if session_store:
+        selected_id = workspace_id
+        if selected_id is None and session_store:
             pref = session_store.get_user_workspace_preference(username) or {}
             selected_id = pref.get("workspace_id")
         workspace = next((item for item in workspaces if item.id == selected_id), None) or workspaces[0]
@@ -172,6 +173,103 @@ def _build_workspace_context(db: Session, username: str, question: str, session_
         return []
 
 
+def _format_context_source(item: dict) -> str:
+    source = str(item.get("source", "") or "").strip()
+    title = str(item.get("title", "") or "").strip()
+    document_id = item.get("document_id")
+    chunk_index = item.get("chunk_index")
+    score = item.get("score")
+
+    if source.startswith("workspace:"):
+        parts = source.split(":", 2)
+        workspace_part = parts[1] if len(parts) > 1 else "unknown"
+        title_part = title or (parts[2] if len(parts) > 2 else "未知文档")
+        query_parts = []
+        if document_id is not None:
+            query_parts.append(f"doc={document_id}")
+        if chunk_index is not None:
+            query_parts.append(f"chunk={chunk_index}")
+        if score is not None:
+            try:
+                query_parts.append(f"score={float(score):.3f}")
+            except Exception:
+                pass
+        query = f"?{'&'.join(query_parts)}" if query_parts else ""
+        return f"knowledge://workspace/{workspace_part}/{title_part}{query}"
+
+    if source:
+        return source
+    if title:
+        return f"knowledge://workspace/unknown/{title}"
+    return "knowledge://workspace/unknown/untitled"
+
+
+def _render_workspace_rag_context(workspace_hits: List[dict]) -> str:
+    parts = []
+    for idx, item in enumerate(workspace_hits[:5], start=1):
+        title = str(item.get("title", "") or "未知标题").strip()
+        content = str(item.get("content", "") or item.get("text", "") or "").strip()
+        source = _format_context_source(item)
+        if not content:
+            continue
+        parts.append(f"工作区知识[{idx}]\n标题: {title}\n来源: {source}\n内容: {content}")
+    return "\n\n".join(parts)
+
+
+def _collect_context_sources(*contexts: List[dict]) -> List[str]:
+    sources: List[str] = []
+    seen = set()
+    for context in contexts:
+        for item in context or []:
+            source = _format_context_source(item)
+            if source in seen:
+                continue
+            seen.add(source)
+            sources.append(source)
+    return sources
+
+
+def _collect_context_highlights(*contexts: List[dict]) -> List[dict]:
+    highlights: List[dict] = []
+    seen = set()
+    for context in contexts:
+        for item in context or []:
+            source = _format_context_source(item)
+            key = (source, item.get("chunk_index"), item.get("document_id"))
+            if key in seen:
+                continue
+            seen.add(key)
+            content = str(item.get("content", "") or item.get("text", "") or "").strip()
+            snippet = content[:220]
+            if len(content) > 220:
+                snippet += "..."
+            highlights.append(
+                {
+                    "source": source,
+                    "title": str(item.get("title", "") or "未知标题").strip(),
+                    "snippet": snippet,
+                    "document_id": item.get("document_id"),
+                    "chunk_index": item.get("chunk_index"),
+                    "score": item.get("score"),
+                }
+            )
+    return highlights[:5]
+
+
+def _apply_workspace_context_to_conversation(conversation: Conversation, workspace_id: int | None):
+    meta = dict(conversation.conversation_meta or {})
+    if workspace_id:
+        meta["workspace_id"] = int(workspace_id)
+    conversation.conversation_meta = meta
+
+
+def _build_message_meta(base: dict | None = None, workspace_id: int | None = None) -> dict:
+    meta = dict(base or {})
+    if workspace_id:
+        meta["workspace_id"] = int(workspace_id)
+    return meta
+
+
 # ============ 数据模型 ============
 
 class ChatRequest(BaseModel):
@@ -179,12 +277,15 @@ class ChatRequest(BaseModel):
     username: str
     message: str
     conversation_id: Optional[int] = None
+    workspace_id: Optional[int] = None
     override_provider: Optional[str] = None
     override_model: Optional[str] = None
     override_api_base: Optional[str] = None
     override_api_key: Optional[str] = None
     reasoning_mode: Optional[str] = "standard"
     show_thinking: Optional[bool] = False
+    execution_mode: Optional[str] = "chat"
+    agent_framework: Optional[str] = "openai_agents"
 
 
 class ChatResponse(BaseModel):
@@ -193,7 +294,9 @@ class ChatResponse(BaseModel):
     message: str
     conversation_id: int
     sources: List[str] = []
+    highlights: List[dict] = []
     tool_calls: List[dict] = []
+    tool_trace: List[dict] = []
     usage: dict = {}
 
 
@@ -202,6 +305,7 @@ class ConversationResponse(BaseModel):
     id: int
     title: str
     created_at: str
+    workspace_id: Optional[int] = None
 
 
 # ============ API 接口 ============
@@ -251,12 +355,16 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
             db.add(conversation)
             db.commit()
             db.refresh(conversation)
+        _apply_workspace_context_to_conversation(conversation, request.workspace_id)
+        db.add(conversation)
+        db.commit()
         
         # 3. 保存用户消息
         user_msg = Message(
             conversation_id=conversation.id,
             role="user",
-            content=request.message
+            content=request.message,
+            message_meta=_build_message_meta(workspace_id=request.workspace_id),
         )
         db.add(user_msg)
         db.commit()
@@ -286,9 +394,20 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
             history_for_model = [{"role": "system", "content": skill_context}] + history
         
         ai_result = None
-        
+
+        if (request.execution_mode or "chat").strip().lower() == "agent":
+            logger.info(f"【Chat】用户 {request.username} 使用 Agent Runtime 模式")
+            runtime = get_agent_runtime()
+            ai_result = await runtime.run(
+                username=request.username,
+                message=request.message,
+                framework=(request.agent_framework or "openai_agents").strip().lower(),
+                session_store=session_store,
+                workspace_id=request.workspace_id,
+            )
+
         # 6. 优先使用工具调用（Function Calling）
-        if getattr(model_svc, "available", False) and tools_context:
+        if not ai_result and getattr(model_svc, "available", False) and tools_context:
             logger.info(f"【Chat】用户 {request.username} 使用工具调用模式")
             ai_result = model_svc.chat_with_tools(
                 messages=history_for_model,
@@ -299,7 +418,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
         if not ai_result or not ai_result.get("success"):
             edu_data = db.query(EducationData).filter(EducationData.user_id == user.id).first()
             context = []
-            workspace_context = _build_workspace_context(db, request.username, request.message, session_store=session_store)
+            workspace_context = _build_workspace_context(db, request.username, request.message, session_store=session_store, workspace_id=request.workspace_id)
             normalized_payload = None
             if edu_data:
                 try:
@@ -346,6 +465,8 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
                 merged_context.extend(context)
             if workspace_context:
                 merged_context.extend(workspace_context)
+            rag_sources = _collect_context_sources(context, workspace_context)
+            rag_highlights = _collect_context_highlights(context, workspace_context)
 
             if merged_context:
                 logger.info(f"【Chat】用户 {request.username} 使用 RAG 模式")
@@ -354,6 +475,9 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
                     context=merged_context,
                     conversation_history=history[:-1] if len(history) > 1 else None
                 )
+                if ai_result.get("success"):
+                    ai_result["sources"] = rag_sources or ai_result.get("sources", [])
+                    ai_result["highlights"] = rag_highlights
             elif getattr(model_svc, "available", False):
                 logger.info(f"【Chat】用户 {request.username} 使用纯对话模式")
                 ai_result = model_svc.chat(history_for_model)
@@ -368,11 +492,13 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
             conversation_id=conversation.id,
             role="assistant",
             content=ai_result["content"],
-            message_meta={
+            message_meta=_build_message_meta({
                 "usage": ai_result.get("usage", {}),
                 "sources": ai_result.get("sources", []),
-                "tool_calls": ai_result.get("tool_calls", [])
-            }
+                "highlights": ai_result.get("highlights", []),
+                "tool_calls": ai_result.get("tool_calls", []),
+                "tool_trace": ai_result.get("tool_trace", []),
+            }, workspace_id=request.workspace_id),
         )
         db.add(ai_msg)
         db.commit()
@@ -382,7 +508,9 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
             message=ai_result["content"],
             conversation_id=conversation.id,
             sources=ai_result.get("sources", []),
+            highlights=ai_result.get("highlights", []),
             tool_calls=ai_result.get("tool_calls", []),
+            tool_trace=ai_result.get("tool_trace", []),
             usage=ai_result.get("usage", {})
         )
         
@@ -394,7 +522,12 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
 
 
 @router.get("/conversations/{username}", response_model=List[ConversationResponse])
-async def get_conversations(username: str, http_request: Request, db: Session = Depends(get_db)):
+async def get_conversations(
+    username: str,
+    workspace_id: Optional[int] = None,
+    http_request: Request = None,
+    db: Session = Depends(get_db),
+):
     """获取用户的所有对话"""
     try:
         enforce_username_isolation(http_request, username)
@@ -405,12 +538,21 @@ async def get_conversations(username: str, http_request: Request, db: Session = 
         conversations = db.query(Conversation).filter(
             Conversation.user_id == user.id
         ).order_by(Conversation.updated_at.desc()).all()
+
+        if workspace_id:
+            filtered = []
+            for item in conversations:
+                meta = item.conversation_meta or {}
+                if int(meta.get("workspace_id") or 0) == int(workspace_id):
+                    filtered.append(item)
+            conversations = filtered
         
         return [
             ConversationResponse(
                 id=c.id,
                 title=c.title,
-                created_at=c.created_at.isoformat()
+                created_at=c.created_at.isoformat(),
+                workspace_id=int((c.conversation_meta or {}).get("workspace_id") or 0) or None,
             )
             for c in conversations
         ]
@@ -553,12 +695,16 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
             db.add(conversation)
             db.commit()
             db.refresh(conversation)
+        _apply_workspace_context_to_conversation(conversation, request.workspace_id)
+        db.add(conversation)
+        db.commit()
         
         # 3. 保存用户消息
         user_msg = Message(
             conversation_id=conversation.id,
             role="user",
-            content=request.message
+            content=request.message,
+            message_meta=_build_message_meta(workspace_id=request.workspace_id),
         )
         db.add(user_msg)
         db.commit()
@@ -604,7 +750,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                             conversation_id=conversation.id,
                             role="assistant",
                             content=grounded_answer,
-                            message_meta={"sources": ["grounded_structured_data"]},
+                            message_meta=_build_message_meta({"sources": ["grounded_structured_data"]}, workspace_id=request.workspace_id),
                         )
                         db.add(ai_msg)
                         db.commit()
@@ -654,14 +800,11 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
         if skill_context:
             edu_context = f"{edu_context}\n\n{skill_context}" if edu_context else skill_context
 
-        workspace_context = _build_workspace_context(db, request.username, request.message, session_store=session_store)
+        workspace_context = _build_workspace_context(db, request.username, request.message, session_store=session_store, workspace_id=request.workspace_id)
+        workspace_sources = _collect_context_sources(workspace_context)
+        workspace_highlights = _collect_context_highlights(workspace_context)
         if workspace_context:
-            workspace_parts = []
-            for idx, item in enumerate(workspace_context[:5], start=1):
-                workspace_parts.append(
-                    f"工作区知识[{idx}]：{item.get('title', '未知标题')} - {item.get('content', '')}"
-                )
-            workspace_text = "\n".join(workspace_parts)
+            workspace_text = _render_workspace_rag_context(workspace_context)
             edu_context = f"{edu_context}\n\n{workspace_text}" if edu_context else workspace_text
         
         # 7. 流式生成AI回复（先回包，再在流内执行工具调用/模型调用）
@@ -672,11 +815,52 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
             loop = asyncio.get_running_loop()
             chunk_queue: asyncio.Queue = asyncio.Queue()
             tool_calls_info = []
+            tool_trace_info = []
+            response_sources = workspace_sources[:]
+            response_highlights = workspace_highlights[:]
 
             try:
                 yield f"data: {json.dumps({'conversation_id': conversation.id, 'done': False})}\n\n"
                 if trace_id:
                     yield f"data: {json.dumps({'trace_id': trace_id, 'done': False})}\n\n"
+
+                if (request.execution_mode or "chat").strip().lower() == "agent":
+                    runtime = get_agent_runtime()
+                    agent_result = await runtime.run(
+                        username=request.username,
+                        message=request.message,
+                        framework=(request.agent_framework or "openai_agents").strip().lower(),
+                        session_store=session_store,
+                        workspace_id=request.workspace_id,
+                    )
+                    tool_trace_info = agent_result.get("tool_trace", []) or []
+                    tool_content = agent_result.get("content", "") or ""
+                    if tool_content:
+                        chunk_size = 16
+                        for i in range(0, len(tool_content), chunk_size):
+                            chunk = tool_content[i:i + chunk_size]
+                            full_content += chunk
+                            yield f"data: {json.dumps({'content': chunk, 'done': False})}\n\n"
+                            await asyncio.sleep(0.01)
+
+                    ai_msg = Message(
+                        conversation_id=conversation.id,
+                        role="assistant",
+                        content=full_content or "本轮 Agent 未返回有效内容。",
+                        message_meta=_build_message_meta({
+                            "tool_calls": tool_calls_info,
+                            "tool_trace": tool_trace_info,
+                            "framework": agent_result.get("framework", ""),
+                            "sources": response_sources,
+                            "highlights": response_highlights,
+                        }, workspace_id=request.workspace_id),
+                    )
+                    db.add(ai_msg)
+                    db.commit()
+
+                    yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info, 'tool_trace': tool_trace_info, 'sources': response_sources, 'highlights': response_highlights})}\n\n"
+                    done_sent = True
+                    return
 
                 # 7.1 优先工具调用（在流内执行，并发送 keepalive 防止连接空闲断开）
                 if tools_context:
@@ -705,12 +889,15 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                                     conversation_id=conversation.id,
                                     role="assistant",
                                     content=full_content,
-                                    message_meta={"tool_calls": tool_calls_info}
+                                    message_meta=_build_message_meta(
+                                        {"tool_calls": tool_calls_info, "tool_trace": tool_trace_info, "sources": response_sources, "highlights": response_highlights},
+                                        workspace_id=request.workspace_id,
+                                    )
                                 )
                                 db.add(ai_msg)
                                 db.commit()
 
-                                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info})}\n\n"
+                                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info, 'tool_trace': tool_trace_info, 'sources': response_sources, 'highlights': response_highlights})}\n\n"
                                 done_sent = True
                                 return
                     except Exception as e:
@@ -765,12 +952,15 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                     conversation_id=conversation.id,
                     role="assistant",
                     content=full_content,
-                    message_meta={"tool_calls": tool_calls_info} if tool_calls_info else None
+                    message_meta=_build_message_meta(
+                        {"tool_calls": tool_calls_info, "tool_trace": tool_trace_info, "sources": response_sources, "highlights": response_highlights},
+                        workspace_id=request.workspace_id,
+                    ) if (tool_calls_info or tool_trace_info or response_sources or response_highlights or request.workspace_id) else None
                 )
                 db.add(ai_msg)
                 db.commit()
 
-                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_trace': tool_trace_info, 'sources': response_sources, 'highlights': response_highlights})}\n\n"
                 done_sent = True
             except asyncio.CancelledError:
                 logger.warning(f"流式连接被客户端中断: conversation_id={conversation.id}")
@@ -785,7 +975,8 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                     ai_msg = Message(
                         conversation_id=conversation.id,
                         role="assistant",
-                        content=full_content or error_text
+                        content=full_content or error_text,
+                        message_meta=_build_message_meta(workspace_id=request.workspace_id),
                     )
                     db.add(ai_msg)
                     db.commit()
@@ -824,7 +1015,8 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                 ai_msg = Message(
                     conversation_id=conversation.id,
                     role="assistant",
-                    content=error_text
+                    content=error_text,
+                    message_meta=_build_message_meta(workspace_id=request.workspace_id),
                 )
                 db.add(ai_msg)
                 db.commit()

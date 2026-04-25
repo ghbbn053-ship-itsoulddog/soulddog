@@ -8,6 +8,9 @@
 
 from __future__ import annotations
 
+import csv
+import hashlib
+import io
 import json
 import logging
 import mimetypes
@@ -31,6 +34,26 @@ logger = logging.getLogger(__name__)
 
 UPLOAD_ROOT = Path("backend/data/workspace_uploads")
 
+try:
+    from pypdf import PdfReader
+except Exception:  # pragma: no cover - optional dependency
+    PdfReader = None
+
+try:
+    from docx import Document as DocxDocument
+except Exception:  # pragma: no cover - optional dependency
+    DocxDocument = None
+
+try:
+    from openpyxl import load_workbook
+except Exception:  # pragma: no cover - optional dependency
+    load_workbook = None
+
+try:
+    from pptx import Presentation
+except Exception:  # pragma: no cover - optional dependency
+    Presentation = None
+
 
 def _slugify(text: str) -> str:
     base = re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff_-]+", "-", (text or "").strip()).strip("-").lower()
@@ -42,6 +65,10 @@ def _normalize_text(text: str) -> str:
     raw = re.sub(r"\n{3,}", "\n\n", raw)
     lines = [line.strip() for line in raw.split("\n")]
     return "\n".join(lines).strip()
+
+
+def _hash_bytes(raw_bytes: bytes) -> str:
+    return hashlib.sha256(raw_bytes or b"").hexdigest()
 
 
 def _split_text(text: str, chunk_size: int = 900, overlap: int = 120) -> List[str]:
@@ -156,6 +183,245 @@ class WorkspaceKnowledgeService:
             )
         return relations
 
+    @staticmethod
+    def _decode_text_bytes(raw_bytes: bytes) -> str:
+        for encoding in ("utf-8", "utf-8-sig", "gb18030", "gbk", "latin-1"):
+            try:
+                return raw_bytes.decode(encoding)
+            except Exception:
+                continue
+        return raw_bytes.decode("utf-8", errors="ignore")
+
+    def _extract_pdf_text(self, raw_bytes: bytes) -> str:
+        if PdfReader is None:
+            raise ValueError("当前未安装 PDF 解析依赖 pypdf")
+        reader = PdfReader(io.BytesIO(raw_bytes))
+        parts: List[str] = []
+        for idx, page in enumerate(reader.pages):
+            page_text = (page.extract_text() or "").strip()
+            if page_text:
+                parts.append(f"[第 {idx + 1} 页]\n{page_text}")
+        return "\n\n".join(parts).strip()
+
+    def _extract_docx_text(self, raw_bytes: bytes) -> str:
+        if DocxDocument is None:
+            raise ValueError("当前未安装 DOCX 解析依赖 python-docx")
+        doc = DocxDocument(io.BytesIO(raw_bytes))
+        parts: List[str] = []
+        for paragraph in doc.paragraphs:
+            text = (paragraph.text or "").strip()
+            if text:
+                parts.append(text)
+        for table_idx, table in enumerate(doc.tables):
+            table_rows: List[str] = []
+            for row in table.rows:
+                cells = [(cell.text or "").strip() for cell in row.cells]
+                if any(cells):
+                    table_rows.append(" | ".join(cells))
+            if table_rows:
+                parts.append(f"[表格 {table_idx + 1}]\n" + "\n".join(table_rows))
+        return "\n\n".join(parts).strip()
+
+    def _extract_xlsx_text(self, raw_bytes: bytes) -> str:
+        if load_workbook is None:
+            raise ValueError("当前未安装 Excel 解析依赖 openpyxl")
+        workbook = load_workbook(io.BytesIO(raw_bytes), data_only=True)
+        parts: List[str] = []
+        for sheet in workbook.worksheets:
+            sheet_rows: List[str] = []
+            for row in sheet.iter_rows(values_only=True):
+                cells = [str(cell).strip() for cell in row if cell not in (None, "")]
+                if cells:
+                    sheet_rows.append(" | ".join(cells))
+            if sheet_rows:
+                parts.append(f"[工作表] {sheet.title}\n" + "\n".join(sheet_rows))
+        return "\n\n".join(parts).strip()
+
+    def _extract_pptx_text(self, raw_bytes: bytes) -> str:
+        if Presentation is None:
+            raise ValueError("当前未安装 PPTX 解析依赖 python-pptx")
+        prs = Presentation(io.BytesIO(raw_bytes))
+        slides: List[str] = []
+        for slide_idx, slide in enumerate(prs.slides):
+            texts: List[str] = []
+            for shape in slide.shapes:
+                text = getattr(shape, "text", "") or ""
+                text = text.strip()
+                if text:
+                    texts.append(text)
+            if texts:
+                slides.append(f"[幻灯片 {slide_idx + 1}]\n" + "\n".join(texts))
+        return "\n\n".join(slides).strip()
+
+    def _extract_csv_text(self, raw_bytes: bytes) -> str:
+        text = self._decode_text_bytes(raw_bytes)
+        reader = csv.reader(io.StringIO(text))
+        rows: List[str] = []
+        for row in reader:
+            cells = [cell.strip() for cell in row if cell and cell.strip()]
+            if cells:
+                rows.append(" | ".join(cells))
+        return "\n".join(rows).strip()
+
+    def _extract_upload_text(
+        self,
+        filename: str,
+        raw_bytes: bytes,
+        mime_type: Optional[str] = None,
+    ) -> Tuple[str, Dict]:
+        suffix = Path(filename).suffix.lower()
+        parser = "text"
+        if suffix == ".json":
+            parser = "json"
+            parsed = json.loads(self._decode_text_bytes(raw_bytes))
+            return json.dumps(parsed, ensure_ascii=False, indent=2), {"parser": parser}
+        if suffix in {".txt", ".md", ".markdown", ".yaml", ".yml", ".html", ".htm", ".xml", ".log"}:
+            return self._decode_text_bytes(raw_bytes), {"parser": parser}
+        if suffix == ".csv" or mime_type == "text/csv":
+            parser = "csv"
+            return self._extract_csv_text(raw_bytes), {"parser": parser}
+        if suffix == ".pdf":
+            parser = "pdf"
+            return self._extract_pdf_text(raw_bytes), {"parser": parser}
+        if suffix == ".docx":
+            parser = "docx"
+            return self._extract_docx_text(raw_bytes), {"parser": parser}
+        if suffix in {".xlsx", ".xlsm"}:
+            parser = "xlsx"
+            return self._extract_xlsx_text(raw_bytes), {"parser": parser}
+        if suffix == ".pptx":
+            parser = "pptx"
+            return self._extract_pptx_text(raw_bytes), {"parser": parser}
+        return self._decode_text_bytes(raw_bytes), {"parser": parser}
+
+    def _list_source_documents(
+        self,
+        db: Session,
+        owner_username: str,
+        workspace_id: int,
+        logical_name: str,
+    ) -> List[KnowledgeDocument]:
+        docs = (
+            db.query(KnowledgeDocument)
+            .join(KnowledgeSource, KnowledgeSource.id == KnowledgeDocument.source_id)
+            .filter(
+                KnowledgeDocument.owner_username == owner_username,
+                KnowledgeDocument.workspace_id == workspace_id,
+                KnowledgeSource.original_filename == logical_name,
+            )
+            .order_by(KnowledgeDocument.id.asc())
+            .all()
+        )
+        return docs
+
+    def _find_duplicate_document(
+        self,
+        db: Session,
+        owner_username: str,
+        workspace_id: int,
+        content_hash: str,
+    ) -> Optional[KnowledgeDocument]:
+        docs = (
+            db.query(KnowledgeDocument)
+            .filter(
+                KnowledgeDocument.owner_username == owner_username,
+                KnowledgeDocument.workspace_id == workspace_id,
+            )
+            .order_by(KnowledgeDocument.id.desc())
+            .all()
+        )
+        for doc in docs:
+            meta = doc.metadata_json or {}
+            if str(meta.get("content_hash", "")) == content_hash:
+                return doc
+        return None
+
+    def _next_version(
+        self,
+        db: Session,
+        owner_username: str,
+        workspace_id: int,
+        logical_name: str,
+    ) -> int:
+        docs = self._list_source_documents(db, owner_username, workspace_id, logical_name)
+        version = 1
+        for doc in docs:
+            current = int((doc.metadata_json or {}).get("version", 1) or 1)
+            if current >= version:
+                version = current + 1
+        return version
+
+    def _persist_failed_document(
+        self,
+        db: Session,
+        owner_username: str,
+        workspace: Workspace,
+        filename: str,
+        raw_bytes: bytes,
+        source_type: str,
+        mime_type: Optional[str],
+        authority_level: str,
+        error_message: str,
+        extra_meta: Optional[Dict] = None,
+    ) -> KnowledgeDocument:
+        version = self._next_version(db, owner_username, workspace.id, filename)
+        owner_dir = self._owner_dir(owner_username, workspace.slug)
+        storage_name = filename if version == 1 else f"{Path(filename).stem}.v{version}{Path(filename).suffix}"
+        target_path = owner_dir / storage_name
+        target_path.write_bytes(raw_bytes or b"")
+
+        detected_mime = mime_type or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        content_hash = _hash_bytes(raw_bytes or b"")
+        source = KnowledgeSource(
+            workspace_id=workspace.id,
+            owner_username=owner_username,
+            source_type=source_type,
+            title=filename,
+            mime_type=detected_mime,
+            original_filename=filename,
+            storage_path=str(target_path),
+            status="failed",
+            authority_level=authority_level,
+            meta_json={
+                "content_hash": content_hash,
+                "logical_name": filename,
+                "storage_name": storage_name,
+                "version": version,
+                "file_size": len(raw_bytes or b""),
+                "error": error_message,
+                **(extra_meta or {}),
+            },
+        )
+        db.add(source)
+        db.flush()
+
+        doc = KnowledgeDocument(
+            workspace_id=workspace.id,
+            source_id=source.id,
+            owner_username=owner_username,
+            title=Path(filename).stem or filename,
+            doc_type="document",
+            status="failed",
+            summary=f"文档解析失败：{error_message}",
+            content_text="",
+            token_estimate=0,
+            metadata_json={
+                "filename": filename,
+                "source_type": source_type,
+                "mime_type": detected_mime,
+                "content_hash": content_hash,
+                "version": version,
+                "authority_level": authority_level,
+                "storage_name": storage_name,
+                "error": error_message,
+                **(extra_meta or {}),
+            },
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+        return doc
+
     def ingest_text_document(
         self,
         db: Session,
@@ -166,6 +432,7 @@ class WorkspaceKnowledgeService:
         source_type: str = "upload",
         mime_type: Optional[str] = None,
         extra_meta: Optional[Dict] = None,
+        authority_level: str = "user",
     ) -> KnowledgeDocument:
         workspace = (
             db.query(Workspace)
@@ -179,8 +446,16 @@ class WorkspaceKnowledgeService:
         if not normalized:
             raise ValueError("文档内容为空")
 
+        raw_bytes = normalized.encode("utf-8")
+        content_hash = _hash_bytes(raw_bytes)
+        duplicate = self._find_duplicate_document(db, owner_username, workspace.id, content_hash)
+        if duplicate:
+            return duplicate
+
+        version = self._next_version(db, owner_username, workspace.id, filename)
         owner_dir = self._owner_dir(owner_username, workspace.slug)
-        target_path = owner_dir / filename
+        storage_name = filename if version == 1 else f"{Path(filename).stem}.v{version}{Path(filename).suffix}"
+        target_path = owner_dir / storage_name
         target_path.write_text(normalized, encoding="utf-8")
 
         detected_mime = mime_type or mimetypes.guess_type(filename)[0] or "text/plain"
@@ -192,9 +467,16 @@ class WorkspaceKnowledgeService:
             mime_type=detected_mime,
             original_filename=filename,
             storage_path=str(target_path),
-            status="ready",
-            authority_level="user",
-            meta_json=extra_meta or {},
+            status="processing",
+            authority_level=authority_level,
+            meta_json={
+                "content_hash": content_hash,
+                "logical_name": filename,
+                "storage_name": storage_name,
+                "version": version,
+                "file_size": len(raw_bytes),
+                **(extra_meta or {}),
+            },
         )
         db.add(source)
         db.flush()
@@ -215,6 +497,10 @@ class WorkspaceKnowledgeService:
                 "filename": filename,
                 "source_type": source_type,
                 "mime_type": detected_mime,
+                "content_hash": content_hash,
+                "version": version,
+                "authority_level": authority_level,
+                "storage_name": storage_name,
                 **(extra_meta or {}),
             },
         )
@@ -242,11 +528,65 @@ class WorkspaceKnowledgeService:
         if relations:
             db.add_all(relations)
 
+        source.status = "ready"
         db.commit()
         db.refresh(doc)
 
         self._vectorize_document(doc, chunk_rows)
         return doc
+
+    def ingest_uploaded_document(
+        self,
+        db: Session,
+        owner_username: str,
+        workspace_id: int,
+        filename: str,
+        raw_bytes: bytes,
+        source_type: str = "upload",
+        mime_type: Optional[str] = None,
+        authority_level: str = "user",
+        extra_meta: Optional[Dict] = None,
+    ) -> KnowledgeDocument:
+        if not raw_bytes:
+            raise ValueError("上传文件为空")
+        workspace = (
+            db.query(Workspace)
+            .filter(Workspace.id == workspace_id, Workspace.owner_username == owner_username)
+            .first()
+        )
+        if not workspace:
+            raise ValueError("工作区不存在")
+
+        try:
+            extracted_text, parse_meta = self._extract_upload_text(filename, raw_bytes, mime_type=mime_type)
+            return self.ingest_text_document(
+                db=db,
+                owner_username=owner_username,
+                workspace_id=workspace_id,
+                filename=filename,
+                content_text=extracted_text,
+                source_type=source_type,
+                mime_type=mime_type,
+                authority_level=authority_level,
+                extra_meta={
+                    "original_file_size": len(raw_bytes),
+                    **parse_meta,
+                    **(extra_meta or {}),
+                },
+            )
+        except ValueError as e:
+            return self._persist_failed_document(
+                db=db,
+                owner_username=owner_username,
+                workspace=workspace,
+                filename=filename,
+                raw_bytes=raw_bytes,
+                source_type=source_type,
+                mime_type=mime_type,
+                authority_level=authority_level,
+                error_message=str(e),
+                extra_meta={"original_file_size": len(raw_bytes), **(extra_meta or {})},
+            )
 
     def _vectorize_document(self, document: KnowledgeDocument, chunks: List[KnowledgeChunk]):
         if not chunks:
@@ -286,7 +626,201 @@ class WorkspaceKnowledgeService:
         query = db.query(KnowledgeDocument).filter(KnowledgeDocument.owner_username == owner_username)
         if workspace_id:
             query = query.filter(KnowledgeDocument.workspace_id == workspace_id)
-        return query.order_by(KnowledgeDocument.id.desc()).all()
+        docs = query.order_by(KnowledgeDocument.id.desc()).all()
+        hash_counts: Dict[str, int] = {}
+        latest_version_by_name: Dict[str, int] = {}
+
+        for doc in docs:
+            meta = doc.metadata_json or {}
+            content_hash = str(meta.get("content_hash", "")).strip()
+            logical_name = str(meta.get("filename", "")).strip()
+            version = int(meta.get("version", 1) or 1)
+            if content_hash:
+                hash_counts[content_hash] = hash_counts.get(content_hash, 0) + 1
+            if logical_name:
+                latest_version_by_name[logical_name] = max(latest_version_by_name.get(logical_name, 1), version)
+
+        for doc in docs:
+            meta = dict(doc.metadata_json or {})
+            content_hash = str(meta.get("content_hash", "")).strip()
+            logical_name = str(meta.get("filename", "")).strip()
+            version = int(meta.get("version", 1) or 1)
+            meta["duplicate_count"] = hash_counts.get(content_hash, 1) if content_hash else 1
+            meta["is_duplicate"] = bool(content_hash and hash_counts.get(content_hash, 0) > 1)
+            meta["latest_version"] = latest_version_by_name.get(logical_name, version) if logical_name else version
+            meta["is_latest_version"] = meta["latest_version"] == version
+            doc.metadata_json = meta
+        return docs
+
+    def get_workspace_knowledge_overview(self, db: Session, owner_username: str, workspace_id: int) -> Dict:
+        workspace = (
+            db.query(Workspace)
+            .filter(Workspace.id == workspace_id, Workspace.owner_username == owner_username)
+            .first()
+        )
+        if not workspace:
+            raise ValueError("工作区不存在")
+
+        docs = self.list_documents(db, owner_username, workspace_id=workspace_id)
+        relation_count = (
+            db.query(KnowledgeRelation)
+            .filter(KnowledgeRelation.workspace_id == workspace_id, KnowledgeRelation.owner_username == owner_username)
+            .count()
+        )
+        chunk_count = (
+            db.query(KnowledgeChunk)
+            .filter(KnowledgeChunk.workspace_id == workspace_id, KnowledgeChunk.owner_username == owner_username)
+            .count()
+        )
+
+        by_doc_type: Dict[str, int] = {}
+        by_status: Dict[str, int] = {}
+        by_authority: Dict[str, int] = {}
+        total_tokens = 0
+
+        serialized_documents: List[Dict] = []
+        for doc in docs:
+            meta = dict(doc.metadata_json or {})
+            authority_level = str(meta.get("authority_level", "user") or "user")
+            by_doc_type[doc.doc_type] = by_doc_type.get(doc.doc_type, 0) + 1
+            by_status[doc.status] = by_status.get(doc.status, 0) + 1
+            by_authority[authority_level] = by_authority.get(authority_level, 0) + 1
+            total_tokens += int(doc.token_estimate or 0)
+            serialized_documents.append(
+                {
+                    "id": doc.id,
+                    "workspace_id": doc.workspace_id,
+                    "title": doc.title,
+                    "doc_type": doc.doc_type,
+                    "summary": doc.summary,
+                    "status": doc.status,
+                    "token_estimate": doc.token_estimate,
+                    "metadata": meta,
+                    "created_at": doc.created_at.isoformat() if doc.created_at else None,
+                    "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
+                }
+            )
+
+        return {
+            "workspace": {
+                "id": workspace.id,
+                "slug": workspace.slug,
+                "name": workspace.name,
+                "description": workspace.description,
+                "is_default": workspace.is_default,
+            },
+            "stats": {
+                "documents": len(docs),
+                "knowledge_units": chunk_count,
+                "relations": relation_count,
+                "ready_documents": by_status.get("ready", 0),
+                "failed_documents": by_status.get("failed", 0),
+                "total_tokens": total_tokens,
+                "by_doc_type": by_doc_type,
+                "by_status": by_status,
+                "by_authority": by_authority,
+            },
+            "documents": serialized_documents,
+        }
+
+    def list_document_chunks(self, db: Session, owner_username: str, workspace_id: int, document_id: int) -> List[Dict]:
+        workspace = (
+            db.query(Workspace)
+            .filter(Workspace.id == workspace_id, Workspace.owner_username == owner_username)
+            .first()
+        )
+        if not workspace:
+            raise ValueError("工作区不存在")
+
+        document = (
+            db.query(KnowledgeDocument)
+            .filter(
+                KnowledgeDocument.id == document_id,
+                KnowledgeDocument.workspace_id == workspace_id,
+                KnowledgeDocument.owner_username == owner_username,
+            )
+            .first()
+        )
+        if not document:
+            raise ValueError("文档不存在")
+
+        chunks = (
+            db.query(KnowledgeChunk)
+            .filter(
+                KnowledgeChunk.document_id == document_id,
+                KnowledgeChunk.workspace_id == workspace_id,
+                KnowledgeChunk.owner_username == owner_username,
+            )
+            .order_by(KnowledgeChunk.chunk_index.asc())
+            .all()
+        )
+        return [
+            {
+                "id": chunk.id,
+                "document_id": document_id,
+                "workspace_id": workspace_id,
+                "chunk_index": chunk.chunk_index,
+                "title": chunk.title,
+                "content": chunk.content,
+                "char_count": chunk.char_count,
+                "metadata": chunk.metadata_json or {},
+            }
+            for chunk in chunks
+        ]
+
+    def delete_document(self, db: Session, owner_username: str, workspace_id: int, document_id: int) -> Dict:
+        workspace = (
+            db.query(Workspace)
+            .filter(Workspace.id == workspace_id, Workspace.owner_username == owner_username)
+            .first()
+        )
+        if not workspace:
+            raise ValueError("工作区不存在")
+
+        document = (
+            db.query(KnowledgeDocument)
+            .filter(
+                KnowledgeDocument.id == document_id,
+                KnowledgeDocument.workspace_id == workspace_id,
+                KnowledgeDocument.owner_username == owner_username,
+            )
+            .first()
+        )
+        if not document:
+            raise ValueError("文档不存在")
+
+        source = (
+            db.query(KnowledgeSource)
+            .filter(
+                KnowledgeSource.id == document.source_id,
+                KnowledgeSource.workspace_id == workspace_id,
+                KnowledgeSource.owner_username == owner_username,
+            )
+            .first()
+        )
+        title = document.title
+        storage_path = source.storage_path if source else None
+
+        db.delete(document)
+        if source:
+            remaining = (
+                db.query(KnowledgeDocument)
+                .filter(KnowledgeDocument.source_id == source.id)
+                .count()
+            )
+            if remaining <= 0:
+                db.delete(source)
+        db.commit()
+
+        try:
+            if storage_path:
+                path = Path(storage_path)
+                if path.exists():
+                    path.unlink()
+        except Exception as e:
+            logger.warning("删除工作区文档文件失败: %s", e)
+
+        return {"success": True, "title": title}
 
     @staticmethod
     def _fallback_search_score(query: str, text: str) -> float:

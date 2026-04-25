@@ -49,6 +49,10 @@ psycopg2-binary==2.9.10
 # 数据处理
 pandas==2.2.3
 numpy==1.26.4
+openpyxl==3.1.5
+python-docx==1.1.2
+python-pptx==1.0.2
+pypdf==5.4.0
 
 # MCP (Model Context Protocol)
 mcp==1.8.0

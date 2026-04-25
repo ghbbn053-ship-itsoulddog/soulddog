@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Optional
 
@@ -30,6 +29,7 @@ class TextIngestRequest(BaseModel):
     workspace_id: int
     filename: str
     content: str
+    authority_level: Optional[str] = "user"
 
 
 class WorkspaceSearchRequest(BaseModel):
@@ -56,6 +56,35 @@ async def list_workspaces(username: str, http_request: Request, db: Session = De
             }
             for item in items
         ],
+    }
+
+
+@router.get("/{username}/detail/{workspace_id}")
+async def workspace_detail(username: str, workspace_id: int, http_request: Request, db: Session = Depends(get_db)):
+    enforce_username_isolation(http_request, username)
+    svc = get_workspace_knowledge_service()
+    items = svc.list_workspaces(db, username)
+    workspace = next((item for item in items if item.id == workspace_id), None)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="工作区不存在")
+
+    docs = svc.list_documents(db, username, workspace_id=workspace_id)
+    graph = svc.get_workspace_graph(db, username, workspace_id)
+    return {
+        "success": True,
+        "workspace": {
+            "id": workspace.id,
+            "slug": workspace.slug,
+            "name": workspace.name,
+            "description": workspace.description,
+            "is_default": workspace.is_default,
+        },
+        "stats": {
+            "documents": len(docs),
+            "graph_nodes": len(graph.get("nodes", [])),
+            "graph_edges": len(graph.get("edges", [])),
+        },
+        "graph": graph,
     }
 
 
@@ -116,6 +145,7 @@ async def ingest_text_document(payload: TextIngestRequest, http_request: Request
             filename=payload.filename,
             content_text=payload.content,
             source_type="manual",
+            authority_level=payload.authority_level or "user",
         )
         return {"success": True, "document_id": doc.id}
     except ValueError as e:
@@ -128,6 +158,7 @@ async def ingest_text_document(payload: TextIngestRequest, http_request: Request
 async def upload_document(
     username: str = Form(...),
     workspace_id: int = Form(...),
+    authority_level: str = Form("user"),
     document_file: UploadFile = File(...),
     http_request: Request = None,
     db: Session = Depends(get_db),
@@ -138,19 +169,15 @@ async def upload_document(
     raw = await document_file.read()
 
     try:
-        if filename.lower().endswith(".json"):
-            parsed = json.loads(raw.decode("utf-8", errors="ignore"))
-            content = json.dumps(parsed, ensure_ascii=False, indent=2)
-        else:
-            content = raw.decode("utf-8", errors="ignore")
-        doc = svc.ingest_text_document(
+        doc = svc.ingest_uploaded_document(
             db,
             owner_username=username,
             workspace_id=workspace_id,
             filename=filename,
-            content_text=content,
+            raw_bytes=raw,
             source_type="upload",
             mime_type=document_file.content_type,
+            authority_level=authority_level,
         )
         return {"success": True, "document_id": doc.id}
     except ValueError as e:

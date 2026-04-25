@@ -165,7 +165,12 @@ class LiteLLMProvider(BaseProvider):
         if education_context:
             system_ctx = {
                 "role": "system",
-                "content": f"以下是该学生教务数据，请严格基于数据回答：\n{education_context}",
+                "content": (
+                    "以下是当前可用的事实与知识，请据此回答用户问题。\n"
+                    "回答自然直接，不要机械复述“根据以上数据”。\n"
+                    "没有依据就明确说无法确认，不要补虚构细节。\n\n"
+                    f"{education_context}"
+                ),
             }
             stream_messages = [system_ctx] + messages
 
@@ -200,7 +205,12 @@ class LiteLLMProvider(BaseProvider):
         if education_context:
             system_ctx = {
                 "role": "system",
-                "content": f"以下是该学生教务数据，请严格基于数据回答：\n{education_context}",
+                "content": (
+                    "以下是当前可用的事实与知识，请据此回答用户问题。\n"
+                    "回答自然直接，不要机械复述“根据以上数据”。\n"
+                    "没有依据就明确说无法确认，不要补虚构细节。\n\n"
+                    f"{education_context}"
+                ),
             }
             stream_messages = [system_ctx] + messages
 

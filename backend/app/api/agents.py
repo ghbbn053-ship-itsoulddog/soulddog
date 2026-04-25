@@ -28,7 +28,7 @@ async def run_agent(payload: AgentRunRequest, http_request: Request):
     enforce_username_isolation(http_request, payload.username)
     runtime = get_agent_runtime()
     session_store = getattr(http_request.app.state, "session_store", None)
-    result = runtime.run(
+    result = await runtime.run(
         username=payload.username,
         message=payload.message,
         framework=payload.framework,

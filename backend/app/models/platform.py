@@ -163,3 +163,27 @@ class MCPServerManifest(Base):
     __table_args__ = (
         UniqueConstraint("owner_username", "name", name="uq_mcp_manifest_owner_name"),
     )
+
+
+class WorkspaceSuggestion(Base):
+    __tablename__ = "workspace_suggestions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=False, index=True)
+    owner_username = Column(String(50), nullable=False, index=True)
+    suggestion_key = Column(String(160), nullable=False, comment="建议幂等键")
+    suggestion_type = Column(String(50), nullable=False, comment="exam_reminder/class_reminder/study_plan/knowledge_gap/review_reminder/data_refresh")
+    title = Column(String(255), nullable=False)
+    content = Column(Text, nullable=False)
+    reason = Column(Text, nullable=True)
+    tone = Column(String(20), nullable=False, default="normal", comment="normal/warning/urgent")
+    status = Column(String(20), nullable=False, default="active", comment="active/accepted/dismissed/expired")
+    payload_json = Column(JSON, default=dict)
+    accepted_at = Column(DateTime(timezone=True), nullable=True)
+    dismissed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "suggestion_key", name="uq_workspace_suggestion_workspace_key"),
+    )

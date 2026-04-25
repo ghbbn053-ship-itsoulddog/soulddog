@@ -14,6 +14,7 @@ from app.models.platform import (
     KnowledgeRelation,
     SkillManifest,
     MCPServerManifest,
+    WorkspaceSuggestion,
 )
 
 # 创建所有表
@@ -39,4 +40,5 @@ __all__ = [
     "KnowledgeRelation",
     "SkillManifest",
     "MCPServerManifest",
+    "WorkspaceSuggestion",
 ]

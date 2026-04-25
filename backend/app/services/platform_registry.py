@@ -38,7 +38,10 @@ class PlatformRegistryService:
             record.tools = item.get("tools", []) or []
             record.source_type = "yaml"
             record.source_ref = f"skills/{owner_username}/{name}.yaml"
-            record.metadata_json = {"updated_at": item.get("updated_at")}
+            record.metadata_json = {
+                "updated_at": item.get("updated_at"),
+                "input_schema": item.get("input_schema", {}) or {},
+            }
             out.append(record)
         db.commit()
         return out

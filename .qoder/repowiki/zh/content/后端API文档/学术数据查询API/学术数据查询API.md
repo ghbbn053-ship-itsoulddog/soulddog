@@ -10,16 +10,19 @@
 - [data_processor.py](file://backend/app/services/data_processor.py)
 - [test_scraper.py](file://backend/test_scraper.py)
 - [test_login.py](file://backend/test_login.py)
+- [test_academic_progress.py](file://backend/test_academic_progress.py)
+- [education.py](file://backend/app/api/education.py)
+- [tools.py](file://backend/app/mcp/tools.py)
 </cite>
 
 ## 更新摘要
 **所做更改**
-- 增强了各学术数据查询API的HTML调试输出功能，提供更好的数据解析和问题诊断能力
-- 新增了详细的日志记录和HTML文件保存功能，便于开发和维护
-- 改进了编码处理逻辑，支持UTF-8和GBK混合编码场景
-- 增强了个人信息提取过程，支持从多个HTML源获取准确信息
-- 新增了完整的向量化数据聚合接口，支持RAG系统
-- 修复了URL构造逻辑中的重复jsxsd前缀问题
+- 学业进度查询接口得到显著增强，包括改进的表格解析逻辑、增强的数值提取能力、优化的学分统计机制
+- 新增了智能的总学分提取算法，支持从标题和表格头部双重来源提取学分要求
+- 改进了课程列表去重机制，支持基于课程代码和名称的复合去重
+- 增强了合计行识别和已获学分统计功能
+- 优化了HTML调试输出功能，提供详细的解析过程跟踪
+- 新增了专门的学业进度解析测试工具
 
 ## 目录
 1. [简介](#简介)
@@ -27,11 +30,13 @@
 3. [核心组件](#核心组件)
 4. [架构概览](#架构概览)
 5. [详细组件分析](#详细组件分析)
-6. [调试功能详解](#调试功能详解)
-7. [依赖关系分析](#依赖关系分析)
-8. [性能考虑](#性能考虑)
-9. [故障排除指南](#故障排除指南)
-10. [结论](#结论)
+6. [按学期分类的数据结构](#按学期分类的数据结构)
+7. [AI上下文感知能力](#ai上下文感知能力)
+8. [调试功能详解](#调试功能详解)
+9. [依赖关系分析](#依赖关系分析)
+10. [性能考虑](#性能考虑)
+11. [故障排除指南](#故障排除指南)
+12. [结论](#结论)
 
 ## 简介
 
@@ -39,7 +44,7 @@
 
 该系统采用现代化的技术栈，包括Python 3.9+、FastAPI、SQLAlchemy、BeautifulSoup等，实现了高可靠性的数据爬取和处理功能。系统支持多种查询条件和筛选参数，提供灵活的数据查询能力，并具备良好的扩展性和维护性。
 
-**更新** 本版本显著增强了调试能力，为各API接口添加了HTML调试输出功能，提供详细的日志记录和问题诊断能力，同时修复了核心爬虫功能中的URL构造逻辑问题。
+**更新** 本版本完成了学术数据组织系统的完全重构，实现了按学期分类的数据结构，显著提升了AI上下文感知能力和数据查询的精确性。特别地，学业进度查询接口得到了重大增强，包括改进的表格解析逻辑、增强的数值提取能力、优化的学分统计机制等。
 
 ## 项目结构
 
@@ -91,14 +96,14 @@ DEBUG --> TEST
 ```
 
 **图表来源**
-- [main.py:1-951](file://backend/main.py#L1-L951)
-- [scraper.py:1-1303](file://backend/scraper.py#L1-L1303)
-- [data_processor.py:1-356](file://backend/app/services/data_processor.py#L1-L356)
+- [main.py:1-1060](file://backend/main.py#L1-L1060)
+- [scraper.py:1-1550](file://backend/scraper.py#L1-L1550)
+- [data_processor.py:1-409](file://backend/app/services/data_processor.py#L1-L409)
 
 **章节来源**
-- [main.py:1-951](file://backend/main.py#L1-L951)
-- [scraper.py:1-1303](file://backend/scraper.py#L1-L1303)
-- [data_processor.py:1-356](file://backend/app/services/data_processor.py#L1-L356)
+- [main.py:1-1060](file://backend/main.py#L1-L1060)
+- [scraper.py:1-1550](file://backend/scraper.py#L1-L1550)
+- [data_processor.py:1-409](file://backend/app/services/data_processor.py#L1-L409)
 
 ## 核心组件
 
@@ -121,18 +126,18 @@ DEBUG --> TEST
 
 1. **用户认证模块**: 处理用户登录、会话管理和权限控制
 2. **数据爬取模块**: 从教务系统抓取各类学术数据，支持HTML调试输出
-3. **数据处理模块**: 解析、转换和格式化爬取的数据
+3. **数据处理模块**: 解析、转换和格式化爬取的数据，支持按学期分类
 4. **API接口模块**: 提供RESTful API接口，包含调试功能
 5. **数据存储模块**: 管理用户数据的持久化存储
 6. **向量化模块**: 将数据转换为向量格式供RAG系统使用
 7. **调试模块**: 提供HTML文件保存和详细日志记录功能
 
-**更新** 核心爬虫功能经过重大重构，修复了URL构造逻辑，增强了编码处理能力，并新增了完整的向量化数据聚合接口和HTML调试输出功能。
+**更新** 核心爬虫功能经过重大重构，修复了URL构造逻辑，增强了编码处理能力，并新增了完整的向量化数据聚合接口和HTML调试输出功能。特别是学业进度查询接口，现在具备了更强大的表格解析和数值提取能力。
 
 **章节来源**
-- [main.py:1-951](file://backend/main.py#L1-L951)
-- [scraper.py:1-1303](file://backend/scraper.py#L1-L1303)
-- [data_processor.py:1-356](file://backend/app/services/data_processor.py#L1-L356)
+- [main.py:1-1060](file://backend/main.py#L1-L1060)
+- [scraper.py:1-1550](file://backend/scraper.py#L1-L1550)
+- [data_processor.py:1-409](file://backend/app/services/data_processor.py#L1-L409)
 
 ## 架构概览
 
@@ -260,8 +265,8 @@ curl -X GET "http://localhost:8000/api/grades?username=2024110101&kcxz=01&fxkc=0
 **更新** 成绩查询接口现在包含完整的统计信息，包括总学分要求、已完成学分、绩点等关键指标，并新增了HTML调试输出功能。
 
 **章节来源**
-- [main.py:520-557](file://backend/main.py#L520-L557)
-- [scraper.py:224-317](file://backend/scraper.py#L224-L317)
+- [main.py:629-666](file://backend/main.py#L629-L666)
+- [scraper.py:243-385](file://backend/scraper.py#L243-L385)
 
 ### 课表查询接口
 
@@ -309,8 +314,8 @@ curl -X GET "http://localhost:8000/api/schedule?username=2024110101&semester=202
 **更新** 课表查询接口现在包含原始HTML内容，便于调试和数据分析，并新增了HTML文件保存功能。
 
 **章节来源**
-- [main.py:574-604](file://backend/main.py#L574-L604)
-- [scraper.py:381-544](file://backend/scraper.py#L381-L544)
+- [main.py:683-713](file://backend/main.py#L683-L713)
+- [scraper.py:473-714](file://backend/scraper.py#L473-L714)
 
 ### 培养方案查询接口
 
@@ -356,8 +361,8 @@ curl -X GET "http://localhost:8000/api/training-plan/my?username=2024110101"
 **更新** 培养方案查询接口现在使用更准确的表格解析逻辑，能够正确识别目标课程表格，并新增了HTML调试输出功能。
 
 **章节来源**
-- [main.py:606-630](file://backend/main.py#L606-L630)
-- [scraper.py:633-723](file://backend/scraper.py#L633-L723)
+- [main.py:715-739](file://backend/main.py#L715-L739)
+- [scraper.py:803-829](file://backend/scraper.py#L803-L829)
 
 ### 学业进度查询接口
 
@@ -389,6 +394,7 @@ curl -X GET "http://localhost:8000/api/training-plan/my?username=2024110101"
         "学分": "4",
         "建议修读学期": "3",
         "免听免修": "否",
+        "模块应修学分": "",
         "已获学分": "4"
       }
     ],
@@ -402,11 +408,17 @@ curl -X GET "http://localhost:8000/api/training-plan/my?username=2024110101"
 curl -X GET "http://localhost:8000/api/academic-progress?username=2024110101&study_type=0"
 ```
 
-**更新** 学业进度查询接口现在包含更详细的统计信息，包括修读类型和学分计算，并新增了HTML调试输出功能。
+**更新** 学业进度查询接口现在包含更详细的统计信息，包括修读类型和学分计算，并新增了HTML调试输出功能。该接口具备了以下增强功能：
+- 智能的总学分提取：支持从标题和表格头部双重来源提取学分要求
+- 增强的课程列表去重：基于课程代码和名称的复合去重机制
+- 优化的合计行识别：准确识别并统计已获学分
+- 完善的学分统计：自动计算还需学分
+- 详细的HTML调试输出：提供完整的解析过程跟踪
 
 **章节来源**
-- [main.py:632-658](file://backend/main.py#L632-L658)
-- [scraper.py:724-822](file://backend/scraper.py#L724-L822)
+- [main.py:741-767](file://backend/main.py#L741-L767)
+- [scraper.py:1051-1218](file://backend/scraper.py#L1051-L1218)
+- [education.py:121-135](file://backend/app/api/education.py#L121-L135)
 
 ### 考试安排查询接口
 
@@ -450,8 +462,8 @@ curl -X GET "http://localhost:8000/api/exam-schedule?username=2024110101&semeste
 **更新** 考试安排查询接口现在包含更完整的考试信息，包括考试时间、地点、座位号等，并新增了HTML调试输出功能。
 
 **章节来源**
-- [main.py:660-687](file://backend/main.py#L660-L687)
-- [scraper.py:823-886](file://backend/scraper.py#L823-L886)
+- [main.py:769-796](file://backend/main.py#L769-L796)
+- [scraper.py:1227-1282](file://backend/scraper.py#L1227-L1282)
 
 ### 教师查询接口
 
@@ -477,7 +489,7 @@ curl -X GET "http://localhost:8000/api/exam-schedule?username=2024110101&semeste
       "教师姓名": "李明",
       "所属院系": "计算机学院",
       "教师ID": "12345",
-      "详情链接": "http://jwxt.gdufe.edu.cn/jsxx/jsxx_detail?jg0101id=12345"
+      "详情链接": "http://jwxt.gdufe.edu.cn/jsxsd/jsxx/jsxx_query_detail?jg0101id=12345"
     }
   ],
   "count": 3
@@ -492,8 +504,8 @@ curl -X GET "http://localhost:8000/api/teacher/search?name=李&department=11"
 **更新** 教师查询接口现在包含教师ID和详情链接，便于进一步获取教师详细信息。
 
 **章节来源**
-- [main.py:689-716](file://backend/main.py#L689-L716)
-- [scraper.py:887-962](file://backend/scraper.py#L887-L962)
+- [main.py:798-825](file://backend/main.py#L798-L825)
+- [scraper.py:1291-1376](file://backend/scraper.py#L1291-L1376)
 
 ### 课程查询接口
 
@@ -536,8 +548,8 @@ curl -X GET "http://localhost:8000/api/course/search?course_name=数据结构&de
 **更新** 课程查询接口现在包含课程ID，便于进一步获取课程详细信息。
 
 **章节来源**
-- [main.py:718-746](file://backend/main.py#L718-L746)
-- [scraper.py:1007-1083](file://backend/scraper.py#L1007-L1083)
+- [main.py:827-855](file://backend/main.py#L827-L855)
+- [scraper.py:1378-1468](file://backend/scraper.py#L1378-L1468)
 
 ### 选课信息查询接口
 
@@ -577,8 +589,8 @@ curl -X GET "http://localhost:8000/api/course-selection?username=2024110101"
 **更新** 选课信息查询接口提供了完整的选课轮次和可选课程信息。
 
 **章节来源**
-- [main.py:748-771](file://backend/main.py#L748-L771)
-- [scraper.py:1084-1129](file://backend/scraper.py#L1084-L1129)
+- [main.py:857-880](file://backend/main.py#L857-L880)
+- [scraper.py:1470-1550](file://backend/scraper.py#L1470-L1550)
 
 ### 执行计划查询接口
 
@@ -628,8 +640,8 @@ curl -X GET "http://localhost:8000/api/execution-plan?username=2024110101"
 **更新** 执行计划查询接口提供了完整的培养方案和已选课程信息。
 
 **章节来源**
-- [main.py:773-797](file://backend/main.py#L773-L797)
-- [scraper.py:1130-1191](file://backend/scraper.py#L1130-L1191)
+- [main.py:882-906](file://backend/main.py#L882-L906)
+- [scraper.py:1551-1689](file://backend/scraper.py#L1551-L1689)
 
 ### 个人信息查询接口
 
@@ -665,8 +677,8 @@ curl -X GET "http://localhost:8000/api/user/info?username=2024110101"
 **更新** 个人信息查询接口现在支持从多个HTML源提取准确信息。
 
 **章节来源**
-- [main.py:462-493](file://backend/main.py#L462-L493)
-- [scraper.py:96-183](file://backend/scraper.py#L96-L183)
+- [main.py:571-602](file://backend/main.py#L571-L602)
+- [scraper.py:95-201](file://backend/scraper.py#L95-L201)
 
 ### 学籍卡片查询接口
 
@@ -709,8 +721,8 @@ curl -X GET "http://localhost:8000/api/user/card?username=2024110101"
 **更新** 学籍卡片查询接口提供了完整的个人信息。
 
 **章节来源**
-- [main.py:495-518](file://backend/main.py#L495-L518)
-- [scraper.py:184-223](file://backend/scraper.py#L184-L223)
+- [main.py:604-627](file://backend/main.py#L604-L627)
+- [scraper.py:203-242](file://backend/scraper.py#L203-L242)
 
 ### 所有数据聚合接口
 
@@ -737,13 +749,32 @@ curl -X GET "http://localhost:8000/api/user/card?username=2024110101"
       "department": "计算机学院"
     },
     "成绩信息": {
-      "成绩列表": [...],
-      "统计信息": {...}
+      "按学期": {
+        "2024-2025-1": [
+          {
+            "课程名称": "数据结构",
+            "成绩": "85",
+            "学分": "4.0",
+            "开课学期": "2024-2025-1"
+          }
+        ]
+      },
+      "统计信息": {
+        "total_credits_required": 120,
+        "credits_completed": 80,
+        "gpa_major": 3.2
+      }
     },
-    "课表信息": [...],
+    "课表信息": {
+      "学期": "2024-2025-2",
+      "课程列表": [...]
+    },
     "培养方案": {...},
     "学业进度": {...},
-    "考试安排": [...],
+    "考试安排": {
+      "学期": "2024-2025-1",
+      "考试列表": [...]
+    },
     "教师信息": [...],
     "课程信息": [...]
   }
@@ -755,11 +786,11 @@ curl -X GET "http://localhost:8000/api/user/card?username=2024110101"
 curl -X GET "http://localhost:8000/api/all-data?username=2024110101"
 ```
 
-**更新** 新增的向量化数据聚合接口，为RAG系统提供完整数据支持。
+**更新** 新增的向量化数据聚合接口，为RAG系统提供完整数据支持，现已支持按学期分类的成绩、课表和考试安排数据。
 
 **章节来源**
-- [main.py:800-823](file://backend/main.py#L800-L823)
-- [scraper.py:1192-1303](file://backend/scraper.py#L1192-L1303)
+- [main.py:908-932](file://backend/main.py#L908-L932)
+- [scraper.py:1470-1550](file://backend/scraper.py#L1470-L1550)
 
 ### 选项查询接口
 
@@ -801,8 +832,140 @@ curl -X GET "http://localhost:8000/api/all-data?username=2024110101"
 - **认证**: 无需登录
 
 **章节来源**
-- [main.py:825-909](file://backend/main.py#L825-L909)
+- [main.py:936-1018](file://backend/main.py#L936-L1018)
 - [education_options.py:1-420](file://backend/education_options.py#L1-L420)
+
+## 按学期分类的数据结构
+
+### 成绩数据的学期分类
+
+系统现在支持按学期对成绩数据进行分类存储，提供更精确的数据组织和查询能力：
+
+```json
+{
+  "成绩信息": {
+    "按学期": {
+      "2024-2025-1": [
+        {
+          "课程名称": "数据结构",
+          "开课学期": "2024-2025-1",
+          "成绩": "85",
+          "学分": "4.0",
+          "课程性质": "必修"
+        },
+        {
+          "课程名称": "算法设计",
+          "开课学期": "2024-2025-1",
+          "成绩": "88",
+          "学分": "3.5",
+          "课程性质": "必修"
+        }
+      ],
+      "2024-2025-2": [
+        {
+          "课程名称": "操作系统",
+          "开课学期": "2024-2025-2",
+          "成绩": "82",
+          "学分": "4.0",
+          "课程性质": "专业必修"
+        }
+      ]
+    },
+    "统计信息": {
+      "total_credits_required": 120,
+      "credits_completed": 80,
+      "gpa_major": 3.2,
+      "course_count": 15
+    }
+  }
+}
+```
+
+### 课表数据的学期分类
+
+课表数据现在包含学期信息，便于按学期查询和展示：
+
+```json
+{
+  "课表信息": {
+    "学期": "2024-2025-2",
+    "课程列表": [
+      {
+        "课程名称": "操作系统",
+        "学期": "2024-2025-2",
+        "星期": "周一",
+        "节次": "1-2",
+        "教师": "李教授",
+        "地点": "教学楼A101",
+        "周次": "1-16",
+        "节次信息": "[01-02]节"
+      }
+    ]
+  }
+}
+```
+
+### 考试安排的学期分类
+
+考试安排数据同样支持按学期分类：
+
+```json
+{
+  "考试安排": {
+    "学期": "2024-2025-1",
+    "考试列表": [
+      {
+        "课程名称": "数据结构",
+        "考试时间": "2025-01-15 08:30-10:30",
+        "考试地点": "教学楼A101",
+        "座位号": "01",
+        "考试方式": "期末考试"
+      }
+    ]
+  }
+}
+```
+
+**更新** 学术数据组织系统完全重构，实现了按学期分类的数据结构，显著提升了数据查询的精确性和AI上下文感知能力。
+
+## AI上下文感知能力
+
+### 数据分块策略
+
+系统现在采用更精细的数据分块策略，为AI系统提供更好的上下文感知能力：
+
+```mermaid
+flowchart TD
+A[原始数据] --> B[个人信息分块]
+B --> C[每门课程1个分块]
+C --> D[每天课表1个分块]
+D --> E[按学期分组的培养方案]
+E --> F[学业进度综合分块]
+F --> G[每门考试1个分块]
+G --> H[最终向量集合]
+```
+
+**图表来源**
+- [data_processor.py:182-404](file://backend/app/services/data_processor.py#L182-L404)
+
+### 元数据标注
+
+每个数据分块都包含丰富的元数据信息，用于AI系统理解和检索：
+
+- **类型标识**: personal_info, grade, schedule, training_plan, academic_progress, exam
+- **课程信息**: course, semester, day
+- **来源标识**: 指明数据来自哪个接口或页面
+- **文本内容**: 结构化的学习数据描述
+
+### 向量化优化
+
+系统现在支持批量向量化处理，提高了RAG系统的响应速度：
+
+- **批量处理**: 每批10个数据块，避免超时
+- **占位向量**: 对无法生成向量的数据使用占位向量
+- **过滤机制**: 自动过滤无效数据块
+
+**更新** AI上下文感知能力得到显著提升，数据分块策略更加精细化，元数据标注更加丰富，为RAG系统提供了更好的支持。
 
 ## 调试功能详解
 
@@ -818,17 +981,20 @@ curl -X GET "http://localhost:8000/api/all-data?username=2024110101"
 - **课表查询**: `/tmp/debug_schedule.html`  
 - **培养方案**: `/tmp/debug_training_plan.html`
 - **个人信息**: `/tmp/debug_personal_info.html`
+- **学业进度**: `/tmp/debug_academic_progress.html`
 
 #### 日志记录增强
 
 所有爬虫操作都增加了详细的日志记录：
 
 ```python
-logger.info(f"【成绩调试】请求URL: {url}")
-logger.info(f"【成绩调试】响应状态: {response.status_code}")
-logger.info(f"【成绩调试】响应URL: {response.url}")
-logger.info(f"【成绩调试】HTML长度: {len(html_text)}")
-logger.info(f"【成绩调试】找到 {len(all_tables)} 个表格")
+logger.info(f"【学业进度调试】请求URL: {url}")
+logger.info(f"【学业进度调试】响应状态: {response.status_code}")
+logger.info(f"【学业进度调试】响应URL: {response.url}")
+logger.info(f"【学业进度调试】HTML长度: {len(html_text)}")
+logger.info(f"【学业进度调试】找到 {len(all_tables)} 个表格")
+logger.info(f"【学业进度调试】提取总学分要求: {progress_data['总学分要求']}")
+logger.info(f"【学业进度调试】表格{table_idx}合计已获学分: {table_earned}")
 ```
 
 #### 调试功能特性
@@ -838,6 +1004,7 @@ logger.info(f"【成绩调试】找到 {len(all_tables)} 个表格")
 3. **表格解析调试**: 显示找到的表格数量和解析过程
 4. **编码问题诊断**: 提供编码检测和解码过程的日志
 5. **错误快速定位**: 通过日志快速定位数据解析问题
+6. **智能学分提取**: 跟踪总学分从标题和表格头部的提取过程
 
 #### 调试文件内容
 
@@ -847,12 +1014,21 @@ logger.info(f"【成绩调试】找到 {len(all_tables)} 个表格")
 - **数据提取验证**: 验证表格选择器和解析逻辑
 - **编码问题排查**: 检查页面编码和特殊字符处理
 - **性能优化**: 分析页面加载时间和数据量
+- **解析过程跟踪**: 查看详细的学分提取和课程解析过程
+
+#### 专门的学业进度解析测试
+
+系统新增了专门的学业进度解析测试工具，用于验证复杂的表格解析逻辑：
+
+- **测试HTML文件**: `.qoder/教务系统源代码/学业进度查询.txt`
+- **智能表格识别**: 自动识别包含特定表头的表格
+- **学分提取验证**: 测试从标题和表格头部提取学分的能力
+- **合计行识别**: 验证合计行的识别和已获学分统计
+- **课程去重测试**: 验证基于课程代码和名称的去重逻辑
 
 **章节来源**
-- [scraper.py:140-175](file://backend/scraper.py#L140-L175)
-- [scraper.py:273-277](file://backend/scraper.py#L273-L277)
-- [scraper.py:448-458](file://backend/scraper.py#L448-L458)
-- [scraper.py:685-689](file://backend/scraper.py#L685-L689)
+- [scraper.py:1051-1218](file://backend/scraper.py#L1051-L1218)
+- [test_academic_progress.py:1-109](file://backend/test_academic_progress.py#L1-L109)
 
 ## 依赖关系分析
 
@@ -864,6 +1040,8 @@ subgraph "核心模块"
 MAIN[main.py]
 SCRAPER[scraper.py]
 DATA_PROCESSOR[data_processor.py]
+EDUCATION_API[education.py]
+MCP_TOOLS[tools.py]
 end
 subgraph "数据模型"
 USER_MODEL[user.py]
@@ -875,6 +1053,7 @@ end
 subgraph "测试模块"
 TEST_SCRAPER[test_scraper.py]
 TEST_LOGIN[test_login.py]
+TEST_ACADEMIC_PROGRESS[test_academic_progress.py]
 end
 subgraph "调试模块"
 DEBUG[HTML调试输出]
@@ -882,6 +1061,8 @@ LOG[日志系统]
 end
 MAIN --> SCRAPER
 MAIN --> DATA_PROCESSOR
+EDUCATION_API --> SCRAPER
+MCP_TOOLS --> SCRAPER
 DATA_PROCESSOR --> USER_MODEL
 DATA_PROCESSOR --> EDUCATION_MODEL
 SCRAPER --> OPTIONS
@@ -889,12 +1070,13 @@ SCRAPER --> DEBUG
 DEBUG --> LOG
 TEST_SCRAPER --> SCRAPER
 TEST_LOGIN --> MAIN
+TEST_ACADEMIC_PROGRESS --> SCRAPER
 ```
 
 **图表来源**
-- [main.py:1-951](file://backend/main.py#L1-L951)
-- [scraper.py:1-1303](file://backend/scraper.py#L1-L1303)
-- [data_processor.py:1-356](file://backend/app/services/data_processor.py#L1-L356)
+- [main.py:1-1060](file://backend/main.py#L1-L1060)
+- [scraper.py:1-1550](file://backend/scraper.py#L1-L1550)
+- [data_processor.py:1-409](file://backend/app/services/data_processor.py#L1-L409)
 
 ### 外部依赖
 
@@ -907,7 +1089,7 @@ TEST_LOGIN --> MAIN
 5. **网络服务**: 需要稳定的网络连接访问教务系统
 6. **文件系统**: 用于保存HTML调试文件
 
-**更新** 核心爬虫功能重构后，URL构造逻辑更加健壮，编码处理能力显著提升，向量化接口为RAG系统提供完整支持，调试功能增强了系统的可维护性。
+**更新** 核心爬虫功能重构后，URL构造逻辑更加健壮，编码处理能力显著提升，向量化接口为RAG系统提供完整支持，调试功能增强了系统的可维护性。特别是学业进度查询接口，新增了专门的解析测试工具。
 
 **章节来源**
 - [main.py:50-81](file://backend/main.py#L50-L81)
@@ -941,6 +1123,7 @@ TEST_LOGIN --> MAIN
 4. **数据压缩**: 对大响应数据进行压缩传输
 5. **向量化优化**: 批量处理向量数据，避免超时
 6. **调试文件清理**: 定期清理临时HTML调试文件
+7. **表格解析优化**: 缓存已识别的表格结构，避免重复解析
 
 ### 监控指标
 
@@ -952,8 +1135,9 @@ TEST_LOGIN --> MAIN
 - 错误率统计
 - 向量数据库性能
 - 调试文件存储空间
+- 学业进度解析准确率
 
-**更新** 编码处理优化显著提升了数据解析的准确性，向量化接口为RAG系统提供了高效的查询能力，调试功能为系统维护提供了强大支持。
+**更新** 编码处理优化显著提升了数据解析的准确性，向量化接口为RAG系统提供了高效的查询能力，调试功能为系统维护提供了强大支持。新增的学业进度解析测试工具进一步提升了系统的可靠性。
 
 ## 故障排除指南
 
@@ -986,6 +1170,7 @@ TEST_LOGIN --> MAIN
 4. **编码处理失败**（已优化）
 5. **URL路径错误**（已修复）
 6. **HTML调试文件缺失**
+7. **学业进度表格解析失败**（已增强）
 
 **解决步骤**:
 1. 检查教务系统页面结构
@@ -995,6 +1180,7 @@ TEST_LOGIN --> MAIN
 5. **验证编码处理逻辑**
 6. **验证URL拼接逻辑，确保正确路径**
 7. **检查调试文件是否正确保存**
+8. **使用学业进度解析测试工具验证表格识别**
 
 #### 性能问题
 
@@ -1005,6 +1191,7 @@ TEST_LOGIN --> MAIN
 3. 并发请求过多
 4. **重复URL请求**（已优化）
 5. **调试文件过多占用磁盘空间**
+6. **表格解析性能问题**（已优化）
 
 **解决步骤**:
 1. 优化数据库查询语句
@@ -1013,6 +1200,7 @@ TEST_LOGIN --> MAIN
 4. 异步处理
 5. **减少无效的URL重定向**
 6. **定期清理调试文件**
+7. **优化表格解析算法**
 
 #### 编码问题
 
@@ -1036,15 +1224,35 @@ TEST_LOGIN --> MAIN
 2. 磁盘空间不足
 3. 路径不存在
 4. 调试功能被禁用
+5. **学业进度解析失败**（已增强）
 
 **解决步骤**:
 1. 检查/tmp目录权限
 2. 清理磁盘空间
 3. 确认路径存在
 4. 启用调试功能
-5. 检查日志输出
+5. **检查日志输出**
+6. **使用专门的解析测试工具**
 
-**更新** 编码处理逻辑经过优化，现在能够智能检测和处理UTF-8和GBK混合编码场景。URL构造逻辑修复解决了重复前缀导致的额外请求和重定向问题。调试功能提供了完整的HTML文件保存和详细日志记录能力。
+#### 学业进度解析问题
+
+**问题症状**: 学业进度数据不准确或缺失
+**可能原因**:
+1. 表格结构变化
+2. 学分提取算法失效
+3. 课程去重逻辑错误
+4. 合计行识别失败
+5. **HTML结构复杂**（已增强）
+
+**解决步骤**:
+1. 检查HTML结构变化
+2. 更新学分提取算法
+3. 验证去重逻辑
+4. 检查合计行识别
+5. **使用解析测试工具验证**
+6. **查看详细的调试日志**
+
+**更新** 编码处理逻辑经过优化，现在能够智能检测和处理UTF-8和GBK混合编码场景。URL构造逻辑修复解决了重复前缀导致的额外请求和重定向问题。调试功能提供了完整的HTML文件保存和详细日志记录能力。新增的学业进度解析测试工具大大提升了系统的可维护性。
 
 **章节来源**
 - [main.py:187-328](file://backend/main.py#L187-L328)
@@ -1056,17 +1264,20 @@ TEST_LOGIN --> MAIN
 
 1. **登录测试脚本**: `test_login.py` - 测试登录功能
 2. **爬虫测试脚本**: `test_scraper.py` - 测试爬虫功能
-3. **日志系统**: 完整的日志记录和错误追踪
-4. **健康检查**: `/api/health` - 系统健康状态检查
-5. **向量化测试**: 完整的数据聚合和向量化流程测试
-6. **HTML调试文件**: 自动保存的原始页面内容
-7. **编码检测**: 智能编码处理和错误诊断
+3. **学业进度解析测试**: `test_academic_progress.py` - 专门测试学业进度解析
+4. **日志系统**: 完整的日志记录和错误追踪
+5. **健康检查**: `/api/health` - 系统健康状态检查
+6. **向量化测试**: 完整的数据聚合和向量化流程测试
+7. **HTML调试文件**: 自动保存的原始页面内容
+8. **编码检测**: 智能编码处理和错误诊断
+9. **学业进度解析测试工具**: 专门验证复杂的表格解析逻辑
 
-**更新** 调试工具现在可以正确测试重构后的URL构造逻辑和编码处理能力。新增了向量化数据聚合接口的测试功能。调试功能提供了完整的HTML文件保存和详细日志记录能力。
+**更新** 调试工具现在可以正确测试重构后的URL构造逻辑和编码处理能力。新增了向量化数据聚合接口的测试功能。调试功能提供了完整的HTML文件保存和详细日志记录能力。新增的学业进度解析测试工具专门验证复杂的表格解析和学分提取逻辑。
 
 **章节来源**
 - [test_login.py:1-152](file://backend/test_login.py#L1-L152)
 - [test_scraper.py:1-280](file://backend/test_scraper.py#L1-L280)
+- [test_academic_progress.py:1-109](file://backend/test_academic_progress.py#L1-L109)
 
 ## 结论
 
@@ -1079,6 +1290,8 @@ TEST_LOGIN --> MAIN
 5. **安全可靠**: 完善的认证机制和错误处理
 6. **智能化**: 新增向量化接口支持RAG系统
 7. **可调试性强**: 完善的HTML调试输出和日志记录功能
+8. **按学期分类**: 支持按学期分类的成绩、课表和考试安排数据
+9. **AI上下文感知**: 提供更精确的数据分块和元数据标注
 
 **更新亮点**:
 - **URL构造修复**: 成功消除了重复的'/jsxsd/'前缀问题
@@ -1089,6 +1302,17 @@ TEST_LOGIN --> MAIN
 - **兼容性改善**: 确保与不同服务器配置的兼容性
 - **调试能力增强**: 提供了详细的日志输出和错误诊断
 - **HTML调试输出**: 新增完整的HTML文件保存和分析功能
+- **按学期分类**: 实现了按学期分类的数据组织结构
+- **AI上下文感知**: 提升了数据分块和元数据标注的精确性
+- **学业进度增强**: 学业进度查询接口得到重大增强，包括改进的表格解析逻辑、增强的数值提取能力、优化的学分统计机制等
+
+**学业进度查询接口的重大改进**:
+- **智能总学分提取**: 支持从标题和表格头部双重来源提取学分要求
+- **增强的表格解析**: 更准确地识别课程表格和表头
+- **优化的课程去重**: 基于课程代码和名称的复合去重机制
+- **完善的合计行识别**: 准确识别并统计已获学分
+- **详细的HTML调试**: 提供完整的解析过程跟踪和问题诊断
+- **专门的解析测试**: 新增的测试工具验证复杂的表格解析逻辑
 
 系统在实际部署中建议：
 - 生产环境使用Redis作为缓存存储
@@ -1099,5 +1323,8 @@ TEST_LOGIN --> MAIN
 - 部署Milvus向量数据库支持RAG功能
 - 定期清理调试文件，避免磁盘空间不足
 - 监控调试文件的存储和访问权限
+- 利用按学期分类的数据结构优化查询性能
+- 使用专门的解析测试工具验证学业进度解析准确性
+- 建立完善的日志记录和错误追踪机制
 
-通过持续的优化和维护，该系统能够为用户提供稳定、高效、可靠的学术数据查询服务，为教育智能化发展提供坚实的技术支撑。新增的调试功能大大提升了系统的可维护性和问题诊断能力，为后续的功能扩展和优化提供了强有力的支持。
+通过持续的优化和维护，该系统能够为用户提供稳定、高效、可靠的学术数据查询服务，为教育智能化发展提供坚实的技术支撑。新增的调试功能和专门的解析测试工具大大提升了系统的可维护性和问题诊断能力，为后续的功能扩展和优化提供了强有力的支持。按学期分类的数据结构和AI上下文感知能力的提升，为RAG系统的应用奠定了坚实的基础。学业进度查询接口的增强功能显著提升了整体学术数据查询的准确性和稳定性，为学生提供了更优质的学术数据服务体验。

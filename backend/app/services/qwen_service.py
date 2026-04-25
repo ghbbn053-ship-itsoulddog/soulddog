@@ -163,6 +163,18 @@ class QwenService:
                 }
             }
         ]
+
+    @staticmethod
+    def _grounded_answer_rules() -> str:
+        return (
+            "回答要求：\n"
+            "1. 优先直接回答用户问题，语言自然，不要机械重复“根据以上数据”这类套话。\n"
+            "2. 只能把已提供的数据、知识片段、工具结果当作事实；没有依据就明确说无法确认。\n"
+            "3. 如果信息不足，先说明缺口，再建议用户同步数据、补充文档或缩小问题范围。\n"
+            "4. 可以概括、整理、解释，但不能把推测包装成事实。\n"
+            "5. 若引用知识库内容，尽量自然点明来自某份制度、说明或工作区文档，不要生硬堆来源。\n"
+            "6. 不要输出虚构的校区、制度细节、操作入口、服务信息或规则。\n"
+        )
     
     def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7) -> Dict:
         """与千问对话"""
@@ -222,7 +234,10 @@ class QwenService:
             # 添加系统提示（可附加教务数据上下文）
             system_content = self.system_prompt
             if education_context:
-                system_content += f"\n\n【该学生的教务系统真实数据】\n{education_context}\n\n请严格基于以上真实数据回答学生的问题，不要编造任何数据。"
+                system_content += (
+                    f"\n\n【当前可用事实与知识】\n{education_context}\n\n"
+                    f"{self._grounded_answer_rules()}"
+                )
             full_messages = [{"role": "system", "content": system_content}] + messages
             
             # 调用流式API
@@ -527,20 +542,26 @@ class QwenService:
         try:
             # 构建上下文
             context_text = "\n\n".join([
-                f"【{i+1}】{item['text']}\n来源: {item['source']}"
+                f"【证据 {i+1}】\n内容：{item['text']}\n来源：{item['source']}"
                 for i, item in enumerate(context)
             ])
             
             # 构建提示词
-            prompt = f"""基于以下教务数据，回答学生的问题：
+            prompt = f"""下面是当前可用的事实证据，请据此回答用户问题。
 
-=== 相关数据 ===
+{self._grounded_answer_rules()}
+
+=== 可用证据 ===
 {context_text}
 
-=== 学生问题 ===
+=== 用户问题 ===
 {question}
 
-请根据以上数据回答问题。如果数据不足以回答问题，请说明需要同步更多数据。"""
+输出要求：
+- 先直接回答问题；
+- 如果证据不足，就明确说当前无法确认；
+- 不要为了“说满”去补虚构细节；
+- 回答可以自然，不要写成生硬报告。"""
             
             # 构建消息
             messages = []
@@ -556,7 +577,7 @@ class QwenService:
                     "success": True,
                     "content": result["content"],
                     "usage": result["usage"],
-                    "sources": [item["source"] for item in context]  # 返回引用来源
+                    "sources": [str(item.get("source", "") or "").strip() for item in context if str(item.get("source", "") or "").strip()]
                 }
             else:
                 return result

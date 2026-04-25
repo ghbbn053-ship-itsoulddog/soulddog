@@ -2,6 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Activity, RefreshCcw, SearchCheck, ShieldAlert, Upload, Wrench } from "lucide-react";
+
+import { PlatformSidebarFooter, PlatformSidebarHeader, createPlatformNav } from "@/components/workspace/app-sidebar";
+import {
+  WorkbenchBadge,
+  WorkbenchEmpty,
+  WorkbenchSection,
+  WorkbenchShell,
+  WorkbenchStatCard,
+} from "@/components/workspace/workbench-shell";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type MCPTool = {
   name: string;
@@ -335,180 +350,222 @@ export default function MCPPage() {
 
   const sorted = useMemo(() => [...tools].sort((a, b) => a.name.localeCompare(b.name)), [tools]);
 
-  if (loading) return <div className="p-6 text-sm text-gray-500">加载中...</div>;
+  if (loading) {
+    return <div className="p-6 text-sm text-slate-500">加载中...</div>;
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="bg-white border border-gray-200 rounded-2xl p-5">
-          <h1 className="text-xl font-semibold text-gray-900">MCP 工具管理</h1>
-          <p className="text-sm text-gray-500 mt-1">导入 JSON 配置并重载即可接入工具。</p>
-          <div className="mt-4">
-            <p className="text-xs font-medium text-gray-500 mb-2">导入配置</p>
-            <div className="flex flex-wrap gap-2 items-center">
-            <input
-              value={importUrl}
-              onChange={(e) => setImportUrl(e.target.value)}
-              placeholder="MCP 配置 JSON 链接"
-              className="flex-1 min-w-0 w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm"
-            />
-            <button
-              onClick={importFromUrl}
-              disabled={saving || !importUrl.trim()}
-              className="h-10 px-4 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap shrink-0 text-sm font-medium"
-            >
-              URL 导入
-            </button>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2 items-center">
-            <input
-              type="file"
-              accept=".json"
-              onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-              className="flex-1 min-w-0 w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-white file:mr-2 file:rounded-md file:border-0 file:bg-gray-100 file:px-2 file:py-1 file:text-xs overflow-hidden"
-            />
-            <button
-              onClick={importFromFile}
-              disabled={saving || !uploadFile}
-              className="h-10 px-4 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap shrink-0 text-sm font-medium"
-            >
-              文件导入
-            </button>
-          </div>
-          <div className="mt-4">
-            <p className="text-xs font-medium text-gray-500 mb-2">流水线操作</p>
-            <div className="grid grid-cols-2 gap-2">
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as "high" | "normal" | "low")}
-              className="h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm min-w-0 w-full"
-            >
-              <option value="high">高优先级</option>
-              <option value="normal">普通优先级</option>
-              <option value="low">低优先级</option>
-            </select>
-            <button
-              onClick={reloadTools}
-              disabled={saving}
-              className="h-10 px-4 rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50 whitespace-nowrap text-sm font-medium"
-            >
-              {saving ? "处理中..." : "重载工具"}
-            </button>
-            <button
-              onClick={() => runProbe(false)}
-              disabled={saving}
-              className="h-10 px-4 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap text-sm font-medium"
-            >
-              探测
-            </button>
-            <button
-              onClick={() => runProbe(true)}
-              disabled={saving}
-              className="h-10 px-4 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap text-sm font-medium"
-            >
-              探测并启用
-            </button>
-            <button
-              onClick={runPipeline}
-              disabled={saving}
-              className="h-10 px-4 rounded-lg border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 whitespace-nowrap text-sm font-medium"
-            >
-              一键流水线
-            </button>
-            <button
-              onClick={forceUnlock}
-              disabled={saving}
-              className="h-10 px-4 rounded-lg border border-red-300 text-red-600 bg-white hover:bg-red-50 disabled:opacity-50 whitespace-nowrap text-sm font-medium"
-            >
-              强制解锁
-            </button>
-            <button onClick={() => router.push("/chat")} className="col-span-2 h-10 px-4 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 whitespace-nowrap text-sm font-medium">
-              返回聊天
-            </button>
-            </div>
-          </div>
-          <div className="mt-3 text-xs text-gray-500">
-            状态：{state?.running ? "运行中" : "空闲"} · run_id: {state?.run_id || "-"} · status: {state?.status || "-"} · 运行中: {runningCount} · 队列: {queueSize}
-          </div>
-          {msg && <div className="mt-3 text-sm text-gray-700">{msg}</div>}
+    <WorkbenchShell
+      badge={
+        <WorkbenchBadge>
+          <Wrench className="h-3.5 w-3.5" />
+          MCP TOOLCHAIN
+        </WorkbenchBadge>
+      }
+      title="MCP 工具管理"
+      description="统一管理 MCP 工具导入、探测、启用和流水线任务。按钮布局已改为稳定卡片栅格，不再发生文本顶出。"
+      sidebarTitle="工具接入"
+      sidebarDescription="导入现成配置，重载工具，并观察 intake pipeline 状态。"
+      sidebarHeader={<PlatformSidebarHeader />}
+      navItems={createPlatformNav("mcp")}
+      footer={<PlatformSidebarFooter username={username} detail="MCP 管理账号" />}
+      topActions={
+        <>
+          <Button variant="outline" onClick={() => router.push("/composition")}>
+            组合编排
+          </Button>
+          <Button onClick={() => router.push("/chat")}>返回会话</Button>
+        </>
+      }
+    >
+      <div className="grid gap-4">
+        <div className="grid gap-4 md:grid-cols-4">
+          <WorkbenchStatCard label="Tools" value={sorted.length} hint="已注册 MCP 工具" />
+          <WorkbenchStatCard label="Queue" value={queueSize} hint="等待中的流水线任务" />
+          <WorkbenchStatCard label="Running" value={runningCount} hint="当前正在执行" />
+          <WorkbenchStatCard label="State" value={state?.running ? "Running" : "Idle"} hint={state?.status || "暂无状态"} />
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-2xl p-5">
-          <h2 className="text-lg font-semibold text-gray-900">已注册工具</h2>
-          <div className="mt-3 space-y-2">
-            {sorted.length === 0 && <div className="text-sm text-gray-500">暂无 MCP 工具</div>}
-            {sorted.map((t) => (
-              <div key={t.name} className="border border-gray-200 rounded-xl p-3">
-                <div className="font-medium text-gray-900">{t.name}</div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {(t.description || "无描述")} · kind: {t.kind || "python"}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {msg ? (
+          <Card className="border-slate-200 bg-slate-50 shadow-none">
+            <CardContent className="p-4 text-sm text-slate-700">{msg}</CardContent>
+          </Card>
+        ) : null}
 
-        <div className="bg-white border border-gray-200 rounded-2xl p-5">
-          <h2 className="text-lg font-semibold text-gray-900">任务队列</h2>
-          <div className="mt-3 space-y-2">
-            {tasks.length === 0 && <div className="text-sm text-gray-500">暂无任务</div>}
-            {tasks.map((t) => (
-              <div key={t.run_id} className="border border-gray-200 rounded-xl p-3">
-                <div className="text-sm font-medium text-gray-900">
-                  {t.run_id} · {t.status || "-"}
+        <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr_0.95fr]">
+          <div className="grid gap-4">
+            <WorkbenchSection title="导入与控制" description="这里把导入、探测、流水线控制拆成稳定区块，避免按钮挤压。">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-slate-900">URL 导入</div>
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                    <Input
+                      value={importUrl}
+                      onChange={(e) => setImportUrl(e.target.value)}
+                      placeholder="MCP 配置 JSON 链接"
+                    />
+                    <Button variant="outline" onClick={importFromUrl} disabled={saving || !importUrl.trim()}>
+                      <Upload className="h-4 w-4" />
+                      URL 导入
+                    </Button>
+                  </div>
                 </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {t.created_at || "-"} · 优先级: {t.priority || "normal"} · 重试: {t.retries ?? 0}/{t.max_retries ?? 0}
+
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-slate-900">本地文件</div>
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                    <Input type="file" accept=".json" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+                    <Button variant="outline" onClick={importFromFile} disabled={saving || !uploadFile}>
+                      <Upload className="h-4 w-4" />
+                      文件导入
+                    </Button>
+                  </div>
                 </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  耗时: {t.duration_ms ?? "-"} ms · reload: {t.reload_count ?? "-"} · 下次执行: {t.next_run_at || "-"}
-                </div>
-                {t.error && <div className="text-xs text-red-600 mt-1 break-all">{t.error}</div>}
-                {t.last_error && <div className="text-xs text-red-500 mt-1 break-all">last_error: {t.last_error}</div>}
-                <div className="mt-2 flex gap-2">
-                  <button
-                    onClick={() => cancelTask(t.run_id)}
-                    disabled={saving || !["queued", "running"].includes(String(t.status || ""))}
-                    className="px-3 py-1 rounded-lg border border-red-300 text-red-700 bg-white text-xs disabled:opacity-50"
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={() => retryTask(t.run_id)}
-                    disabled={saving || state?.running}
-                    className="px-3 py-1 rounded-lg border border-gray-300 bg-white text-xs disabled:opacity-50"
-                  >
-                    重试
-                  </button>
-                  <button
-                    onClick={() => rollbackTask(t.run_id)}
-                    disabled={saving || state?.running || !t.snapshot}
-                    className="px-3 py-1 rounded-lg border border-orange-300 text-orange-700 bg-white text-xs disabled:opacity-50"
-                  >
-                    回滚
-                  </button>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">流水线优先级</div>
+                      <div className="text-xs text-slate-500">影响 intake pipeline 排队顺序</div>
+                    </div>
+                    <select
+                      value={priority}
+                      onChange={(e) => setPriority(e.target.value as "high" | "normal" | "low")}
+                      className="h-10 rounded-xl border border-[hsl(var(--border))] bg-white px-3 text-sm outline-none"
+                    >
+                      <option value="high">高优先级</option>
+                      <option value="normal">普通优先级</option>
+                      <option value="low">低优先级</option>
+                    </select>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Button variant="outline" onClick={reloadTools} disabled={saving}>
+                      <RefreshCcw className="h-4 w-4" />
+                      重载工具
+                    </Button>
+                    <Button variant="outline" onClick={() => runProbe(false)} disabled={saving}>
+                      <SearchCheck className="h-4 w-4" />
+                      探测
+                    </Button>
+                    <Button variant="outline" onClick={() => runProbe(true)} disabled={saving}>
+                      <SearchCheck className="h-4 w-4" />
+                      探测并启用
+                    </Button>
+                    <Button onClick={runPipeline} disabled={saving}>
+                      <Activity className="h-4 w-4" />
+                      一键流水线
+                    </Button>
+                    <Button variant="outline" className="sm:col-span-2" onClick={forceUnlock} disabled={saving}>
+                      <ShieldAlert className="h-4 w-4" />
+                      强制解锁
+                    </Button>
+                  </div>
                 </div>
               </div>
-            ))}
+            </WorkbenchSection>
+
+            <WorkbenchSection title="已注册工具" description="工具 manifest 列表。">
+              <ScrollArea className="h-[460px] pr-3">
+                <div className="space-y-3">
+                  {sorted.length === 0 ? <WorkbenchEmpty title="暂无 MCP 工具" description="先导入 JSON 或运行探测。" /> : null}
+                  {sorted.map((tool) => (
+                    <Card key={tool.name} className="border-slate-200 shadow-none">
+                      <CardContent className="space-y-2 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm font-semibold text-slate-950">{tool.name}</div>
+                          <Badge variant="outline">{tool.kind || "python"}</Badge>
+                        </div>
+                        <div className="text-xs leading-5 text-slate-500">{tool.description || "无描述"}</div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
+            </WorkbenchSection>
           </div>
-          <h2 className="text-lg font-semibold text-gray-900 mt-6">流水线历史</h2>
-          <div className="mt-3 space-y-2">
-            {history.length === 0 && <div className="text-sm text-gray-500">暂无记录</div>}
-            {history.map((h, idx) => (
-              <div key={`${h.run_id || idx}`} className="border border-gray-200 rounded-xl p-3">
-                <div className="text-sm font-medium text-gray-900">
-                  {h.run_id || "-"} · {h.success ? "成功" : "失败"}
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {h.started_at || "-"} · 耗时: {h.duration_ms ?? "-"} ms · reload: {h.reload_count ?? "-"}
-                </div>
-                {h.error && <div className="text-xs text-red-600 mt-1 break-all">{h.error}</div>}
+
+          <WorkbenchSection title="任务队列" description="查看运行、失败、取消、回滚和重试。">
+            <ScrollArea className="h-[760px] pr-3">
+              <div className="space-y-3">
+                {tasks.length === 0 ? <WorkbenchEmpty title="暂无任务" description="执行探测或流水线后，这里会出现任务。" /> : null}
+                {tasks.map((task) => (
+                  <Card key={task.run_id} className="border-slate-200 shadow-none">
+                    <CardContent className="space-y-3 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-slate-950">{task.run_id}</div>
+                        <Badge
+                          variant={
+                            task.status === "success"
+                              ? "success"
+                              : task.status === "failed"
+                                ? "destructive"
+                                : task.status === "running"
+                                  ? "warning"
+                                  : "outline"
+                          }
+                        >
+                          {task.status || "-"}
+                        </Badge>
+                      </div>
+                      <div className="text-xs leading-5 text-slate-500">
+                        {task.created_at || "-"} · 优先级 {task.priority || "normal"} · 重试 {task.retries ?? 0}/{task.max_retries ?? 0}
+                      </div>
+                      <div className="text-xs leading-5 text-slate-500">
+                        耗时 {task.duration_ms ?? "-"} ms · reload {task.reload_count ?? "-"} · 下次执行 {task.next_run_at || "-"}
+                      </div>
+                      {task.error ? <div className="text-xs text-rose-600 break-all">{task.error}</div> : null}
+                      {task.last_error ? <div className="text-xs text-rose-500 break-all">last_error: {task.last_error}</div> : null}
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => cancelTask(task.run_id)}
+                          disabled={saving || !["queued", "running"].includes(String(task.status || ""))}
+                        >
+                          取消
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => retryTask(task.run_id)} disabled={saving || !!state?.running}>
+                          重试
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => rollbackTask(task.run_id)}
+                          disabled={saving || !!state?.running || !task.snapshot}
+                        >
+                          回滚
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-            ))}
-          </div>
+            </ScrollArea>
+          </WorkbenchSection>
+
+          <WorkbenchSection title="流水线历史" description="保留最近执行记录，便于回溯。">
+            <ScrollArea className="h-[760px] pr-3">
+              <div className="space-y-3">
+                {history.length === 0 ? <WorkbenchEmpty title="暂无记录" description="历史记录会在任务执行后出现。" /> : null}
+                {history.map((item, idx) => (
+                  <Card key={`${item.run_id || idx}`} className="border-slate-200 shadow-none">
+                    <CardContent className="space-y-2 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-slate-950">{item.run_id || "-"}</div>
+                        <Badge variant={item.success ? "success" : "destructive"}>{item.success ? "成功" : "失败"}</Badge>
+                      </div>
+                      <div className="text-xs leading-5 text-slate-500">
+                        {item.started_at || "-"} · 耗时 {item.duration_ms ?? "-"} ms · reload {item.reload_count ?? "-"}
+                      </div>
+                      {item.error ? <div className="text-xs text-rose-600 break-all">{item.error}</div> : null}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
+          </WorkbenchSection>
         </div>
       </div>
-    </div>
+    </WorkbenchShell>
   );
 }

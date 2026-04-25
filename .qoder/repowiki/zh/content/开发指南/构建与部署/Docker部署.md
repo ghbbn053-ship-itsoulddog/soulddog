@@ -16,15 +16,15 @@
 - [scripts/prepare.sh](file://scripts/prepare.sh)
 - [scripts/dev.sh](file://scripts/dev.sh)
 - [.coze](file://.coze)
+- [.gitignore](file://.gitignore)
 </cite>
 
 ## 更新摘要
 **所做变更**
-- 更新前端服务配置，现在使用Dockerfile.dev支持热重载和实时代码同步
-- 新增开发模式下的文件监听和代码挂载配置
-- 更新前端Dockerfile.dev的构建流程说明，强调单阶段开发构建和系统依赖安装
-- 增强开发环境的实时同步功能描述
-- 改进pnpm镜像源配置，支持国内网络环境
+- 更新开发环境热重载配置章节，反映最新的卷挂载排除规则调整
+- 移除了对dist和tsconfig.tsbuildinfo的显式排除规则说明
+- 强调问题已通过其他方式解决，不再需要显式排除这些目录
+- 更新卷挂载排除规则的技术细节，保持开发环境的稳定性和性能优化
 
 ## 目录
 1. [简介](#简介)
@@ -32,11 +32,12 @@
 3. [核心组件](#核心组件)
 4. [架构总览](#架构总览)
 5. [详细组件分析](#详细组件分析)
-6. [依赖关系分析](#依赖关系分析)
-7. [性能考虑](#性能考虑)
-8. [故障排查指南](#故障排查指南)
-9. [结论](#结论)
-10. [附录](#附录)
+6. [开发环境热重载配置](#开发环境热重载配置)
+7. [依赖关系分析](#依赖关系分析)
+8. [性能考虑](#性能考虑)
+9. [故障排查指南](#故障排查指南)
+10. [结论](#结论)
+11. [附录](#附录)
 
 ## 简介
 本文件面向智能教务系统AI助手的Docker部署，提供从环境准备、镜像构建、容器编排到生产部署最佳实践的完整指南。内容覆盖：
@@ -45,6 +46,7 @@
 - 环境变量、端口映射与容器间通信
 - 数据持久化策略与安全加固建议
 - 生产环境资源限制、日志与监控配置思路
+- **更新** 开发环境热重载配置的最新优化，移除了对dist和tsconfig.tsbuildinfo的显式排除规则
 
 ## 项目结构
 该仓库采用多服务单仓结构：前端Next.js应用、后端FastAPI应用、以及数据库、缓存、对象存储、向量数据库等基础设施均通过Compose统一编排。
@@ -255,10 +257,10 @@ MV --> MC
 
 ### 环境变量与端口映射
 - 后端关键变量：数据库连接、缓存连接、Milvus连接、AI模型密钥、教育系统地址、JWT密钥、CORS来源
-- 前端关键变量：NEXT_PUBLIC_API_URL（指向/api）、WATCHPACK_POLLING（支持文件监听）
+- 前端关键变量：NEXT_PUBLIC_API_URL（指向/api）、WATCHPACK_POLLING（支持文件监听）、CHOKIDAR_USEPOLLING（轮询监听）
 - 端口映射：5000（前端开发模式）、3000（前端生产模式）、8000（后端）、5432（数据库）、6379（缓存）、9000/9001（对象存储）、19530/9091（向量数据库）
 
-**更新** 新增WATCHPACK_POLLING环境变量支持开发模式的文件监听功能
+**更新** 新增WATCHPACK_POLLING和CHOKIDAR_USEPOLLING环境变量支持开发模式的文件监听功能
 
 **章节来源**
 - [docker-compose.yml](file://docker-compose.yml)
@@ -273,6 +275,38 @@ MV --> MC
 
 **章节来源**
 - [docker-compose.yml](file://docker-compose.yml)
+
+## 开发环境热重载配置
+
+### 卷挂载排除规则
+开发模式下的卷挂载配置包含了精心设计的排除规则，以防止不必要的文件监听和避免热更新自循环：
+
+- **node_modules排除**：`- /app/node_modules` - 防止宿主机的node_modules影响容器内依赖
+- **Next.js缓存排除**：`- /app/.next` - Next.js开发服务器的缓存目录，避免重复监听
+
+**更新** 移除了对dist目录和tsconfig.tsbuildinfo文件的显式排除规则，因为问题已通过其他方式解决
+
+这些排除规则确保了开发环境的稳定性和性能优化。
+
+### 文件监听优化
+开发模式提供了多种文件监听机制来适应不同的操作系统和开发环境：
+
+- **Linux系统**：默认使用inotify机制进行文件监听，性能最优
+- **跨平台挂载**：当需要在不同系统间共享代码时，设置`WATCHPACK_POLLING=true`
+- **轮询监听**：通过`CHOKIDAR_USEPOLLING=true`启用轮询模式，适用于某些文件系统不支持inotify的情况
+
+### 开发模式特性详解
+- **热重载支持**：通过Dockerfile.dev的pnpm dev命令实现代码修改后的自动重启
+- **实时代码同步**：通过volumes挂载实现宿主机与容器内的代码实时同步
+- **文件监听增强**：通过WATCHPACK_POLLING=true启用文件变化监听，提升开发体验
+- **开发工具集成**：支持React Dev Inspector等开发工具的集成使用
+- **系统依赖安装**：在Dockerfile.dev中添加libc6-compat依赖，确保兼容性
+- **pnpm镜像源优化**：配置国内镜像源，提升依赖安装速度
+
+**章节来源**
+- [docker-compose.yml](file://docker-compose.yml)
+- [frontend/Dockerfile.dev](file://frontend/Dockerfile.dev)
+- [frontend/package.json](file://frontend/package.json)
 
 ## 依赖关系分析
 后端对数据库、缓存、向量数据库存在直接依赖；Milvus对etcd与MinIO存在依赖；前端依赖后端提供API。
@@ -312,6 +346,7 @@ FEProd["前端生产模式"] --> BK
 - **开发模式优化**
   - 文件监听：通过WATCHPACK_POLLING环境变量启用文件变化监听
   - 实时同步：通过volumes挂载实现代码的实时同步，无需手动重启容器
+  - **卷挂载优化**：通过排除规则避免不必要的文件监听，提升开发性能
 
 ## 故障排查指南
 - 健康检查失败
@@ -330,13 +365,14 @@ FEProd["前端生产模式"] --> BK
   - 热重载失效：检查WATCHPACK_POLLING环境变量是否正确设置
   - 代码不同步：确认volumes挂载配置是否正确，特别是排除node_modules和.next目录
   - 文件监听异常：检查容器权限和文件系统挂载点
+  - **卷挂载排除问题**：确认排除规则是否正确配置，避免误排除必要文件
 
 **章节来源**
 - [docker-compose.yml](file://docker-compose.yml)
 - [frontend/nginx.conf](file://frontend/nginx.conf)
 
 ## 结论
-本部署方案通过Docker Compose将前后端与数据库、缓存、对象存储、向量数据库统一编排，具备清晰的服务边界与依赖关系。**新增的开发模式**通过Dockerfile.dev提供了强大的热重载和实时代码同步能力，显著提升了开发效率。建议在生产环境中进一步完善资源限制、日志采集、监控告警与安全加固（如密钥管理、网络隔离、只读卷等），以满足高可用与合规要求。
+本部署方案通过Docker Compose将前后端与数据库、缓存、对象存储、向量数据库统一编排，具备清晰的服务边界与依赖关系。**更新的开发模式**通过Dockerfile.dev提供了强大的热重载和实时代码同步能力，显著提升了开发效率。**优化的卷挂载排除规则**（移除了对dist和tsconfig.tsbuildinfo的显式排除）确保了开发环境的稳定性和性能。建议在生产环境中进一步完善资源限制、日志采集、监控告警与安全加固（如密钥管理、网络隔离、只读卷等），以满足高可用与合规要求。
 
 ## 附录
 
@@ -453,9 +489,15 @@ F-->>U : 返回响应
 - **开发工具集成**：支持React Dev Inspector等开发工具的集成使用
 - **系统依赖安装**：在Dockerfile.dev中添加libc6-compat依赖，确保兼容性
 - **pnpm镜像源优化**：配置国内镜像源，提升依赖安装速度
+- **卷挂载排除规则**：通过精心设计的排除规则避免热更新自循环，提升开发稳定性
+- **跨平台兼容性**：通过CHOKIDAR_USEPOLLING环境变量支持不同文件系统的监听需求
+
+**更新** 移除了对dist和tsconfig.tsbuildinfo的显式排除规则，问题已通过其他方式解决
 
 **新增章节** 详细说明开发模式下前端容器的特殊配置和功能特性
 
 **章节来源**
 - [docker-compose.yml](file://docker-compose.yml)
 - [frontend/Dockerfile.dev](file://frontend/Dockerfile.dev)
+- [frontend/package.json](file://frontend/package.json)
+- [.gitignore](file://.gitignore)

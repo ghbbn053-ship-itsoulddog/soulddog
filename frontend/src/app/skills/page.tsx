@@ -2,6 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Blocks, FileUp, Github, Upload } from "lucide-react";
+
+import { PlatformSidebarFooter, PlatformSidebarHeader, createPlatformNav } from "@/components/workspace/app-sidebar";
+import {
+  WorkbenchBadge,
+  WorkbenchEmpty,
+  WorkbenchSection,
+  WorkbenchShell,
+  WorkbenchStatCard,
+} from "@/components/workspace/workbench-shell";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
 
 type SkillItem = {
   name: string;
@@ -9,6 +25,7 @@ type SkillItem = {
   description: string;
   enabled: boolean;
   triggers: string[];
+  input_schema?: Record<string, unknown>;
   tools: Array<{ name?: string }>;
   updated_at?: number;
 };
@@ -19,6 +36,13 @@ description: 示例课表技能
 triggers:
   - 课表
   - 课程安排
+input_schema:
+  type: object
+  properties:
+    semester:
+      type: string
+      description: 学期，如 2025-2026-2
+  required: []
 tools:
   - name: query_schedule
     description: 查询课程表
@@ -170,99 +194,146 @@ export default function SkillsPage() {
   };
 
   const sorted = useMemo(() => [...skills].sort((a, b) => a.name.localeCompare(b.name)), [skills]);
+  const enabledCount = sorted.filter((item) => item.enabled).length;
 
-  if (loading) return <div className="p-6 text-sm text-gray-500">加载中...</div>;
+  if (loading) {
+    return <div className="p-6 text-sm text-slate-500">加载中...</div>;
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white border border-gray-200 rounded-2xl p-5">
-          <h1 className="text-xl font-semibold text-gray-900">Skill 管理</h1>
-          <p className="text-sm text-gray-500 mt-1">上传 YAML 声明即可扩展能力。</p>
-          <textarea
-            value={yamlText}
-            onChange={(e) => setYamlText(e.target.value)}
-            className="mt-4 w-full h-80 border border-gray-300 rounded-xl p-3 font-mono text-sm"
-          />
-          <div className="mt-3 flex gap-2">
-            <input
-              value={importUrl}
-              onChange={(e) => setImportUrl(e.target.value)}
-              placeholder="GitHub YAML 链接（支持 /blob/ 自动转换）"
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            />
-            <button
-              onClick={importFromUrl}
-              disabled={saving || !importUrl.trim()}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50"
-            >
-              URL 导入
-            </button>
+    <WorkbenchShell
+      badge={
+        <WorkbenchBadge>
+          <Blocks className="h-3.5 w-3.5" />
+          SKILL REGISTRY
+        </WorkbenchBadge>
+      }
+      title="Skill 管理"
+      description="按文档方案，Skill 是平台可拼接能力对象。这里统一管理 YAML manifest、URL 导入和启停状态。"
+      sidebarTitle="能力编排"
+      sidebarDescription="以 Skill 为单位维护平台能力和触发路由。"
+      sidebarHeader={<PlatformSidebarHeader />}
+      navItems={createPlatformNav("skills")}
+      footer={<PlatformSidebarFooter username={username} detail="Skill 管理账号" />}
+      topActions={
+        <>
+          <Button variant="outline" onClick={() => router.push("/composition")}>
+            进入组合编排
+          </Button>
+          <Button onClick={() => router.push("/chat")}>返回会话</Button>
+        </>
+      }
+    >
+      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="grid gap-4">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <WorkbenchStatCard label="Installed" value={sorted.length} hint="当前账号可见 Skill 总数" />
+            <WorkbenchStatCard label="Enabled" value={enabledCount} hint="当前处于启用状态" />
+            <WorkbenchStatCard label="Disabled" value={sorted.length - enabledCount} hint="可在右侧快速启用" />
           </div>
-          <div className="mt-3 flex gap-2 items-center">
-            <input
-              type="file"
-              accept=".yaml,.yml"
-              onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
-            />
-            <button
-              onClick={uploadFromFile}
-              disabled={saving || !uploadFile}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white disabled:opacity-50"
-            >
-              文件安装
-            </button>
-          </div>
-          <div className="mt-3 flex gap-2">
-            <button
-              onClick={upload}
-              disabled={saving}
-              className="px-4 py-2 rounded-lg bg-gray-900 text-white disabled:opacity-50"
-            >
-              {saving ? "上传中..." : "上传 Skill"}
-            </button>
-            <button onClick={() => router.push("/chat")} className="px-4 py-2 rounded-lg border border-gray-300 bg-white">
-              返回聊天
-            </button>
-          </div>
-          {msg && <div className="mt-3 text-sm text-gray-700">{msg}</div>}
+
+          <WorkbenchSection
+            title="安装与导入"
+            description="支持直接粘贴 YAML、从 GitHub URL 导入，或上传本地 manifest 文件。"
+          >
+            <div className="space-y-4">
+              <Textarea
+                value={yamlText}
+                onChange={(e) => setYamlText(e.target.value)}
+                className="min-h-[360px] font-mono text-sm"
+              />
+              <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                <Input
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                  placeholder="GitHub YAML 链接，支持 /blob/ 自动转换"
+                />
+                <Button variant="outline" onClick={importFromUrl} disabled={saving || !importUrl.trim()}>
+                  <Github className="h-4 w-4" />
+                  URL 导入
+                </Button>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                <Input type="file" accept=".yaml,.yml" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+                <Button variant="outline" onClick={uploadFromFile} disabled={saving || !uploadFile}>
+                  <FileUp className="h-4 w-4" />
+                  文件安装
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={upload} disabled={saving}>
+                  <Upload className="h-4 w-4" />
+                  {saving ? "处理中..." : "上传 Skill"}
+                </Button>
+                {msg ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{msg}</div>
+                ) : null}
+              </div>
+            </div>
+          </WorkbenchSection>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-2xl p-5">
-          <h2 className="text-lg font-semibold text-gray-900">已安装 Skills</h2>
-          <div className="mt-3 space-y-2">
-            {sorted.length === 0 && <div className="text-sm text-gray-500">暂无 Skill</div>}
-            {sorted.map((s) => (
-              <div key={s.name} className="border border-gray-200 rounded-xl p-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-gray-900">{s.name}</div>
-                    <div className="text-xs text-gray-500">{s.description || "无描述"} · v{s.version || "-"}</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => toggle(s.name, !s.enabled)}
-                      className="px-2.5 py-1.5 text-xs rounded-lg border border-gray-300"
-                    >
-                      {s.enabled ? "停用" : "启用"}
-                    </button>
-                    <button
-                      onClick={() => remove(s.name)}
-                      className="px-2.5 py-1.5 text-xs rounded-lg border border-red-300 text-red-600"
-                    >
-                      删除
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-2 text-xs text-gray-500">
-                  状态：{s.enabled ? "启用" : "停用"} · tools：{(s.tools || []).map((t) => t?.name || "-").join(", ")}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <WorkbenchSection title="已安装 Skill" description="清单视图采用 shadcn 卡片，不再使用原生按钮堆叠。">
+          <ScrollArea className="h-[720px] pr-3">
+            <div className="space-y-3">
+              {sorted.length === 0 ? (
+                <WorkbenchEmpty title="暂无 Skill" description="先在左侧上传 YAML 或从现成 GitHub 配置导入。" />
+              ) : null}
+              {sorted.map((skill) => {
+                const schemaProperties =
+                  (skill.input_schema as Record<string, unknown>)?.properties as Record<string, unknown> | undefined;
+                return (
+                  <Card key={skill.name} className="border-slate-200 shadow-none">
+                    <CardContent className="space-y-3 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="text-sm font-semibold text-slate-950">{skill.name}</div>
+                          <div className="text-xs leading-5 text-slate-500">{skill.description || "无描述"}</div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge variant={skill.enabled ? "success" : "outline"}>{skill.enabled ? "enabled" : "disabled"}</Badge>
+                          <Badge variant="outline">v{skill.version || "-"}</Badge>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {(skill.triggers || []).length > 0 ? (
+                          skill.triggers.map((trigger) => (
+                            <Badge key={trigger} variant="secondary">
+                              {trigger}
+                            </Badge>
+                          ))
+                        ) : (
+                          <Badge variant="outline">无 trigger</Badge>
+                        )}
+                      </div>
+
+                      <div className="text-xs text-slate-500">
+                        tools: {(skill.tools || []).map((tool) => tool?.name || "-").join(", ") || "-"}
+                      </div>
+
+                      {schemaProperties && Object.keys(schemaProperties).length > 0 ? (
+                        <pre className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">
+                          {JSON.stringify(skill.input_schema || {}, null, 2)}
+                        </pre>
+                      ) : null}
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" onClick={() => toggle(skill.name, !skill.enabled)}>
+                          {skill.enabled ? "停用" : "启用"}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => remove(skill.name)}>
+                          删除
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </WorkbenchSection>
       </div>
-    </div>
+    </WorkbenchShell>
   );
 }

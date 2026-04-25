@@ -15,17 +15,22 @@
 - [frontend/src/app/chat/page.tsx](file://frontend/src/app/chat/page.tsx)
 - [backend/app/mcp/tools.py](file://backend/app/mcp/tools.py)
 - [backend/app/api/mcp.py](file://backend/app/api/mcp.py)
+- [backend/app/services/mcp_registry.py](file://backend/app/services/mcp_registry.py)
+- [backend/mcp_server.py](file://backend/mcp_server.py)
 - [docker-compose.yml](file://docker-compose.yml)
 - [backend/requirements.txt](file://backend/requirements.txt)
 </cite>
 
 ## 更新摘要
 **变更内容**
-- 增强了Qwen服务的工具调用兼容性，支持字典和对象两种消息格式
-- 增加了详细的工具调用结构日志记录功能
-- 改进了工具调用的错误处理和调试能力
+- **新增MCP注册表系统（MCPRegistry）**：消除了API层的硬编码工具映射，提供了统一的工具注册、发现和调用接口
+- **统一的MCP工具接口**：支持六个内置学术工具的标准化调用
+- **MCP HTTP API**：提供RESTful接口访问MCP工具，支持Web端和其他客户端
+- **MCP服务器**：支持stdio模式，可被OpenClaw、Claude Desktop等支持MCP的AI Agent调用
+- **增强的Qwen服务工具调用兼容性**：支持字典和对象两种消息格式
+- **详细的工具调用结构日志记录功能**
+- **改进的工具调用错误处理和调试能力**
 - **新增query_training_plan工具**：扩展AI在学术查询方面的能力，支持查询培养方案和课程规划
-- **新增MCP工具支持**：为OpenClaw平台提供标准化的工具接口
 
 ## 目录
 1. [简介](#简介)
@@ -42,14 +47,17 @@
 
 本项目是一个基于FastAPI构建的AI工具调用系统，专门为广东财经大学设计，提供智能化的教务系统查询和交互功能。系统集成了千问大模型的Function Calling能力，实现了真正的AI工具调用，能够直接访问教务系统的实时数据。
 
+**更新** 新增了MCP注册表系统和标准化MCP接口支持
+
 该系统的核心特色包括：
 - **Function Calling工具调用**：AI模型可以直接调用预定义的工具函数查询教务数据
+- **MCP注册表系统**：统一的工具注册、发现和调用接口，消除了API层的硬编码工具映射
+- **标准化MCP接口**：支持OpenClaw、Claude Desktop等AI Agent平台
 - **多模态AI服务**：支持直接对话、工具调用和RAG增强对话三种模式
 - **完整的数据管道**：从教务系统爬取数据到向量化存储的全流程
 - **智能对话管理**：支持多轮对话、对话历史管理和工具调用追踪
 - **增强的工具调用兼容性**：支持字典和对象两种消息格式，提供详细的结构日志记录
 - **扩展的学术查询能力**：新增培养方案查询工具，支持课程规划和学分管理
-- **标准化MCP接口**：为OpenClaw平台提供标准化的工具调用接口
 
 ## 项目结构
 
@@ -66,8 +74,10 @@ subgraph "后端服务"
 API[FastAPI后端]
 ChatAPI[对话API]
 DataAPI[数据API]
-Services[业务服务层]
 MCPAPI[MCP API]
+MCPRegistry[MCP注册表]
+MCPTools[MCP工具]
+MCPService[MCP服务]
 end
 subgraph "数据存储"
 PG[(PostgreSQL)]
@@ -79,9 +89,10 @@ Qwen[千问AI服务]
 VectorStore[向量存储]
 DataProcessor[数据处理器]
 end
-subgraph "工具接口"
-MCPTools[MCP工具]
+subgraph "MCP平台"
 OpenClaw[OpenClaw平台]
+ClaudeDesktop[Claude Desktop]
+MCPStdio[MCP stdio模式]
 end
 FE --> API
 ChatUI --> FE
@@ -89,10 +100,12 @@ LoginUI --> FE
 API --> ChatAPI
 API --> DataAPI
 API --> MCPAPI
-ChatAPI --> Services
-DataAPI --> Services
-MCPAPI --> MCPTools
-MCPTools --> OpenClaw
+MCPAPI --> MCPRegistry
+MCPRegistry --> MCPTools
+MCPTools --> MCPService
+MCPService --> OpenClaw
+MCPService --> ClaudeDesktop
+MCPService --> MCPStdio
 Services --> PG
 Services --> Milvus
 Services --> Qwen
@@ -101,22 +114,43 @@ Services --> DataProcessor
 ```
 
 **图表来源**
-- [backend/main.py:1-150](file://backend/main.py#L1-L150)
+- [backend/main.py:1-118](file://backend/main.py#L1-L118)
 - [frontend/src/app/chat/page.tsx:1-100](file://frontend/src/app/chat/page.tsx#L1-L100)
-- [backend/app/api/mcp.py:1-195](file://backend/app/api/mcp.py#L1-L195)
+- [backend/app/api/mcp.py:1-101](file://backend/app/api/mcp.py#L1-L101)
+- [backend/app/services/mcp_registry.py:1-174](file://backend/app/services/mcp_registry.py#L1-L174)
 
 **章节来源**
-- [backend/main.py:1-150](file://backend/main.py#L1-L150)
+- [backend/main.py:1-118](file://backend/main.py#L1-L118)
 - [docker-compose.yml:1-167](file://docker-compose.yml#L1-L167)
 
 ## 核心组件
 
-### AI工具调用系统架构
+### MCP注册表系统架构
 
-系统的核心是基于千问大模型的Function Calling功能，实现了真正的智能代理能力：
+**更新** 新增了MCP注册表系统，提供统一的工具管理接口
+
+系统的核心是基于千问大模型的Function Calling功能和MCP注册表系统，实现了真正的智能代理能力：
 
 ```mermaid
 classDiagram
+class MCPRegistry {
++tools : Dict[str, MCPToolSpec]
++register(spec) void
++list_tools() List[Dict]
++has_tool(name) bool
++get_tool_schema(name) Dict
++call_tool(name, username, params) str
++注册六个内置学术工具
++提供统一工具接口
+}
+class MCPToolSpec {
++name : str
++description : str
++module_path : str
++func_name : str
++parameters : Dict[str, Any]
++input_schema : Dict[str, Any]
+}
 class QwenService {
 +api_key : str
 +model : str
@@ -129,6 +163,14 @@ class QwenService {
 +_execute_tool(func_name, args, context) Dict
 +支持字典和对象两种消息格式
 +详细工具调用结构日志记录
+}
+class MCPTools {
++query_grades(username, semester) str
++query_schedule(username, semester) str
++query_academic_progress(username) str
++query_training_plan(username) str
++query_exam_schedule(username, semester) str
++query_personal_info(username) str
 }
 class JwxtScraper {
 +session : requests.Session
@@ -155,14 +197,8 @@ class VectorStore {
 +search(user_id, query_embedding, top_k) List[Dict]
 +delete_user_data(user_id) void
 }
-class MCPTools {
-+query_grades(username, semester) str
-+query_schedule(username, semester) str
-+query_academic_progress(username) str
-+query_training_plan(username) str
-+query_exam_schedule(username, semester) str
-+query_personal_info(username) str
-}
+MCPRegistry --> MCPToolSpec : "管理"
+MCPRegistry --> MCPTools : "调用"
 QwenService --> JwxtScraper : "调用工具"
 QwenService --> DataProcessor : "更新数据"
 MCPTools --> JwxtScraper : "调用工具"
@@ -171,11 +207,12 @@ DataProcessor --> Database : "持久化存储"
 ```
 
 **图表来源**
+- [backend/app/services/mcp_registry.py:27-174](file://backend/app/services/mcp_registry.py#L27-L174)
+- [backend/app/mcp/tools.py:40-306](file://backend/app/mcp/tools.py#L40-L306)
 - [backend/app/services/qwen_service.py:15-583](file://backend/app/services/qwen_service.py#L15-L583)
 - [backend/scraper.py:13-1504](file://backend/scraper.py#L13-L1504)
 - [backend/app/services/data_processor.py:13-347](file://backend/app/services/data_processor.py#L13-L347)
 - [backend/app/services/vector_store.py:14-185](file://backend/app/services/vector_store.py#L14-L185)
-- [backend/app/mcp/tools.py:183-310](file://backend/app/mcp/tools.py#L183-L310)
 
 ### 对话管理系统
 
@@ -220,12 +257,14 @@ graph TB
 subgraph "入口层"
 Router[FastAPI路由]
 Middleware[中间件]
+MCPAPI[MCP HTTP API]
 end
 subgraph "业务逻辑层"
 ChatService[对话服务]
 DataService[数据服务]
 VectorService[向量服务]
 MCPService[MCP服务]
+MCPRegistry[MCP注册表]
 end
 subgraph "数据访问层"
 UserModel[用户模型]
@@ -238,13 +277,17 @@ MilvusDB[Milvus向量库]
 PostgresDB[PostgreSQL]
 JwxtSystem[教务系统]
 OpenClaw[OpenClaw平台]
+MCPStdio[MCP stdio模式]
 end
 Router --> ChatService
 Router --> DataService
-Router --> MCPService
+Router --> MCPAPI
+MCPAPI --> MCPRegistry
+MCPRegistry --> MCPService
 ChatService --> QwenAPI
 ChatService --> VectorService
 MCPService --> OpenClaw
+MCPService --> MCPStdio
 DataService --> JwxtSystem
 VectorService --> MilvusDB
 ChatService --> PostgresDB
@@ -255,10 +298,97 @@ ConvModel --> PostgresDB
 ```
 
 **图表来源**
-- [backend/main.py:94-154](file://backend/main.py#L94-L154)
+- [backend/main.py:94-118](file://backend/main.py#L94-L118)
 - [backend/app/models/base.py:10-29](file://backend/app/models/base.py#L10-L29)
 
 ## 详细组件分析
+
+### MCP注册表系统实现
+
+**更新** 新增了MCP注册表系统，提供统一的工具管理接口
+
+MCP注册表系统是本次更新的核心组件，消除了API层的硬编码工具映射：
+
+```mermaid
+flowchart TD
+Start([MCP注册表初始化]) --> RegisterBuiltin[注册六个内置学术工具]
+RegisterBuiltin --> QueryGrades[query_grades工具]
+RegisterBuiltin --> QuerySchedule[query_schedule工具]
+RegisterBuiltin --> QueryAcademicProgress[query_academic_progress工具]
+RegisterBuiltin --> QueryTrainingPlan[query_training_plan工具]
+RegisterBuiltin --> QueryExamSchedule[query_exam_schedule工具]
+RegisterBuiltin --> QueryPersonalInfo[query_personal_info工具]
+QueryGrades --> ToolSpec1[MCPToolSpec配置]
+QuerySchedule --> ToolSpec2[MCPToolSpec配置]
+QueryAcademicProgress --> ToolSpec3[MCPToolSpec配置]
+QueryTrainingPlan --> ToolSpec4[MCPToolSpec配置]
+QueryExamSchedule --> ToolSpec5[MCPToolSpec配置]
+QueryPersonalInfo --> ToolSpec6[MCPToolSpec配置]
+ToolSpec1 --> Registry[注册到工具表]
+ToolSpec2 --> Registry
+ToolSpec3 --> Registry
+ToolSpec4 --> Registry
+ToolSpec5 --> Registry
+ToolSpec6 --> Registry
+Registry --> CallTool[统一工具调用接口]
+CallTool --> ImportModule[动态导入模块]
+ImportModule --> ExecuteFunc[执行工具函数]
+ExecuteFunc --> ReturnResult[返回工具结果]
+```
+
+**图表来源**
+- [backend/app/services/mcp_registry.py:27-174](file://backend/app/services/mcp_registry.py#L27-L174)
+
+**章节来源**
+- [backend/app/services/mcp_registry.py:1-174](file://backend/app/services/mcp_registry.py#L1-L174)
+
+### MCP工具接口实现
+
+**更新** 新增了标准化的MCP工具接口，支持六个内置学术工具
+
+系统为OpenClaw平台提供了标准化的MCP工具接口，支持六个内置学术工具：
+
+```mermaid
+flowchart TD
+A[MCP客户端请求] --> B[HTTP API接收]
+B --> C[工具映射查找]
+C --> D[动态导入工具函数]
+D --> E[构建参数并调用]
+E --> F[异步执行工具]
+F --> G[返回标准化响应]
+G --> H[JSON Schema返回]
+```
+
+**图表来源**
+- [backend/app/api/mcp.py:44-86](file://backend/app/api/mcp.py#L44-L86)
+- [backend/app/mcp/tools.py:40-306](file://backend/app/mcp/tools.py#L40-L306)
+
+**章节来源**
+- [backend/app/api/mcp.py:1-101](file://backend/app/api/mcp.py#L1-L101)
+- [backend/app/mcp/tools.py:1-306](file://backend/app/mcp/tools.py#L1-L306)
+
+### MCP服务器实现
+
+**更新** 新增了MCP服务器，支持stdio模式
+
+系统提供了MCP服务器，支持stdio模式和OpenClaw集成：
+
+```mermaid
+flowchart TD
+A[启动MCP服务器] --> B[添加项目根目录到Python路径]
+B --> C[导入MCP工具模块]
+C --> D[打印可用工具列表]
+D --> E[启动MCP服务(stdio模式)]
+E --> F[等待客户端连接]
+F --> G[处理工具调用请求]
+G --> H[返回工具执行结果]
+```
+
+**图表来源**
+- [backend/mcp_server.py:22-34](file://backend/mcp_server.py#L22-L34)
+
+**章节来源**
+- [backend/mcp_server.py:1-35](file://backend/mcp_server.py#L1-L35)
 
 ### AI工具调用实现
 
@@ -272,9 +402,11 @@ ConvModel --> PostgresDB
 | query_exam_schedule | 查询考试安排 | semester | 考试信息 |
 | query_academic_progress | 查询学业进度 | 无 | 学业进度信息 |
 | **query_training_plan** | **查询培养方案** | **semester** | **培养方案课程列表** |
-| refresh_all_data | 刷新所有数据 | 无 | 数据刷新状态 |
+| **refresh_all_data** | **刷新所有数据** | **无** | **数据刷新状态** |
+| **MCP注册表** | **统一工具管理** | **无** | **工具注册状态** |
+| **MCP HTTP API** | **RESTful工具接口** | **username, params** | **工具调用结果** |
 
-**更新** 新增query_training_plan工具，扩展AI在学术查询方面的能力
+**更新** 新增了MCP注册表和MCP HTTP API工具
 
 ```mermaid
 flowchart TD
@@ -366,28 +498,6 @@ G --> H[AI生成自然语言回复]
 **章节来源**
 - [backend/app/services/qwen_service.py:127-143](file://backend/app/services/qwen_service.py#L127-L143)
 - [backend/scraper.py:788-896](file://backend/scraper.py#L788-L896)
-
-### MCP工具接口实现
-
-**新增功能** 系统为OpenClaw平台提供了标准化的MCP工具接口：
-
-```mermaid
-flowchart TD
-A[MCP客户端请求] --> B[HTTP API接收]
-B --> C[工具映射查找]
-C --> D[动态导入工具函数]
-D --> E[构建参数并调用]
-E --> F[异步执行工具]
-F --> G[返回标准化响应]
-```
-
-**图表来源**
-- [backend/app/api/mcp.py:96-146](file://backend/app/api/mcp.py#L96-L146)
-- [backend/app/mcp/tools.py:183-233](file://backend/app/mcp/tools.py#L183-L233)
-
-**章节来源**
-- [backend/app/api/mcp.py:1-195](file://backend/app/api/mcp.py#L1-L195)
-- [backend/app/mcp/tools.py:183-310](file://backend/app/mcp/tools.py#L183-L310)
 
 ### 数据处理和向量化流程
 
@@ -487,6 +597,7 @@ end
 subgraph "MCP平台"
 OpenClaw[OpenClaw 1.0]
 MCP[MCP规范]
+MCPStdio[MCP stdio模式]
 end
 FastAPI --> DashScope
 FastAPI --> SQLAlchemy
@@ -499,6 +610,7 @@ Milvus --> Redis
 Requests --> BeautifulSoup
 Selenium --> Requests
 OpenClaw --> MCP
+MCP --> MCPStdio
 ```
 
 **图表来源**
@@ -517,18 +629,21 @@ OpenClaw --> MCP
 - **会话缓存**：使用内存存储用户会话，支持Redis集群部署
 - **向量缓存**：Milvus向量库支持批量插入和索引优化
 - **数据库连接池**：SQLAlchemy连接池减少连接开销
+- **MCP工具缓存**：MCP注册表支持工具规格缓存
 
 ### 异步处理
 - **后台任务**：数据同步使用BackgroundTasks异步执行
 - **批量向量化**：数据分批处理避免超时
 - **并发控制**：工具调用支持并发执行
 - **异步MCP工具**：支持异步工具调用提高响应速度
+- **异步MCP注册表**：动态导入工具函数支持异步执行
 
 ### 性能监控
 - **日志系统**：完整的操作日志和错误追踪
 - **指标收集**：响应时间、错误率等关键指标
 - **资源监控**：数据库连接数、向量库状态监控
 - **工具调用监控**：详细的工具调用结构日志便于性能分析
+- **MCP注册表监控**：工具注册状态和调用统计
 
 ## 故障排除指南
 
@@ -542,11 +657,13 @@ OpenClaw --> MCP
 | 爬虫失败 | 教务数据获取失败 | 教务系统维护 | 检查教务系统状态 |
 | 前端无法连接 | API请求失败 | CORS配置问题 | 检查CORS设置 |
 | 工具调用格式错误 | 工具调用失败 | 消息格式不兼容 | 检查工具调用格式 |
-| **培养方案查询失败** | **培养方案为空** | **HTML结构变化** | **检查深度爬取HTML** |
+| **MCP注册表不可用** | **工具调用失败** | **MCP注册表初始化失败** | **检查MCP注册表配置** |
 | **MCP工具调用失败** | **OpenClaw连接异常** | **MCP服务器未启动** | **检查MCP服务状态** |
-| **工具调用日志缺失** | **调试困难** | **日志级别设置过高** | **调整日志配置** |
+| **MCP HTTP API错误** | **RESTful接口异常** | **API路由配置错误** | **检查API路由设置** |
+| **MCP工具调用日志缺失** | **调试困难** | **日志级别设置过高** | **调整日志配置** |
+| **培养方案查询失败** | **培养方案为空** | **HTML结构变化** | **检查深度爬取HTML** |
 
-**更新** 新增了MCP工具调用失败和工具调用日志缺失的故障排除指南
+**更新** 新增了MCP注册表、MCP工具调用和MCP HTTP API相关的故障排除指南
 
 ### 调试方法
 
@@ -557,7 +674,9 @@ OpenClaw --> MCP
 5. **工具调用调试**：查看详细的工具调用结构日志
 6. **培养方案调试**：检查/tmp/debug_training_plan.html文件
 7. **MCP调试**：检查MCP服务器日志和OpenClaw连接状态
-8. **兼容性测试**：验证字典和对象两种消息格式的兼容性
+8. **MCP注册表调试**：验证工具注册状态和规格信息
+9. **MCP HTTP API调试**：测试RESTful接口的可用性和响应
+10. **兼容性测试**：验证字典和对象两种消息格式的兼容性
 
 **章节来源**
 - [backend/main.py:45-47](file://backend/main.py#L45-L47)
@@ -569,13 +688,14 @@ OpenClaw --> MCP
 
 ### 技术优势
 - **真正的工具调用**：基于Function Calling实现AI与真实数据的无缝连接
+- **MCP注册表系统**：统一的工具管理接口，消除了API层的硬编码工具映射
+- **标准化MCP接口**：支持OpenClaw、Claude Desktop等AI Agent平台
 - **多模态AI服务**：支持直接对话、工具调用和RAG增强三种模式
 - **完整的数据管道**：从爬取到向量化的全流程自动化
 - **现代化架构**：微服务架构支持水平扩展和高可用
 - **增强的兼容性**：支持字典和对象两种消息格式，提高系统稳定性
 - **完善的日志记录**：详细的工具调用结构日志便于调试和监控
 - **扩展的学术查询能力**：新增培养方案查询工具，支持课程规划和学分管理
-- **标准化接口**：为OpenClaw平台提供标准化的MCP工具接口
 
 ### 应用价值
 - **提升用户体验**：自然语言交互替代复杂的系统操作流程
@@ -589,4 +709,4 @@ OpenClaw --> MCP
 ### 发展前景
 系统具备良好的扩展性，可以轻松集成更多工具和服务，为校园智能化建设提供坚实的技术基础。通过持续优化AI模型和数据处理算法，系统将能够提供更加精准和智能的服务体验。同时，标准化的MCP接口为未来的平台化发展奠定了坚实基础。
 
-**更新** 新增了标准化接口和平台生态的技术优势说明
+**更新** 新增了MCP注册表系统和平台生态的技术优势说明

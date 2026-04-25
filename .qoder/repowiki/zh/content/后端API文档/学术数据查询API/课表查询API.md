@@ -3,17 +3,21 @@
 <cite>
 **本文档引用的文件**
 - [backend/scraper.py](file://backend/scraper.py)
+- [backend/app/api/education.py](file://backend/app/api/education.py)
 - [backend/main.py](file://backend/main.py)
 - [backend/education_options.py](file://backend/education_options.py)
 - [backend/test_scraper.py](file://backend/test_scraper.py)
+- [backend/test_schedule_parsing.py](file://backend/test_schedule_parsing.py)
+- [backend/test_schedule_debug.py](file://backend/test_schedule_debug.py)
 </cite>
 
 ## 更新摘要
 **变更内容**
 - 新增对kbcontent div元素的解析支持，实现多课程块解析机制
-- 改进教师、周次、教室信息提取逻辑，增强对复杂HTML结构的处理能力
-- 优化课表查询接口的URL构造逻辑，确保正确的课程数据获取
-- 完善课表查询参数的详细说明和使用示例
+- 改进课程块分割算法，使用21-22个短横线作为分割符
+- 优化HTML解析逻辑，增强对复杂课表布局的处理能力
+- 改进教师、周次、教室信息提取逻辑，提升数据准确性
+- 完善课表查询接口的URL构造逻辑和参数处理
 
 ## 目录
 1. [简介](#简介)
@@ -30,9 +34,7 @@
 
 本文档详细说明了教务系统中的课表查询接口，重点介绍 `/api/schedule` 接口的完整规范。该接口支持按学期和周次查询课表，提供了灵活的查询参数组合，能够满足不同场景下的课表查询需求。
 
-**更新** 课表查询接口现已重大改进，新增对kbcontent div元素的解析支持，实现多课程块解析机制，显著增强了对复杂HTML结构的处理能力和数据提取准确性。
-
-系统基于FastAPI框架构建，采用前后端分离架构，通过爬虫技术从教务系统中抓取课表数据，并提供RESTful API接口供前端应用调用。
+**更新** 课表查询接口现已重大改进，新增对kbcontent div元素的解析支持，实现多课程块解析机制，显著增强了对复杂HTML结构的处理能力和数据提取准确性。系统基于FastAPI框架构建，采用前后端分离架构，通过爬虫技术从教务系统中抓取课表数据，并提供RESTful API接口供前端应用调用。
 
 ## 项目结构
 
@@ -253,7 +255,8 @@ ParseRows --> ExtractPeriod[提取节次信息]
 ExtractPeriod --> LoopDays[遍历星期列]
 LoopDays --> FindKBContent[查找kbcontent div元素]
 FindKBContent --> SplitBlocks[分割多课程块]
-SplitBlocks --> ParseCourseInfo[解析课程详细信息]
+SplitBlocks --> RegexSplit[使用正则表达式分割<br/>21-22个短横线]
+RegexSplit --> ParseCourseInfo[解析课程详细信息]
 ParseCourseInfo --> AddToResult[添加到结果集]
 AddToResult --> CheckRemarks[检查备注信息]
 CheckRemarks --> ReturnResult[返回最终结果]

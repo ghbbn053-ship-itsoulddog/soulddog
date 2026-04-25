@@ -1,7 +1,20 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BrainCircuit, Settings2 } from "lucide-react";
+
+import { PlatformSidebarFooter, PlatformSidebarHeader, createPlatformNav } from "@/components/workspace/app-sidebar";
+import {
+  WorkbenchBadge,
+  WorkbenchSection,
+  WorkbenchShell,
+  WorkbenchStatCard,
+} from "@/components/workspace/workbench-shell";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 type ProviderItem = {
   provider: string;
@@ -66,8 +79,11 @@ export default function ModelsSettingsPage() {
     run();
   }, [API_BASE, router]);
 
-  const providerModels = providers.find((p) => p.provider === provider)?.models || [];
-  const providerMeta = providers.find((p) => p.provider === provider);
+  const providerModels = useMemo(
+    () => providers.find((p) => p.provider === provider)?.models || [],
+    [providers, provider]
+  );
+  const providerMeta = useMemo(() => providers.find((p) => p.provider === provider), [providers, provider]);
 
   const save = async () => {
     if (!username) return;
@@ -102,114 +118,154 @@ export default function ModelsSettingsPage() {
     }
   };
 
-  if (loading) return <div className="p-6 text-sm text-gray-500">加载中...</div>;
+  if (loading) {
+    return <div className="p-6 text-sm text-slate-500">加载中...</div>;
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-2xl mx-auto bg-white rounded-2xl border border-gray-200 p-6">
-        <h1 className="text-xl font-semibold text-gray-900">模型设置</h1>
-        <p className="text-sm text-gray-500 mt-1">按账号保存模型偏好，聊天链路自动使用。</p>
-
-        <div className="mt-6 space-y-4">
-          <div>
-            <label className="text-sm font-medium text-gray-700">Provider</label>
-            <select
-              className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
-              value={provider}
-              onChange={(e) => {
-                const nextProvider = e.target.value;
-                setProvider(nextProvider);
-                const defaultModel =
-                  providers.find((p) => p.provider === nextProvider)?.default_model || "";
-                setModel(defaultModel);
-              }}
-            >
-              {providers.map((p) => (
-                <option key={p.provider} value={p.provider}>
-                  {p.provider}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700">Model</label>
-            <select
-              className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-            >
-              {providerModels.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {providerMeta?.supports_custom_endpoint && (
-            <>
-              <div>
-                <label className="text-sm font-medium text-gray-700">Base URL</label>
-                <input
-                  value={apiBase}
-                  onChange={(e) => setApiBase(e.target.value)}
-                  placeholder="https://api.openai.com/v1"
-                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">API Key</label>
-                <input
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={apiKeyMasked ? `已保存(${apiKeyMasked})，留空不修改` : "sk-..."}
-                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
-                />
-              </div>
-            </>
-          )}
-
-          <div>
-            <label className="text-sm font-medium text-gray-700">模式</label>
-            <select
-              className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
-              value={reasoningMode}
-              onChange={(e) => setReasoningMode(e.target.value)}
-            >
-              <option value="standard">标准</option>
-              <option value="thinking">推理</option>
-              <option value="deep">深度推理</option>
-            </select>
-          </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={showThinking}
-              onChange={(e) => setShowThinking(e.target.checked)}
-            />
-            显示思考流（若模型支持）
-          </label>
-
-          <div className="flex gap-2">
-            <button
-              onClick={save}
-              disabled={saving}
-              className="px-4 py-2 rounded-lg bg-gray-900 text-white disabled:opacity-50"
-            >
-              {saving ? "保存中..." : "保存"}
-            </button>
-            <button
-              onClick={() => router.push("/chat")}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white"
-            >
-              返回聊天
-            </button>
-          </div>
+    <WorkbenchShell
+      badge={
+        <WorkbenchBadge>
+          <Settings2 className="h-3.5 w-3.5" />
+          MODEL SETTINGS
+        </WorkbenchBadge>
+      }
+      title="模型设置"
+      description="按账号保存 Provider、Model、推理模式和自定义 API 入口。这里的设置会直接作用于快速会话和工作区对话。"
+      sidebarTitle="模型偏好"
+      sidebarDescription="统一提供模型选择、推理模式和思考流开关。"
+      sidebarHeader={<PlatformSidebarHeader />}
+      navItems={createPlatformNav("models")}
+      footer={<PlatformSidebarFooter username={username} detail="模型设置账号" />}
+      topActions={
+        <>
+          <Button variant="outline" onClick={() => router.push("/chat")}>
+            返回会话
+          </Button>
+          <Button onClick={save} disabled={saving}>
+            {saving ? "保存中..." : "保存设置"}
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-4">
+        <div className="grid gap-4 md:grid-cols-3">
+          <WorkbenchStatCard label="Providers" value={providers.length} hint="当前后端返回可用供应商" />
+          <WorkbenchStatCard label="Models" value={providerModels.length} hint="当前 provider 下的模型数" />
+          <WorkbenchStatCard label="Thinking" value={showThinking ? "On" : "Off"} hint="思考流前端显示状态" />
         </div>
 
-        {msg && <div className="mt-4 text-sm text-gray-700">{msg}</div>}
+        {msg ? (
+          <Card className="border-slate-200 bg-slate-50 shadow-none">
+            <CardContent className="p-4 text-sm text-slate-700">{msg}</CardContent>
+          </Card>
+        ) : null}
+
+        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+          <WorkbenchSection title="基础配置" description="保持页面结构清晰，避免把模型选择藏起来。">
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-2">
+                <div className="text-sm font-medium text-slate-900">Provider</div>
+                <select
+                  className="h-11 w-full rounded-xl border border-[hsl(var(--border))] bg-white px-3 text-sm outline-none ring-0"
+                  value={provider}
+                  onChange={(e) => {
+                    const nextProvider = e.target.value;
+                    setProvider(nextProvider);
+                    const defaultModel = providers.find((p) => p.provider === nextProvider)?.default_model || "";
+                    setModel(defaultModel);
+                  }}
+                >
+                  {providers.map((item) => (
+                    <option key={item.provider} value={item.provider}>
+                      {item.provider}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <div className="text-sm font-medium text-slate-900">Model</div>
+                <select
+                  className="h-11 w-full rounded-xl border border-[hsl(var(--border))] bg-white px-3 text-sm outline-none ring-0"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                >
+                  {providerModels.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {providerMeta?.supports_custom_endpoint ? (
+                <>
+                  <label className="space-y-2 md:col-span-2">
+                    <div className="text-sm font-medium text-slate-900">Base URL</div>
+                    <Input
+                      value={apiBase}
+                      onChange={(e) => setApiBase(e.target.value)}
+                      placeholder="https://api.openai.com/v1"
+                    />
+                  </label>
+                  <label className="space-y-2 md:col-span-2">
+                    <div className="text-sm font-medium text-slate-900">API Key</div>
+                    <Input
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder={apiKeyMasked ? `已保存(${apiKeyMasked})，留空不修改` : "sk-..."}
+                    />
+                  </label>
+                </>
+              ) : null}
+
+              <label className="space-y-2">
+                <div className="text-sm font-medium text-slate-900">推理模式</div>
+                <select
+                  className="h-11 w-full rounded-xl border border-[hsl(var(--border))] bg-white px-3 text-sm outline-none ring-0"
+                  value={reasoningMode}
+                  onChange={(e) => setReasoningMode(e.target.value)}
+                >
+                  <option value="standard">标准</option>
+                  <option value="thinking">推理</option>
+                  <option value="deep">深度推理</option>
+                </select>
+              </label>
+
+              <label className="flex items-center gap-3 rounded-xl border border-[hsl(var(--border))] bg-slate-50 px-4 py-3">
+                <input type="checkbox" checked={showThinking} onChange={(e) => setShowThinking(e.target.checked)} />
+                <div>
+                  <div className="text-sm font-medium text-slate-900">显示思考流</div>
+                  <div className="text-xs text-slate-500">仅在模型支持时有效</div>
+                </div>
+              </label>
+            </div>
+          </WorkbenchSection>
+
+          <WorkbenchSection title="当前摘要" description="给用户一个清晰的当前配置总览。">
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">{provider || "provider"}</Badge>
+                <Badge variant="outline">{model || "model"}</Badge>
+                <Badge variant="secondary">{reasoningMode}</Badge>
+                <Badge variant={showThinking ? "success" : "outline"}>{showThinking ? "思考流开启" : "思考流关闭"}</Badge>
+              </div>
+              <Card className="border-slate-200 bg-slate-50 shadow-none">
+                <CardContent className="space-y-2 p-4 text-sm text-slate-600">
+                  <div className="flex items-center gap-2 text-slate-900">
+                    <BrainCircuit className="h-4 w-4 text-[hsl(var(--primary))]" />
+                    推理模式说明
+                  </div>
+                  <div>标准：追求响应速度。</div>
+                  <div>推理：适合需要展示思考过程的复杂问答。</div>
+                  <div>深度推理：适合更长推导链路，但延迟更高。</div>
+                </CardContent>
+              </Card>
+            </div>
+          </WorkbenchSection>
+        </div>
       </div>
-    </div>
+    </WorkbenchShell>
   );
 }
