@@ -225,6 +225,11 @@ export default function ChatPage() {
     const parsed = Number(raw || 0);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   }, [searchParams]);
+  const requestedConversationId = useMemo(() => {
+    const raw = searchParams.get("conversation_id");
+    const parsed = Number(raw || 0);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }, [searchParams]);
 
   useEffect(() => {
     currentConversationIdRef.current = currentConversationId;
@@ -723,18 +728,12 @@ export default function ChatPage() {
           localStorage.removeItem("current_conversation_id");
         }
 
-        const savedConversationId = localStorage.getItem(migratedKey);
-        if (!savedConversationId) {
+        const initialConversationId = requestedConversationId || Number(localStorage.getItem(migratedKey) || 0);
+        if (!initialConversationId) {
           setInitialLoading(false);
           return;
         }
-
-        const convId = parseInt(savedConversationId, 10);
-        if (Number.isNaN(convId)) {
-          setInitialLoading(false);
-          return;
-        }
-
+        const convId = initialConversationId;
         setCurrentConversationId(convId);
         const reqId = ++activeHistoryReqRef.current;
         const res = await fetch(`${API_BASE}/api/chat/history/${convId}?username=${encodeURIComponent(authUsername)}`, {
@@ -775,7 +774,7 @@ export default function ChatPage() {
     return () => {
       mounted = false;
     };
-  }, [API_BASE, router, fetchModelPrefs, fetchWorkspacePrefs]);
+  }, [API_BASE, router, fetchModelPrefs, fetchWorkspacePrefs, requestedConversationId]);
 
   useEffect(() => {
     if (username) {

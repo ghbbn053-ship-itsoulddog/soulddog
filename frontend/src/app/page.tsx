@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   BookOpen,
-  Bot,
   CalendarDays,
   ChevronRight,
   GraduationCap,
+  History,
   Loader2,
+  MessageSquare,
+  Plus,
   RefreshCcw,
-  Sparkles,
 } from "lucide-react";
 
 import { PlatformSidebarFooter, PlatformSidebarHeader, createPlatformNav } from "@/components/workspace/app-sidebar";
@@ -39,6 +40,13 @@ type EducationStatus = {
     message?: string;
     timestamp?: number;
   };
+};
+
+type ConversationItem = {
+  id: number;
+  title: string;
+  created_at: string;
+  workspace_id?: number | null;
 };
 
 function extractCourseLabel(course: ScheduleCourse, keys: string[]) {
@@ -87,6 +95,7 @@ export default function HomePage() {
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
   const [schedule, setSchedule] = useState<ScheduleCourse[]>([]);
   const [educationStatus, setEducationStatus] = useState<EducationStatus | null>(null);
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
@@ -108,10 +117,11 @@ export default function HomePage() {
         if (!mounted) return;
         setUsername(uname);
 
-        const [workspaceRes, scheduleRes, statusRes] = await Promise.all([
+        const [workspaceRes, scheduleRes, statusRes, conversationRes] = await Promise.all([
           fetch(`${API_BASE}/api/workspace/${encodeURIComponent(uname)}`, { credentials: "include" }),
           fetch(`${API_BASE}/api/schedule/db?username=${encodeURIComponent(uname)}`, { credentials: "include" }),
           fetch(`${API_BASE}/api/education/status?username=${encodeURIComponent(uname)}`, { credentials: "include" }),
+          fetch(`${API_BASE}/api/chat/conversations/${encodeURIComponent(uname)}`, { credentials: "include" }),
         ]);
 
         if (!mounted) return;
@@ -119,10 +129,12 @@ export default function HomePage() {
         const workspaceJson = workspaceRes.ok ? await workspaceRes.json() : null;
         const scheduleJson = scheduleRes.ok ? await scheduleRes.json() : null;
         const statusJson = statusRes.ok ? await statusRes.json() : null;
+        const conversationJson = conversationRes.ok ? await conversationRes.json() : null;
 
         setWorkspaces(workspaceJson?.workspaces || []);
         setSchedule(scheduleJson?.data?.课程列表 || scheduleJson?.data || []);
         setEducationStatus(statusJson || null);
+        setConversations(Array.isArray(conversationJson) ? conversationJson : []);
       } catch {
         if (mounted) router.replace("/login");
       } finally {
@@ -139,6 +151,16 @@ export default function HomePage() {
   const freshness = useMemo(() => getFreshnessMeta(educationStatus), [educationStatus]);
   const featuredWorkspace = useMemo(() => workspaces[0] || null, [workspaces]);
   const todayCourses = useMemo(() => schedule.slice(0, 3), [schedule]);
+  const recentConversations = useMemo(() => conversations.slice(0, 6), [conversations]);
+
+  const openConversation = (conversationId: number) => {
+    if (!username) {
+      router.push("/chat");
+      return;
+    }
+    localStorage.setItem(`current_conversation_id_${username}`, String(conversationId));
+    router.push(`/chat?conversation_id=${conversationId}`);
+  };
 
   const handleRefresh = async () => {
     if (!username || refreshing) return;
@@ -250,122 +272,135 @@ export default function HomePage() {
           <Card className="bg-white/90">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Bot className="h-4 w-4 text-slate-500" />
+                <History className="h-4 w-4 text-slate-500" />
                 <div>
-                  <CardTitle className="text-base">快速会话</CardTitle>
-                  <CardDescription>保留模型切换、推理模式和流式输出。</CardDescription>
+                  <CardTitle className="text-base">会话列表</CardTitle>
+                  <CardDescription>这里直接进入已有快速会话，或者新建一条空会话。</CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="flex h-full flex-col justify-between gap-4">
-              <div className="space-y-3">
-                <div className="text-sm text-slate-600">
-                  快速问答适合直接查询成绩、课表、考试安排，也可以进入 Agent Runtime。
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {["查询我的成绩", "这学期课表", "我的学分情况", "考试安排"].map((item) => (
-                    <Card key={item} className="shadow-none">
-                      <CardContent className="flex items-center gap-3 p-4 text-sm text-slate-700">
-                        <Sparkles className="h-4 w-4 text-[hsl(var(--primary))]" />
-                        {item}
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+            <CardContent className="flex h-full flex-col gap-4">
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => router.push("/chat")}>
+                  <Plus className="h-4 w-4" />
+                  创建新会话
+                </Button>
               </div>
-              <Button onClick={() => router.push("/chat")}>
-                进入会话
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <Card className="bg-white/90">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <GraduationCap className="h-4 w-4 text-slate-500" />
-                <div>
-                  <CardTitle className="text-base">学习工作区</CardTitle>
-                  <CardDescription>把知识库、组合编排和对话验证放在一个地方做闭环。</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-              <div className="space-y-4">
-                {featuredWorkspace ? (
-                  <Card className="shadow-none">
-                    <CardContent className="space-y-3 p-5">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-base font-semibold text-slate-900">{featuredWorkspace.name}</div>
-                        {featuredWorkspace.is_default ? <Badge variant="secondary">默认工作区</Badge> : null}
-                      </div>
-                      <div className="text-sm leading-6 text-slate-600">
-                        {featuredWorkspace.description || featuredWorkspace.slug}
-                      </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <Card className="bg-[hsl(var(--muted))] shadow-none">
-                          <CardContent className="p-4">
-                            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">知识沉淀</div>
-                            <div className="mt-2 text-2xl font-semibold text-slate-950">知识库</div>
-                            <div className="mt-1 text-xs text-slate-500">文档、片段、引用都在这里收口</div>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-[hsl(var(--muted))] shadow-none">
-                          <CardContent className="p-4">
-                            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">验证方式</div>
-                            <div className="mt-2 text-2xl font-semibold text-slate-950">对话</div>
-                            <div className="mt-1 text-xs text-slate-500">直接在工作区里做问答验证</div>
-                          </CardContent>
-                        </Card>
-                      </div>
+              <div className="space-y-2">
+                {recentConversations.length === 0 ? (
+                  <Card className="border-dashed shadow-none">
+                    <CardContent className="flex items-center gap-3 p-5 text-sm text-slate-500">
+                      <MessageSquare className="h-4 w-4 text-slate-300" />
+                      暂无历史会话，先创建一条新的快速会话。
                     </CardContent>
                   </Card>
                 ) : (
-                  <Card className="border-dashed shadow-none">
-                    <CardContent className="p-6 text-sm text-slate-500">暂无工作区</CardContent>
-                  </Card>
+                  recentConversations.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => openConversation(item.id)}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:bg-slate-50"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-slate-900">{item.title}</div>
+                          <div className="mt-1 text-xs text-slate-500">{new Date(item.created_at).toLocaleString("zh-CN")}</div>
+                        </div>
+                        <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                      </div>
+                    </button>
+                  ))
                 )}
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => router.push(featuredWorkspace ? `/workspace/${featuredWorkspace.id}` : "/workspace")}>
-                    打开工作区
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" onClick={() => router.push("/knowledge")}>
-                    打开知识库
-                  </Button>
-                </div>
               </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 text-slate-500" />
-                  <div>
-                    <div className="text-base font-semibold text-slate-900">学习状态</div>
-                    <div className="text-sm text-slate-500">首页先给你一个简洁版，不再单独占一整块。</div>
-                  </div>
-                </div>
-                <div className="grid gap-3">
-                  <Card className="bg-[hsl(var(--muted))] shadow-none">
-                    <CardContent className="p-4">
-                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">今日学习</div>
-                      <div className="mt-2 text-3xl font-semibold text-slate-950">{Math.max(schedule.length, 1) * 5} 分钟</div>
-                      <div className="mt-1 text-xs text-slate-500">按当前缓存课表和平台访问做轻量估算</div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-[hsl(var(--muted))] shadow-none">
-                    <CardContent className="p-4">
-                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">课业密度</div>
-                      <div className="mt-2 text-3xl font-semibold text-slate-950">{schedule.length}</div>
-                      <div className="mt-1 text-xs text-slate-500">当前缓存到的课程条目数</div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
+              <div className="text-xs text-slate-400">点击某条会话会直接带着该会话上下文进入快速会话页。</div>
             </CardContent>
           </Card>
         </div>
+
+        <Card className="bg-white/90">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <GraduationCap className="h-4 w-4 text-slate-500" />
+              <div>
+                <CardTitle className="text-base">学习工作区</CardTitle>
+                <CardDescription>把知识库、组合编排和对话验证放在一个地方做闭环。</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="space-y-4">
+              {featuredWorkspace ? (
+                <Card className="shadow-none">
+                  <CardContent className="space-y-3 p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-base font-semibold text-slate-900">{featuredWorkspace.name}</div>
+                      {featuredWorkspace.is_default ? <Badge variant="secondary">默认工作区</Badge> : null}
+                    </div>
+                    <div className="text-sm leading-6 text-slate-600">
+                      {featuredWorkspace.description || featuredWorkspace.slug}
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Card className="bg-[hsl(var(--muted))] shadow-none">
+                        <CardContent className="p-4">
+                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">知识沉淀</div>
+                          <div className="mt-2 text-2xl font-semibold text-slate-950">知识库</div>
+                          <div className="mt-1 text-xs text-slate-500">文档、片段、引用都在这里收口</div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-[hsl(var(--muted))] shadow-none">
+                        <CardContent className="p-4">
+                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">验证方式</div>
+                          <div className="mt-2 text-2xl font-semibold text-slate-950">对话</div>
+                          <div className="mt-1 text-xs text-slate-500">直接在工作区里做问答验证</div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="border-dashed shadow-none">
+                  <CardContent className="p-6 text-sm text-slate-500">暂无工作区</CardContent>
+                </Card>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => router.push(featuredWorkspace ? `/workspace/${featuredWorkspace.id}` : "/workspace")}>
+                  打开工作区
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" onClick={() => router.push("/knowledge")}>
+                  打开知识库
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-slate-500" />
+                <div>
+                  <div className="text-base font-semibold text-slate-900">学习状态</div>
+                  <div className="text-sm text-slate-500">首页先给你一个简洁版，不再单独占一整块。</div>
+                </div>
+              </div>
+              <div className="grid gap-3">
+                <Card className="bg-[hsl(var(--muted))] shadow-none">
+                  <CardContent className="p-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">今日学习</div>
+                    <div className="mt-2 text-3xl font-semibold text-slate-950">{Math.max(schedule.length, 1) * 5} 分钟</div>
+                    <div className="mt-1 text-xs text-slate-500">按当前缓存课表和平台访问做轻量估算</div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-[hsl(var(--muted))] shadow-none">
+                  <CardContent className="p-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">课业密度</div>
+                    <div className="mt-2 text-3xl font-semibold text-slate-950">{schedule.length}</div>
+                    <div className="mt-1 text-xs text-slate-500">当前缓存到的课程条目数</div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </WorkbenchShell>
   );

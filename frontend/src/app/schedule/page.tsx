@@ -44,6 +44,13 @@ function extractText(item: ScheduleCourse, keys: string[]) {
 function normalizeWeekday(value: string) {
   const text = value.replace(/星期/g, "周").trim();
   const mapping: Record<string, string> = {
+    "1": "周一",
+    "2": "周二",
+    "3": "周三",
+    "4": "周四",
+    "5": "周五",
+    "6": "周六",
+    "7": "周日",
     周1: "周一",
     周2: "周二",
     周3: "周三",
@@ -57,26 +64,45 @@ function normalizeWeekday(value: string) {
 }
 
 function detectPeriodLabel(value: string) {
-  const raw = value.replace(/第/g, "").replace(/节/g, "").trim();
+  const raw = value
+    .replace(/第/g, "")
+    .replace(/节/g, "")
+    .replace(/[\[\]]/g, "")
+    .replace(/\s+/g, "")
+    .trim();
   const match = raw.match(/(\d+)\D+(\d+)/);
   if (match) {
-    return `${match[1]}-${match[2]}`;
+    return `${Number(match[1])}-${Number(match[2])}`;
   }
   const single = raw.match(/^(\d+)$/);
   if (single) {
-    return single[1];
+    const num = Number(single[1]);
+    if (num >= 1 && num <= 2) return "1-2";
+    if (num >= 3 && num <= 4) return "3-4";
+    if (num >= 5 && num <= 6) return "5-6";
+    if (num >= 7 && num <= 8) return "7-8";
+    if (num >= 9 && num <= 10) return "9-10";
+    if (num >= 11 && num <= 12) return "11-12";
+    return String(num);
   }
   return raw || "未分配";
 }
 
 function parseWeekTokens(value: string) {
-  const text = (value || "").replace(/\s+/g, "");
+  const text = (value || "")
+    .replace(/\s+/g, "")
+    .replace(/（/g, "(")
+    .replace(/）/g, ")");
   if (!text) return [];
   const normalized = text
     .replace(/第/g, "")
     .replace(/周次?/g, "")
+    .replace(/\(周\)/g, "")
     .replace(/单周/g, "|odd")
-    .replace(/双周/g, "|even");
+    .replace(/双周/g, "|even")
+    .replace(/\((odd|even)\)/g, "|$1")
+    .replace(/[()]/g, "")
+    .replace(/周/g, "");
 
   return normalized
     .split(/[，,；;]/)
@@ -190,7 +216,7 @@ export default function SchedulePage() {
         continue;
       }
       const weekday = normalizeWeekday(extractText(course, ["星期", "weekday"]));
-      const period = detectPeriodLabel(extractText(course, ["节次", "period", "上课时间"]));
+      const period = detectPeriodLabel(extractText(course, ["节次信息", "节次", "period", "上课时间"]));
       const key = `${weekday}__${period}`;
       const existing = map.get(key) || [];
       existing.push(course);
