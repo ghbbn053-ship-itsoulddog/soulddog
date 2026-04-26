@@ -131,6 +131,12 @@ class AgentRuntimeService:
                     "triggers": skill.triggers or [],
                     "enabled": skill.name in enabled_skill_names,
                     "tools": skill.tools or [],
+                    "mode": (skill.metadata_json or {}).get("mode", "rule"),
+                    "source_type": skill.source_type,
+                    "compatibility_level": (skill.metadata_json or {}).get("compatibility_level", "direct"),
+                    "compatibility_notes": (skill.metadata_json or {}).get("compatibility_notes", []) or [],
+                    "always_on": bool((skill.metadata_json or {}).get("always_on", False)),
+                    "capabilities": (skill.metadata_json or {}).get("capabilities", []) or [],
                 }
                 for skill in skills
                 if skill.name in enabled_skill_names
@@ -145,6 +151,11 @@ class AgentRuntimeService:
                     "kind": tool.kind,
                     "enabled": tool.name in enabled_mcp_names,
                     "parameters": (tool.tool_schema or {}).get("parameters", {}),
+                    "transport": (tool.metadata_json or {}).get("transport", "python" if tool.kind == "python" else "http"),
+                    "source_type": tool.source_type,
+                    "compatibility_level": (tool.metadata_json or {}).get("compatibility_level", "direct"),
+                    "compatibility_notes": (tool.metadata_json or {}).get("compatibility_notes", []) or [],
+                    "capabilities": (tool.metadata_json or {}).get("capabilities", []) or [],
                 }
                 for tool in mcp_tools
                 if tool.name in enabled_mcp_names
@@ -203,13 +214,11 @@ class AgentRuntimeService:
         return params
 
     async def _build_tool_context(self, username: str, message: str, runtime_context: Dict[str, Any]) -> tuple[List[Dict[str, str]], List[Dict[str, Any]]]:
-        skills = runtime_context.get("skills") or []
-        if not skills:
-            return [], []
-
         registry = get_mcp_registry()
+        skills = runtime_context.get("skills") or []
+        enabled_tools = runtime_context.get("mcp_tools") or []
         capability_to_tools: Dict[str, List[str]] = {}
-        for tool in runtime_context.get("mcp_tools") or []:
+        for tool in enabled_tools:
             tool_name = str(tool.get("name", "")).strip()
             if not tool_name:
                 continue
@@ -223,6 +232,7 @@ class AgentRuntimeService:
         results: List[Dict[str, str]] = []
         traces: List[Dict[str, Any]] = []
         tried_tools = set()
+        execution_candidates: List[Dict[str, Any]] = []
 
         for skill in skills:
             candidate_tools: List[str] = []
@@ -242,7 +252,31 @@ class AgentRuntimeService:
                     if tool_name not in candidate_tools:
                         candidate_tools.append(tool_name)
 
-            for tool_name in candidate_tools:
+            if candidate_tools:
+                execution_candidates.append(
+                    {
+                        "skill": str(skill.get("name", "")).strip() or "unknown",
+                        "capabilities": skill.get("capabilities") or [],
+                        "tools": candidate_tools,
+                    }
+                )
+
+        if not execution_candidates:
+            for tool in enabled_tools:
+                tool_name = str(tool.get("name", "")).strip()
+                if not tool_name:
+                    continue
+                execution_candidates.append(
+                    {
+                        "skill": "composition",
+                        "capabilities": tool.get("capabilities") or [],
+                        "tools": [tool_name],
+                    }
+                )
+
+        for candidate in execution_candidates:
+            skill_name = candidate.get("skill", "unknown")
+            for tool_name in candidate.get("tools") or []:
                 if not tool_name or tool_name in tried_tools or not registry.has_tool(tool_name):
                     continue
                 tried_tools.add(tool_name)
@@ -253,7 +287,7 @@ class AgentRuntimeService:
                     logger.warning("AgentRuntime 工具预调用失败 %s: %s", tool_name, e)
                     traces.append(
                         {
-                            "skill": str(skill.get("name", "")).strip() or "unknown",
+                            "skill": skill_name,
                             "tool": tool_name,
                             "params": mapped_params,
                             "status": "failed",
@@ -266,7 +300,7 @@ class AgentRuntimeService:
                 if not rendered:
                     traces.append(
                         {
-                            "skill": str(skill.get("name", "")).strip() or "unknown",
+                            "skill": skill_name,
                             "tool": tool_name,
                             "params": mapped_params,
                             "status": "empty",
@@ -275,7 +309,7 @@ class AgentRuntimeService:
                     continue
                 traces.append(
                     {
-                        "skill": str(skill.get("name", "")).strip() or "unknown",
+                        "skill": skill_name,
                         "tool": tool_name,
                         "params": mapped_params,
                         "status": "success",
@@ -283,7 +317,7 @@ class AgentRuntimeService:
                 )
                 results.append(
                     {
-                        "skill": str(skill.get("name", "")).strip() or "unknown",
+                        "skill": skill_name,
                         "tool": tool_name,
                         "content": rendered[:2400],
                     }
@@ -310,7 +344,9 @@ class AgentRuntimeService:
 
         if skills:
             lines = [
-                f"- {item.get('name')}: {item.get('description') or '无描述'}"
+                f"- {item.get('name')} [{item.get('mode', 'rule')}/{item.get('compatibility_level', 'direct')}]: {item.get('description') or '无描述'}"
+                + (f" | source={item.get('source_type')}" if item.get("source_type") else "")
+                + (f" | capabilities={','.join(item.get('capabilities') or [])}" if item.get("capabilities") else "")
                 + (f" | triggers={','.join(item.get('triggers') or [])}" if item.get("triggers") else "")
                 for item in skills
             ]
@@ -318,7 +354,9 @@ class AgentRuntimeService:
 
         if mcp_tools:
             lines = [
-                f"- {item.get('name')} ({item.get('kind', 'unknown')}): {item.get('description') or '无描述'}"
+                f"- {item.get('name')} ({item.get('kind', 'unknown')}/{item.get('transport', 'unknown')})"
+                f" [{item.get('compatibility_level', 'direct')}]: {item.get('description') or '无描述'}"
+                + (f" | capabilities={','.join(item.get('capabilities') or [])}" if item.get("capabilities") else "")
                 for item in mcp_tools
             ]
             sections.append("当前启用 MCP 工具：\n" + "\n".join(lines))

@@ -7,6 +7,7 @@ from mcp.server.fastmcp import FastMCP
 from typing import Optional
 import json
 import logging
+import requests
 from app.services.session_store import get_session_store
 
 logger = logging.getLogger(__name__)
@@ -303,3 +304,58 @@ async def query_personal_info(username: str) -> str:
     except Exception as e:
         logger.error(f"查询个人信息失败: {e}")
         return f"查询个人信息时发生错误: {str(e)}"
+
+
+@mcp.tool()
+async def query_weather(username: str, location: str = "") -> str:
+    """查询天气信息
+
+    Args:
+        username: 学号（用于统一工具签名，实际天气查询不依赖登录态）
+        location: 地点，如“佛山”“广州天河”“Beijing”
+
+    Returns:
+        天气摘要文本
+    """
+    try:
+        target = (location or "").strip()
+        if not target:
+            return "请提供要查询天气的地点，例如：佛山、广州、北京。"
+
+        encoded = requests.utils.quote(target)
+        url = f"https://wttr.in/{encoded}?format=j1"
+        resp = requests.get(url, timeout=12, headers={"User-Agent": "campus-ai-weather/1.0"})
+        resp.raise_for_status()
+        payload = resp.json()
+
+        current = (payload.get("current_condition") or [{}])[0]
+        weather_desc = ((current.get("weatherDesc") or [{}])[0].get("value") or "").strip()
+        temp_c = str(current.get("temp_C", "")).strip()
+        feels_c = str(current.get("FeelsLikeC", "")).strip()
+        humidity = str(current.get("humidity", "")).strip()
+        wind = str(current.get("windspeedKmph", "")).strip()
+
+        lines = [f"{target} 当前天气"]
+        if weather_desc:
+            lines.append(f"天气: {weather_desc}")
+        if temp_c:
+            lines.append(f"气温: {temp_c}°C")
+        if feels_c:
+            lines.append(f"体感: {feels_c}°C")
+        if humidity:
+            lines.append(f"湿度: {humidity}%")
+        if wind:
+            lines.append(f"风速: {wind} km/h")
+
+        forecast = payload.get("weather") or []
+        if forecast:
+            today = forecast[0] or {}
+            maxtemp = str(today.get("maxtempC", "")).strip()
+            mintemp = str(today.get("mintempC", "")).strip()
+            if maxtemp or mintemp:
+                lines.append(f"今日预报: {mintemp or '-'}°C ~ {maxtemp or '-'}°C")
+
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"查询天气失败: {e}")
+        return f"查询天气时发生错误: {str(e)}"

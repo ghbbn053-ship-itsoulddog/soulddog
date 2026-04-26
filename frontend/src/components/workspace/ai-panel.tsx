@@ -93,7 +93,7 @@ export function AIPanel({
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [executionMode, setExecutionMode] = useState("chat");
+  const [executionMode, setExecutionMode] = useState("agent");
   const [agentFramework, setAgentFramework] = useState("openai_agents");
   const [showThinking, setShowThinking] = useState(false);
 

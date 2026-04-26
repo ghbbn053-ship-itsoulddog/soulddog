@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
 import requests
 from app.services.mcp_manager import get_mcp_manager
+from app.services.mcp_manager import KNOWN_MCP_CAPABILITIES
+from app.services.mcp_runtime import get_mcp_runtime
 
 
 @dataclass
@@ -30,6 +32,19 @@ class MCPToolSpec:
     method: str = "POST"
     url: str = ""
     timeout: int = 12
+    transport: str = "python"
+    source_type: str = "registry"
+    source_ref: str = "mcp_registry"
+    compatibility_level: str = "direct"
+    compatibility_notes: Optional[List[str]] = None
+    capabilities: Optional[List[str]] = None
+    owner_username: str = "system"
+    command: str = ""
+    args: Optional[List[str]] = None
+    env: Optional[Dict[str, Any]] = None
+    cwd: str = ""
+    headers: Optional[Dict[str, Any]] = None
+    tool_name: str = ""
 
 
 class MCPRegistry:
@@ -57,6 +72,7 @@ class MCPRegistry:
                     },
                     "required": ["username"],
                 },
+                capabilities=["grade.query"],
             )
         )
         self.register(
@@ -77,6 +93,7 @@ class MCPRegistry:
                     },
                     "required": ["username"],
                 },
+                capabilities=["schedule.query"],
             )
         )
         self.register(
@@ -86,6 +103,7 @@ class MCPRegistry:
                 module_path="app.mcp.tools",
                 func_name="query_academic_progress",
                 parameters={"username": {"type": "string", "required": True, "description": "学号"}},
+                capabilities=["academic_progress.query"],
             )
         )
         self.register(
@@ -95,6 +113,7 @@ class MCPRegistry:
                 module_path="app.mcp.tools",
                 func_name="query_training_plan",
                 parameters={"username": {"type": "string", "required": True, "description": "学号"}},
+                capabilities=["training_plan.query"],
             )
         )
         self.register(
@@ -107,6 +126,7 @@ class MCPRegistry:
                     "username": {"type": "string", "required": True, "description": "学号"},
                     "semester": {"type": "string", "required": False, "description": "学期"},
                 },
+                capabilities=["exam.query"],
             )
         )
         self.register(
@@ -116,6 +136,28 @@ class MCPRegistry:
                 module_path="app.mcp.tools",
                 func_name="query_personal_info",
                 parameters={"username": {"type": "string", "required": True, "description": "学号"}},
+                capabilities=["personal_info.query"],
+            )
+        )
+        self.register(
+            MCPToolSpec(
+                name="query_weather",
+                description="查询指定地点天气",
+                module_path="app.mcp.tools",
+                func_name="query_weather",
+                parameters={
+                    "username": {"type": "string", "required": True, "description": "学号"},
+                    "location": {"type": "string", "required": True, "description": "地点，如佛山、广州、北京"},
+                },
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "username": {"type": "string", "description": "学号"},
+                        "location": {"type": "string", "description": "地点，如佛山、广州、北京"},
+                    },
+                    "required": ["username", "location"],
+                },
+                capabilities=["weather.query"],
             )
         )
 
@@ -161,6 +203,19 @@ class MCPRegistry:
                         method=str(it.get("method", "POST")).strip().upper() or "POST",
                         url=str(it.get("url", "")).strip(),
                         timeout=int(it.get("timeout", 12) or 12),
+                        transport=str(it.get("transport", kind)).strip().lower() or kind,
+                        source_type=str(it.get("source_type", "registry")).strip() or "registry",
+                        source_ref=str(it.get("source_ref", str(config_path))).strip() or str(config_path),
+                        compatibility_level=str(it.get("compatibility_level", "direct")).strip() or "direct",
+                        compatibility_notes=it.get("compatibility_notes") or [],
+                        capabilities=it.get("capabilities") or ([KNOWN_MCP_CAPABILITIES[name]] if name in KNOWN_MCP_CAPABILITIES else []),
+                        owner_username=str(it.get("owner_username", "system")).strip() or "system",
+                        command=str(it.get("command", "")).strip(),
+                        args=it.get("args") or [],
+                        env=it.get("env") or {},
+                        cwd=str(it.get("cwd", "")).strip(),
+                        headers=it.get("headers") or {},
+                        tool_name=str(it.get("tool_name", "")).strip() or name,
                     )
                     self.register(spec)
             except Exception:
@@ -195,6 +250,19 @@ class MCPRegistry:
                         method=str(it.get("method", "POST")).strip().upper() or "POST",
                         url=str(it.get("url", "")).strip(),
                         timeout=int(it.get("timeout", 12) or 12),
+                        transport=str(it.get("transport", kind)).strip().lower() or kind,
+                        source_type=str(it.get("source_type", "registry")).strip() or "registry",
+                        source_ref=str(it.get("source_ref", "mcp_registry")).strip() or "mcp_registry",
+                        compatibility_level=str(it.get("compatibility_level", "direct")).strip() or "direct",
+                        compatibility_notes=it.get("compatibility_notes") or [],
+                        capabilities=it.get("capabilities") or ([KNOWN_MCP_CAPABILITIES[name]] if name in KNOWN_MCP_CAPABILITIES else []),
+                        owner_username=str(it.get("owner_username", "system")).strip() or "system",
+                        command=str(it.get("command", "")).strip(),
+                        args=it.get("args") or [],
+                        env=it.get("env") or {},
+                        cwd=str(it.get("cwd", "")).strip(),
+                        headers=it.get("headers") or {},
+                        tool_name=str(it.get("tool_name", "")).strip() or name,
                     )
                 )
         except Exception:
@@ -209,6 +277,19 @@ class MCPRegistry:
                     "description": spec.description,
                     "parameters": spec.parameters,
                     "kind": spec.kind,
+                    "transport": spec.transport,
+                    "source_type": spec.source_type,
+                    "source_ref": spec.source_ref,
+                    "compatibility_level": spec.compatibility_level,
+                    "compatibility_notes": spec.compatibility_notes or [],
+                    "capabilities": spec.capabilities or [],
+                    "owner_username": spec.owner_username,
+                    "command": spec.command,
+                    "args": spec.args or [],
+                    "env": spec.env or {},
+                    "cwd": spec.cwd,
+                    "headers": spec.headers or {},
+                    "tool_name": spec.tool_name or spec.name,
                 }
             )
         return tools
@@ -251,6 +332,10 @@ class MCPRegistry:
         merged = {"username": username}
         if params:
             merged.update(params)
+        if spec.kind in {"stdio", "sse", "streamable_http", "command"}:
+            return await get_mcp_runtime().call_tool(spec, merged)
+        if spec.kind not in {"python", "http"}:
+            raise ValueError(f"工具 '{name}' 当前为 {spec.kind} 类型，尚未接入真实运行时")
         if spec.kind == "http":
             return self._call_http_tool(spec, merged)
         module = importlib.import_module(spec.module_path)

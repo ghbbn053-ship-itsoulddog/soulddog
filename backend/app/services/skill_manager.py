@@ -45,6 +45,10 @@ KNOWN_SKILL_TOOL_CAPABILITIES = {
     "query_training_plan": "training_plan.query",
     "query_academic_progress": "academic_progress.query",
     "query_personal_info": "personal_info.query",
+    "query_weather": "weather.query",
+}
+KEYWORD_CAPABILITY_HINTS = {
+    "weather.query": ["weather", "forecast", "temperature", "rain", "wttr", "天气", "气温", "降雨", "预报"],
 }
 
 
@@ -181,6 +185,18 @@ class SkillManager:
             name = str(tool.get("name", "")).strip()
             if name in KNOWN_SKILL_TOOL_CAPABILITIES:
                 capabilities.append(KNOWN_SKILL_TOOL_CAPABILITIES[name])
+
+        capability_source = " ".join(
+            [
+                str(config.get("name", "") or ""),
+                str(config.get("description", "") or ""),
+                str(config.get("prompt", "") or "")[:2400],
+                str(config.get("source_ref", "") or ""),
+            ]
+        ).lower()
+        for capability, keywords in KEYWORD_CAPABILITY_HINTS.items():
+            if any(keyword in capability_source for keyword in keywords):
+                capabilities.append(capability)
         return list(dict.fromkeys(capabilities))
 
     def _apply_skill_metadata(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -208,11 +224,14 @@ class SkillManager:
             notes.append("仓库文档型 Skill，仅做规则/提示词注入，不直接调用工具")
             if always_on:
                 notes.append("当前为 always_on，会持续参与系统提示词构建")
+            if capabilities:
+                notes.append(f"已从文档语义中识别能力标签: {', '.join(capabilities[:4])}")
+                notes.append("如果平台存在同名 capability 的真实工具，可与该规则型 Skill 协同使用")
             return {
                 "mode": "rule",
                 "compatibility_level": "rule_only",
                 "compatibility_notes": notes,
-                "capabilities": [],
+                "capabilities": capabilities,
             }
 
         if not tool_names:
@@ -221,11 +240,13 @@ class SkillManager:
             if prompt or always_on:
                 notes.append("存在规则内容，可作为轻量规则型 Skill 使用")
             if notes:
+                if capabilities:
+                    notes.append(f"已识别能力标签: {', '.join(capabilities[:4])}")
                 return {
                     "mode": "rule",
                     "compatibility_level": "rule_only",
                     "compatibility_notes": notes,
-                    "capabilities": [],
+                    "capabilities": capabilities,
                 }
             return {
                 "mode": "rule",

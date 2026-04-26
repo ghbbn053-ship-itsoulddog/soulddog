@@ -39,6 +39,7 @@ KNOWN_MCP_CAPABILITIES = {
     "query_training_plan": "training_plan.query",
     "query_academic_progress": "academic_progress.query",
     "query_personal_info": "personal_info.query",
+    "query_weather": "weather.query",
 }
 
 
@@ -138,7 +139,9 @@ class MCPManager:
                 kind = "stdio"
             elif transport in {"sse"}:
                 kind = "sse"
-            elif transport in {"streamable_http", "http"}:
+            elif transport == "streamable_http":
+                kind = "streamable_http"
+            elif transport == "http":
                 kind = "http"
             else:
                 kind = transport or "unknown"
@@ -161,11 +164,56 @@ class MCPManager:
             item["args"] = server.get("args")
         if isinstance(server.get("env"), dict):
             item["env"] = server.get("env")
+        if isinstance(server.get("headers"), dict):
+            item["headers"] = server.get("headers")
+        if str(server.get("cwd", "")).strip():
+            item["cwd"] = str(server.get("cwd", "")).strip()
         if str(server.get("module_path", "")).strip():
             item["module_path"] = str(server.get("module_path", "")).strip()
         if str(server.get("func_name", "")).strip():
             item["func_name"] = str(server.get("func_name", "")).strip()
         return item
+
+    @classmethod
+    def _parse_openclaw_skill_payload(cls, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+        if not isinstance(payload, dict):
+            return []
+        mcp_servers = payload.get("mcpServers")
+        declared_tools = payload.get("tools")
+        if not isinstance(mcp_servers, dict) or not isinstance(declared_tools, list) or not declared_tools:
+            return []
+
+        tools: List[Dict[str, Any]] = []
+        capabilities_map = payload.get("capabilities") if isinstance(payload.get("capabilities"), dict) else {}
+        for server_name, raw_server in mcp_servers.items():
+            if not isinstance(raw_server, dict):
+                continue
+            base = cls._coerce_server_entry(server_name, raw_server)
+            disabled = bool(raw_server.get("disabled", False))
+            for tool_name in declared_tools:
+                tool_text = str(tool_name or "").strip()
+                if not tool_text:
+                    continue
+                capability_list: List[str] = []
+                description = ""
+                for capability_key, capability_meta in capabilities_map.items():
+                    if not isinstance(capability_meta, dict):
+                        continue
+                    bound_tool = str(capability_meta.get("tool", "")).strip()
+                    if bound_tool == tool_text:
+                        capability_list.append(str(capability_key).strip())
+                        if not description:
+                            description = str(capability_meta.get("description", "")).strip()
+                item = dict(base)
+                item["name"] = tool_text
+                item["tool_name"] = tool_text
+                item["description"] = description or f"MCP tool from server {server_name}: {tool_text}"
+                item["enabled"] = not disabled
+                if capability_list:
+                    item["capabilities"] = capability_list
+                item["source_format"] = "openclaw_skill"
+                tools.append(item)
+        return tools
 
     @classmethod
     def _parse_payload(cls, content: str) -> List[Dict[str, Any]]:
@@ -178,14 +226,17 @@ class MCPManager:
         else:
             tools = None
             if isinstance(payload, dict):
+                openclaw_tools = cls._parse_openclaw_skill_payload(payload)
+                if openclaw_tools:
+                    tools = openclaw_tools
                 if isinstance(payload.get("tools"), list):
-                    tools = payload.get("tools")
+                    tools = tools or payload.get("tools")
                 elif isinstance(payload.get("mcpServers"), dict):
-                    tools = [cls._coerce_server_entry(name, item) for name, item in payload.get("mcpServers", {}).items() if isinstance(item, dict)]
+                    tools = tools or [cls._coerce_server_entry(name, item) for name, item in payload.get("mcpServers", {}).items() if isinstance(item, dict)]
                 elif isinstance(payload.get("servers"), dict):
-                    tools = [cls._coerce_server_entry(name, item) for name, item in payload.get("servers", {}).items() if isinstance(item, dict)]
+                    tools = tools or [cls._coerce_server_entry(name, item) for name, item in payload.get("servers", {}).items() if isinstance(item, dict)]
                 elif isinstance(payload.get("mcp_servers"), dict):
-                    tools = [cls._coerce_server_entry(name, item) for name, item in payload.get("mcp_servers", {}).items() if isinstance(item, dict)]
+                    tools = tools or [cls._coerce_server_entry(name, item) for name, item in payload.get("mcp_servers", {}).items() if isinstance(item, dict)]
         if not isinstance(tools, list) or not tools:
             raise ValueError("配置格式错误：缺少 tools 数组，或缺少 mcpServers/servers 映射")
         return [item for item in tools if isinstance(item, dict)]
@@ -263,9 +314,12 @@ class MCPManager:
                 notes = ["检测到 stdio MCP server 配置"]
                 if command:
                     notes.append(f"command: {command}")
-                notes.append("当前平台尚未接入 stdio MCP runtime；对象可导入，但还不能直接执行")
+                tool_name = str(item.get("tool_name", "")).strip()
+                if tool_name:
+                    notes.append(f"tool: {tool_name}")
+                notes.append("已接入 stdio MCP runtime；前提是本机安装了 mcp SDK 且目标 server 能正常启动")
                 return {
-                    "compatibility_level": "adapted",
+                    "compatibility_level": "direct" if tool_name and command else "adapted",
                     "compatibility_notes": notes,
                     "capabilities": capabilities,
                 }
@@ -274,9 +328,12 @@ class MCPManager:
                 notes = [f"检测到 {kind} MCP server 配置"]
                 if url:
                     notes.append(f"endpoint: {url}")
-                notes.append("当前平台只支持内部 python/http tool 形态；需要加 MCP client 适配层")
+                tool_name = str(item.get("tool_name", "")).strip()
+                if tool_name:
+                    notes.append(f"tool: {tool_name}")
+                notes.append("已接入远程 MCP client；前提是目标 endpoint 支持标准 MCP 握手与 tool 调用")
                 return {
-                    "compatibility_level": "adapted",
+                    "compatibility_level": "direct" if tool_name and url else "adapted",
                     "compatibility_notes": notes,
                     "capabilities": capabilities,
                 }
@@ -424,6 +481,9 @@ class MCPManager:
                     "command": item.get("command", ""),
                     "args": item.get("args", []) or [],
                     "env": item.get("env", {}) or {},
+                    "cwd": item.get("cwd", ""),
+                    "headers": item.get("headers", {}) or {},
+                    "tool_name": item.get("tool_name", ""),
                     "updated_at": item.get("updated_at"),
                 }
             )
