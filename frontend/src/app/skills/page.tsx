@@ -30,6 +30,10 @@ type SkillItem = {
   tools: Array<{ name?: string }>;
   source_type?: string;
   source_ref?: string;
+  mode?: string;
+  compatibility_level?: string;
+  compatibility_notes?: string[];
+  capabilities?: string[];
   guidance_excerpt?: string;
   updated_at?: number;
 };
@@ -298,6 +302,8 @@ export default function SkillsPage() {
                           <Badge variant={skill.enabled ? "success" : "outline"}>{skill.enabled ? "enabled" : "disabled"}</Badge>
                           <Badge variant="outline">v{skill.version || "-"}</Badge>
                           <Badge variant="secondary">{skill.source_type || "yaml"}</Badge>
+                          <Badge variant="outline">{skill.mode || "rule"}</Badge>
+                          <Badge variant="secondary">{skill.compatibility_level || "direct"}</Badge>
                           {skill.always_on ? <Badge variant="outline">always on</Badge> : null}
                         </div>
                       </div>
@@ -316,6 +322,7 @@ export default function SkillsPage() {
 
                       <div className="space-y-1 text-xs text-slate-500">
                         <div>tools: {(skill.tools || []).map((tool) => tool?.name || "-").join(", ") || "-"}</div>
+                        <div>capabilities: {(skill.capabilities || []).join(", ") || "-"}</div>
                         {skill.source_ref ? <div>source: {skill.source_ref}</div> : null}
                       </div>
 

@@ -136,7 +136,25 @@ class MCPManager:
         normalized["name"] = name
         normalized["kind"] = kind
         normalized["enabled"] = bool(item.get("enabled", True))
+        normalized.setdefault("transport", "python" if kind == "python" else "http")
+        normalized.setdefault("compatibility_level", "direct")
+        normalized.setdefault("compatibility_notes", [])
+        normalized.setdefault("capabilities", MCPManager._infer_capabilities(normalized))
         return normalized
+
+    @staticmethod
+    def _infer_capabilities(item: Dict[str, Any]) -> List[str]:
+        mapping = {
+            "query_schedule": "schedule.query",
+            "query_grades": "grade.query",
+            "query_exam_schedule": "exam.query",
+            "query_training_plan": "training_plan.query",
+            "query_academic_progress": "academic_progress.query",
+            "query_personal_info": "personal_info.query",
+        }
+        name = str(item.get("name", "")).strip()
+        capability = mapping.get(name)
+        return [capability] if capability else []
 
     def import_tools(self, owner: str, tools: List[Dict[str, Any]], source_type: str, source_ref: str) -> Dict[str, Any]:
         existing = self._load_owner_tools(owner)
@@ -208,6 +226,10 @@ class MCPManager:
                     "enabled": bool(item.get("enabled", True)),
                     "source_type": item.get("source_type", "file"),
                     "source_ref": item.get("source_ref", ""),
+                    "transport": item.get("transport", "python" if item.get("kind") == "python" else "http"),
+                    "compatibility_level": item.get("compatibility_level", "direct"),
+                    "compatibility_notes": item.get("compatibility_notes", []) or [],
+                    "capabilities": item.get("capabilities", []) or [],
                     "owner_username": item.get("owner_username", owner),
                     "module_path": item.get("module_path", ""),
                     "func_name": item.get("func_name", ""),

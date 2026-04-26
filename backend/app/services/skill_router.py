@@ -41,6 +41,33 @@ def match_enabled_skills(owner: str, question: str, max_match: int = 3) -> List[
     return combined[: max_match + len(always_on)]
 
 
+def explain_skill_matches(owner: str, question: str, max_match: int = 3) -> List[Dict]:
+    matched = match_enabled_skills(owner, question, max_match=max_match)
+    out: List[Dict] = []
+    q = (question or "").strip().lower()
+    for s in matched:
+        triggers = [str(t).strip() for t in (s.get("triggers") or []) if str(t).strip()]
+        matched_triggers = [t for t in triggers if t.lower() in q]
+        out.append(
+            {
+                "name": s.get("name", "unknown"),
+                "mode": s.get("mode", "rule"),
+                "source_type": s.get("source_type", "yaml"),
+                "compatibility_level": s.get("compatibility_level", "direct"),
+                "capabilities": s.get("capabilities", []) or [],
+                "always_on": bool(s.get("always_on", False)),
+                "matched_triggers": matched_triggers,
+                "has_tools": bool(s.get("tools")),
+                "tools": [
+                    str(t.get("name", "")).strip()
+                    for t in (s.get("tools") or [])
+                    if isinstance(t, dict) and str(t.get("name", "")).strip()
+                ],
+            }
+        )
+    return out
+
+
 def build_skill_prompt_hint(owner: str, question: str, max_match: int = 3) -> str:
     matched = match_enabled_skills(owner, question, max_match=max_match)
     if not matched:

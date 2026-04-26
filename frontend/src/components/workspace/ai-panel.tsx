@@ -37,6 +37,18 @@ type ToolTrace = {
   error?: string;
 };
 
+type SkillMatch = {
+  name: string;
+  mode?: string;
+  source_type?: string;
+  compatibility_level?: string;
+  capabilities?: string[];
+  always_on?: boolean;
+  matched_triggers?: string[];
+  has_tools?: boolean;
+  tools?: string[];
+};
+
 type PanelMessage = {
   id: number;
   role: "user" | "assistant";
@@ -45,6 +57,7 @@ type PanelMessage = {
   highlights?: MessageHighlight[];
   sources?: string[];
   tool_trace?: ToolTrace[];
+  skill_matches?: SkillMatch[];
   timestamp?: string;
   streaming?: boolean;
 };
@@ -130,6 +143,7 @@ export function AIPanel({
           highlights: m.meta?.highlights || [],
           sources: m.meta?.sources || [],
           tool_trace: m.meta?.tool_trace || [],
+          skill_matches: m.meta?.skill_matches || [],
           timestamp: new Date(m.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
         }))
       );
@@ -233,6 +247,7 @@ export function AIPanel({
                           highlights: data.highlights || [],
                           sources: data.sources || [],
                           tool_trace: data.tool_trace || [],
+                          skill_matches: data.skill_matches || [],
                           streaming: false,
                         }
                       : msg
@@ -410,6 +425,30 @@ export function AIPanel({
                             {msg.tool_trace.map((trace, index) => (
                               <div key={`${trace.tool}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                                 {trace.skill} {"->"} {trace.tool} [{trace.status}]
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                        {msg.skill_matches && msg.skill_matches.length > 0 ? (
+                          <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
+                            <div className="text-xs font-medium text-slate-500">Matched Skills</div>
+                            {msg.skill_matches.map((skill, index) => (
+                              <div key={`${skill.name}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                                <div className="flex flex-wrap items-center gap-2 text-slate-900">
+                                  <span className="font-medium">{skill.name}</span>
+                                  <Badge variant="outline">{skill.mode || "rule"}</Badge>
+                                  <Badge variant="secondary">{skill.compatibility_level || "direct"}</Badge>
+                                  {skill.source_type ? <Badge variant="outline">{skill.source_type}</Badge> : null}
+                                </div>
+                                <div className="mt-1 leading-6">
+                                  {skill.always_on ? "always on" : `matched triggers: ${(skill.matched_triggers || []).join(", ") || "-"}`}
+                                </div>
+                                <div className="leading-6">
+                                  capabilities: {(skill.capabilities || []).join(", ") || "-"}
+                                </div>
+                                <div className="leading-6">
+                                  tools: {(skill.tools || []).join(", ") || "-"}
+                                </div>
                               </div>
                             ))}
                           </div>

@@ -29,6 +29,13 @@ async def list_platform_skills(username: str, http_request: Request, db: Session
                 "triggers": row.triggers or [],
                 "input_schema": (row.metadata_json or {}).get("input_schema", {}),
                 "tools": row.tools or [],
+                "mode": (row.metadata_json or {}).get("mode", "rule"),
+                "compatibility_level": (row.metadata_json or {}).get("compatibility_level", "direct"),
+                "compatibility_notes": (row.metadata_json or {}).get("compatibility_notes", []),
+                "capabilities": (row.metadata_json or {}).get("capabilities", []),
+                "always_on": (row.metadata_json or {}).get("always_on", False),
+                "source_type": row.source_type,
+                "source_ref": row.source_ref,
             }
             for row in rows
         ],
@@ -50,6 +57,12 @@ async def list_platform_mcp(username: str, http_request: Request, db: Session = 
                 "kind": row.kind,
                 "enabled": row.enabled,
                 "tool_schema": row.tool_schema or {},
+                "source_type": row.source_type,
+                "source_ref": row.source_ref,
+                "transport": (row.metadata_json or {}).get("transport", "python" if row.kind == "python" else "http"),
+                "compatibility_level": (row.metadata_json or {}).get("compatibility_level", "direct"),
+                "compatibility_notes": (row.metadata_json or {}).get("compatibility_notes", []),
+                "capabilities": (row.metadata_json or {}).get("capabilities", []),
             }
             for row in rows
         ],

@@ -26,6 +26,10 @@ type MCPTool = {
   enabled?: boolean;
   source_type?: string;
   source_ref?: string;
+  transport?: string;
+  compatibility_level?: string;
+  compatibility_notes?: string[];
+  capabilities?: string[];
 };
 
 type PipelineItem = {
@@ -520,14 +524,17 @@ export default function MCPPage() {
                             <div className="text-sm font-semibold text-slate-950">{tool.name}</div>
                             <div className="text-xs leading-5 text-slate-500">{tool.description || "无描述"}</div>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            <Badge variant={tool.enabled ? "success" : "outline"}>{tool.enabled ? "enabled" : "disabled"}</Badge>
-                            <Badge variant="outline">{tool.kind || "python"}</Badge>
-                            <Badge variant="secondary">{tool.source_type || "file"}</Badge>
-                          </div>
-                        </div>
-                        {tool.source_ref ? <div className="text-xs text-slate-500">source: {tool.source_ref}</div> : null}
                         <div className="flex flex-wrap gap-2">
+                          <Badge variant={tool.enabled ? "success" : "outline"}>{tool.enabled ? "enabled" : "disabled"}</Badge>
+                          <Badge variant="outline">{tool.kind || "python"}</Badge>
+                          <Badge variant="secondary">{tool.source_type || "file"}</Badge>
+                          <Badge variant="outline">{tool.transport || tool.kind || "python"}</Badge>
+                          <Badge variant="secondary">{tool.compatibility_level || "direct"}</Badge>
+                        </div>
+                      </div>
+                      {tool.source_ref ? <div className="text-xs text-slate-500">source: {tool.source_ref}</div> : null}
+                      <div className="text-xs text-slate-500">capabilities: {(tool.capabilities || []).join(", ") || "-"}</div>
+                      <div className="flex flex-wrap gap-2">
                           <Button size="sm" variant="outline" disabled={saving} onClick={() => toggleImported(tool.name, !tool.enabled)}>
                             {tool.enabled ? "停用" : "启用"}
                           </Button>

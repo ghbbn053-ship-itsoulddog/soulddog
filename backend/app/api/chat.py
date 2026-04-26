@@ -20,7 +20,7 @@ from app.services import get_model_provider_for_user, get_vector_store
 from app.services.model_provider import UnifiedModelProvider
 from app.services.education_normalizer import build_payload_from_education_data_record
 from app.services.workspace_knowledge import get_workspace_knowledge_service
-from app.services.skill_router import build_skill_prompt_hint
+from app.services.skill_router import build_skill_prompt_hint, explain_skill_matches
 from app.services.agent_runtime import get_agent_runtime
 from app.security import enforce_username_isolation
 from app.core.observability import (
@@ -389,6 +389,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
                 "username": request.username
             }
         skill_context = build_skill_prompt_hint(request.username, request.message)
+        skill_matches = explain_skill_matches(request.username, request.message)
         history_for_model = history
         if skill_context:
             history_for_model = [{"role": "system", "content": skill_context}] + history
@@ -431,6 +432,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
                             "sources": ["grounded_structured_data"],
                             "tool_calls": [],
                             "usage": {},
+                            "skill_matches": skill_matches,
                         }
                 except Exception as e:
                     logger.warning(f"结构化直答构建失败: {e}")
@@ -729,6 +731,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                 "username": request.username
             }
         skill_context = build_skill_prompt_hint(request.username, request.message)
+        skill_matches = explain_skill_matches(request.username, request.message)
         history_for_model = history
         if skill_context:
             history_for_model = [{"role": "system", "content": skill_context}] + history
@@ -816,6 +819,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
             chunk_queue: asyncio.Queue = asyncio.Queue()
             tool_calls_info = []
             tool_trace_info = []
+            skill_matches_info = skill_matches[:]
             response_sources = workspace_sources[:]
             response_highlights = workspace_highlights[:]
 
@@ -850,6 +854,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                         message_meta=_build_message_meta({
                             "tool_calls": tool_calls_info,
                             "tool_trace": tool_trace_info,
+                            "skill_matches": skill_matches_info,
                             "framework": agent_result.get("framework", ""),
                             "sources": response_sources,
                             "highlights": response_highlights,
@@ -858,7 +863,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                     db.add(ai_msg)
                     db.commit()
 
-                    yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info, 'tool_trace': tool_trace_info, 'sources': response_sources, 'highlights': response_highlights})}\n\n"
+                    yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info, 'tool_trace': tool_trace_info, 'skill_matches': skill_matches_info, 'sources': response_sources, 'highlights': response_highlights})}\n\n"
                     done_sent = True
                     return
 
@@ -890,14 +895,14 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                                     role="assistant",
                                     content=full_content,
                                     message_meta=_build_message_meta(
-                                        {"tool_calls": tool_calls_info, "tool_trace": tool_trace_info, "sources": response_sources, "highlights": response_highlights},
+                                        {"tool_calls": tool_calls_info, "tool_trace": tool_trace_info, "skill_matches": skill_matches_info, "sources": response_sources, "highlights": response_highlights},
                                         workspace_id=request.workspace_id,
                                     )
                                 )
                                 db.add(ai_msg)
                                 db.commit()
 
-                                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info, 'tool_trace': tool_trace_info, 'sources': response_sources, 'highlights': response_highlights})}\n\n"
+                                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info, 'tool_trace': tool_trace_info, 'skill_matches': skill_matches_info, 'sources': response_sources, 'highlights': response_highlights})}\n\n"
                                 done_sent = True
                                 return
                     except Exception as e:
@@ -953,14 +958,14 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                     role="assistant",
                     content=full_content,
                     message_meta=_build_message_meta(
-                        {"tool_calls": tool_calls_info, "tool_trace": tool_trace_info, "sources": response_sources, "highlights": response_highlights},
+                        {"tool_calls": tool_calls_info, "tool_trace": tool_trace_info, "skill_matches": skill_matches_info, "sources": response_sources, "highlights": response_highlights},
                         workspace_id=request.workspace_id,
-                    ) if (tool_calls_info or tool_trace_info or response_sources or response_highlights or request.workspace_id) else None
+                    ) if (tool_calls_info or tool_trace_info or skill_matches_info or response_sources or response_highlights or request.workspace_id) else None
                 )
                 db.add(ai_msg)
                 db.commit()
 
-                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_trace': tool_trace_info, 'sources': response_sources, 'highlights': response_highlights})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_trace': tool_trace_info, 'skill_matches': skill_matches_info, 'sources': response_sources, 'highlights': response_highlights})}\n\n"
                 done_sent = True
             except asyncio.CancelledError:
                 logger.warning(f"流式连接被客户端中断: conversation_id={conversation.id}")

@@ -43,6 +43,10 @@ class PlatformRegistryService:
                 "updated_at": item.get("updated_at"),
                 "input_schema": item.get("input_schema", {}) or {},
                 "always_on": bool(item.get("always_on", False)),
+                "mode": item.get("mode", "rule"),
+                "compatibility_level": item.get("compatibility_level", "direct"),
+                "compatibility_notes": item.get("compatibility_notes", []) or [],
+                "capabilities": item.get("capabilities", []) or [],
             }
             out.append(record)
         db.commit()
@@ -83,6 +87,10 @@ class PlatformRegistryService:
             record.metadata_json = {
                 "updated_at": imported.get("updated_at"),
                 "owner_username": imported.get("owner_username", owner_username),
+                "transport": imported.get("transport", "python" if record.kind == "python" else "http"),
+                "compatibility_level": imported.get("compatibility_level", "direct"),
+                "compatibility_notes": imported.get("compatibility_notes", []) or [],
+                "capabilities": imported.get("capabilities", []) or [],
             }
             out.append(record)
         db.commit()

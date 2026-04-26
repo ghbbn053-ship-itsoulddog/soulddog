@@ -41,6 +41,13 @@ type PlatformSkill = {
   triggers: string[];
   input_schema?: Record<string, unknown>;
   tools: Array<{ name?: string; description?: string }>;
+  mode?: string;
+  compatibility_level?: string;
+  compatibility_notes?: string[];
+  capabilities?: string[];
+  always_on?: boolean;
+  source_type?: string;
+  source_ref?: string;
 };
 
 type PlatformMcp = {
@@ -49,6 +56,12 @@ type PlatformMcp = {
   description?: string;
   kind: string;
   enabled: boolean;
+  source_type?: string;
+  source_ref?: string;
+  transport?: string;
+  compatibility_level?: string;
+  compatibility_notes?: string[];
+  capabilities?: string[];
   tool_schema?: {
     parameters?: Record<string, { type?: string; required?: boolean; description?: string }>;
   };
@@ -422,6 +435,16 @@ export default function CompositionPage() {
                         <div className="text-xs text-slate-500">
                           {platformSkills.find((item) => item.name === skill)?.description || "当前状态由用户侧 profile 控制。"}
                         </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge variant="outline">{platformSkills.find((item) => item.name === skill)?.mode || "rule"}</Badge>
+                          <Badge variant="secondary">{platformSkills.find((item) => item.name === skill)?.compatibility_level || "direct"}</Badge>
+                          {platformSkills.find((item) => item.name === skill)?.source_type ? (
+                            <Badge variant="outline">{platformSkills.find((item) => item.name === skill)?.source_type}</Badge>
+                          ) : null}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          capabilities: {(platformSkills.find((item) => item.name === skill)?.capabilities || []).join(", ") || "-"}
+                        </div>
                         {platformSkills.find((item) => item.name === skill)?.input_schema ? (
                           <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-600">
                             schema: {JSON.stringify(platformSkills.find((item) => item.name === skill)?.input_schema || {})}
@@ -457,6 +480,16 @@ export default function CompositionPage() {
                           <div className="text-sm font-semibold text-slate-950">{tool}</div>
                           <div className="text-xs text-slate-500">
                             {platformMcpTools.find((item) => item.name === tool)?.description || "顺序越靠前，工具路由权重越高。"}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant="outline">{platformMcpTools.find((item) => item.name === tool)?.transport || platformMcpTools.find((item) => item.name === tool)?.kind || "python"}</Badge>
+                            <Badge variant="secondary">{platformMcpTools.find((item) => item.name === tool)?.compatibility_level || "direct"}</Badge>
+                            {platformMcpTools.find((item) => item.name === tool)?.source_type ? (
+                              <Badge variant="outline">{platformMcpTools.find((item) => item.name === tool)?.source_type}</Badge>
+                            ) : null}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            capabilities: {(platformMcpTools.find((item) => item.name === tool)?.capabilities || []).join(", ") || "-"}
                           </div>
                           {platformMcpTools.find((item) => item.name === tool)?.tool_schema?.parameters ? (
                             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-600">

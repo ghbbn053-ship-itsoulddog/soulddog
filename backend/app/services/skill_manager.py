@@ -92,6 +92,10 @@ class SkillManager:
         config.setdefault("enabled", True)
         config.setdefault("source_type", "yaml")
         config.setdefault("source_ref", "")
+        config.setdefault("mode", "tool" if config.get("tools") else "rule")
+        config.setdefault("compatibility_level", "direct")
+        config.setdefault("compatibility_notes", [])
+        config.setdefault("capabilities", self._infer_capabilities(config))
         config.setdefault("created_at", int(time.time()))
         config["updated_at"] = int(time.time())
 
@@ -111,6 +115,26 @@ class SkillManager:
             raise ValueError("YAML 根节点必须是对象")
         self._validate(config)
         return config
+
+    @staticmethod
+    def _infer_capabilities(config: Dict[str, Any]) -> List[str]:
+        capabilities = []
+        tools = config.get("tools") or []
+        tool_name_to_cap = {
+            "query_schedule": "schedule.query",
+            "query_grades": "grade.query",
+            "query_exam_schedule": "exam.query",
+            "query_training_plan": "training_plan.query",
+            "query_academic_progress": "academic_progress.query",
+            "query_personal_info": "personal_info.query",
+        }
+        for tool in tools:
+            if not isinstance(tool, dict):
+                continue
+            name = str(tool.get("name", "")).strip()
+            if name in tool_name_to_cap:
+                capabilities.append(tool_name_to_cap[name])
+        return list(dict.fromkeys(capabilities))
 
     def validate_skill_yaml(self, yaml_content: str) -> Dict[str, Any]:
         config = self._parse_and_validate(yaml_content)
@@ -227,6 +251,10 @@ class SkillManager:
             "always_on": True,
             "source_type": "repo_doc",
             "source_ref": source_ref,
+            "mode": "rule",
+            "compatibility_level": "rule_only",
+            "compatibility_notes": ["来自 README/SKILL.md 等规则文档，仅做提示词注入，不直接调用工具"],
+            "capabilities": [],
             "prompt": prompt,
             "created_at": int(time.time()),
             "updated_at": int(time.time()),
@@ -323,6 +351,10 @@ class SkillManager:
                         "tools": config.get("tools", []),
                         "source_type": config.get("source_type", "yaml") or "yaml",
                         "source_ref": config.get("source_ref", "") or "",
+                        "mode": config.get("mode", "tool" if config.get("tools") else "rule") or "rule",
+                        "compatibility_level": config.get("compatibility_level", "direct") or "direct",
+                        "compatibility_notes": config.get("compatibility_notes", []) or [],
+                        "capabilities": config.get("capabilities", []) or [],
                         "prompt": config.get("prompt", "") or "",
                         "guidance_excerpt": (str(config.get("prompt", "")).strip()[:360] if config.get("prompt") else ""),
                         "updated_at": config.get("updated_at"),
