@@ -10,6 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 type ScheduleCourse = Record<string, unknown>;
+type ScheduleEntry = {
+  courseName: string;
+  location: string;
+  teacher: string;
+  weeks: string;
+  weekday: string;
+  period: string;
+  raw: ScheduleCourse;
+};
 
 type ScheduleResponse = {
   success?: boolean;
@@ -64,6 +73,26 @@ function normalizeWeekday(value: string) {
 }
 
 function detectPeriodLabel(value: string) {
+  const normalizedText = value.replace(/\s+/g, "");
+  const chinesePeriodMap: Array<[string, string]> = [
+    ["第一二节", "1-2"],
+    ["一二节", "1-2"],
+    ["第三四节", "3-4"],
+    ["三四节", "3-4"],
+    ["第五六节", "5-6"],
+    ["五六节", "5-6"],
+    ["第七八节", "7-8"],
+    ["七八节", "7-8"],
+    ["第九十节", "9-10"],
+    ["九十节", "9-10"],
+    ["第十一十二节", "11-12"],
+    ["十一十二节", "11-12"],
+  ];
+  for (const [token, mapped] of chinesePeriodMap) {
+    if (normalizedText.includes(token)) {
+      return mapped;
+    }
+  }
   const raw = value
     .replace(/第/g, "")
     .replace(/节/g, "")
@@ -86,6 +115,33 @@ function detectPeriodLabel(value: string) {
     return String(num);
   }
   return raw || "未分配";
+}
+
+function splitCourseField(value: string) {
+  return (value || "")
+    .split(/-{10,}/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function explodeCourse(course: ScheduleCourse): ScheduleEntry[] {
+  const names = splitCourseField(extractText(course, ["课程名称", "课程名", "课程"]));
+  const teachers = splitCourseField(extractText(course, ["教师", "老师"]));
+  const locations = splitCourseField(extractText(course, ["地点", "教室"]));
+  const weeks = splitCourseField(extractText(course, ["周次", "weeks"]));
+  const period = detectPeriodLabel(extractText(course, ["节次信息", "节次", "period", "上课时间"]));
+  const weekday = normalizeWeekday(extractText(course, ["星期", "weekday"]));
+
+  const size = Math.max(names.length, teachers.length, locations.length, weeks.length, 1);
+  return Array.from({ length: size }, (_, index) => ({
+    courseName: names[index] || names[0] || "未命名课程",
+    location: locations[index] || locations[0] || "",
+    teacher: teachers[index] || teachers[0] || "",
+    weeks: weeks[index] || weeks[0] || "",
+    weekday,
+    period,
+    raw: course,
+  }));
 }
 
 function parseWeekTokens(value: string) {
@@ -209,18 +265,17 @@ export default function SchedulePage() {
   const freshness = useMemo(() => getFreshnessMeta(status), [status]);
 
   const grid = useMemo(() => {
-    const map = new Map<string, ScheduleCourse[]>();
+    const map = new Map<string, ScheduleEntry[]>();
     for (const course of courses) {
-      const weeks = extractText(course, ["周次", "weeks"]);
-      if (weeks && !matchesWeek(weeks, weekIndex)) {
-        continue;
+      for (const entry of explodeCourse(course)) {
+        if (entry.weeks && !matchesWeek(entry.weeks, weekIndex)) {
+          continue;
+        }
+        const key = `${entry.weekday}__${entry.period}`;
+        const existing = map.get(key) || [];
+        existing.push(entry);
+        map.set(key, existing);
       }
-      const weekday = normalizeWeekday(extractText(course, ["星期", "weekday"]));
-      const period = detectPeriodLabel(extractText(course, ["节次信息", "节次", "period", "上课时间"]));
-      const key = `${weekday}__${period}`;
-      const existing = map.get(key) || [];
-      existing.push(course);
-      map.set(key, existing);
     }
     return map;
   }, [courses, weekIndex]);
@@ -328,18 +383,10 @@ export default function SchedulePage() {
                             items.map((item, index) => (
                               <Card key={`${day}-${period}-${index}`} className="border-blue-100 bg-blue-50/70 shadow-none">
                                 <CardContent className="space-y-1.5 p-3">
-                                  <div className="text-sm font-medium text-slate-900">
-                                    {extractText(item, ["课程名称", "课程名", "课程"]) || "未命名课程"}
-                                  </div>
-                                  <div className="text-xs text-slate-500">
-                                    {extractText(item, ["地点", "教室"]) || "地点待定"}
-                                  </div>
-                                  <div className="text-xs text-slate-500">
-                                    {extractText(item, ["教师", "老师"]) || "教师待定"}
-                                  </div>
-                                  <div className="text-[11px] text-slate-400">
-                                    {extractText(item, ["周次", "weeks"]) || "周次待定"}
-                                  </div>
+                                  <div className="text-sm font-medium text-slate-900">{item.courseName}</div>
+                                  <div className="text-xs text-slate-500">{item.location || "地点待定"}</div>
+                                  <div className="text-xs text-slate-500">{item.teacher || "教师待定"}</div>
+                                  <div className="text-[11px] text-slate-400">{item.weeks || "周次待定"}</div>
                                 </CardContent>
                               </Card>
                             ))

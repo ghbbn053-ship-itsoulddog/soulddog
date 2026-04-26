@@ -20,11 +20,15 @@ def match_enabled_skills(owner: str, question: str, max_match: int = 3) -> List[
         return []
 
     matched: List[Dict] = []
+    always_on: List[Dict] = []
     for s in skills:
         if not s.get("enabled", True):
             continue
         name = str(s.get("name", "")).strip()
         if name and name not in comp.filter_skill_names(owner, [name]):
+            continue
+        if bool(s.get("always_on")) and str(s.get("prompt", "")).strip():
+            always_on.append(s)
             continue
         triggers = [str(t).strip() for t in (s.get("triggers") or []) if str(t).strip()]
         if not triggers:
@@ -33,7 +37,8 @@ def match_enabled_skills(owner: str, question: str, max_match: int = 3) -> List[
             matched.append(s)
         if len(matched) >= max_match:
             break
-    return matched
+    combined = matched + [item for item in always_on if item not in matched]
+    return combined[: max_match + len(always_on)]
 
 
 def build_skill_prompt_hint(owner: str, question: str, max_match: int = 3) -> str:
@@ -41,7 +46,7 @@ def build_skill_prompt_hint(owner: str, question: str, max_match: int = 3) -> st
     if not matched:
         return ""
 
-    lines = ["【技能路由提示】本轮问题命中以下已启用技能，请优先结合对应工具回答："]
+    lines = ["【技能路由提示】本轮可用的已启用 Skill 如下，请优先遵循其中规则，并结合对应工具回答："]
     for s in matched:
         tools = ", ".join(
             str(t.get("name", "")).strip()
@@ -50,5 +55,10 @@ def build_skill_prompt_hint(owner: str, question: str, max_match: int = 3) -> st
         ) or "无"
         triggers = ", ".join(str(t) for t in (s.get("triggers") or [])[:5]) or "无"
         desc = str(s.get("description", "")).strip() or "无描述"
-        lines.append(f"- {s.get('name', 'unknown')}: {desc}; triggers=[{triggers}]; tools=[{tools}]")
+        source_type = str(s.get("source_type", "yaml")).strip() or "yaml"
+        lines.append(f"- {s.get('name', 'unknown')} ({source_type}): {desc}; triggers=[{triggers}]; tools=[{tools}]")
+        prompt = str(s.get("prompt", "")).strip()
+        if prompt:
+            lines.append("  规则摘录：")
+            lines.append(prompt[:1600])
     return "\n".join(lines)

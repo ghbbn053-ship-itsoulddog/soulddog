@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BrainCircuit, Settings2 } from "lucide-react";
+import { BrainCircuit, Cable, KeyRound, PlusCircle, Settings2, Sparkles } from "lucide-react";
 
 import { PlatformSidebarFooter, PlatformSidebarHeader, createPlatformNav } from "@/components/workspace/app-sidebar";
 import {
@@ -15,15 +15,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 type ProviderItem = {
   provider: string;
   display_name?: string;
+  category?: string;
   models: string[];
   default_model: string;
   supports_custom_endpoint?: boolean;
   supports_custom_model?: boolean;
   supports_reasoning?: boolean;
+  preset_api_base?: string;
+  endpoint_hint?: string;
 };
 
 export default function ModelsSettingsPage() {
@@ -66,9 +70,10 @@ export default function ModelsSettingsPage() {
         });
         const pref = prefRes.ok ? await prefRes.json() : null;
         const prefProvider = pref?.provider || "qwen";
+        const prefMeta = list.find((item) => item.provider === prefProvider);
         setProvider(prefProvider);
-        setModel(pref?.model || list.find((x) => x.provider === prefProvider)?.default_model || "");
-        setApiBase(pref?.api_base || "");
+        setModel(pref?.model || prefMeta?.default_model || "");
+        setApiBase(pref?.api_base || prefMeta?.preset_api_base || "");
         setApiKeyMasked(pref?.api_key_masked || "");
         setReasoningMode(pref?.reasoning_mode || "standard");
         setShowThinking(!!pref?.show_thinking);
@@ -81,20 +86,29 @@ export default function ModelsSettingsPage() {
     run();
   }, [API_BASE, router]);
 
-  const providerModels = useMemo(
-    () => providers.find((p) => p.provider === provider)?.models || [],
-    [providers, provider]
+  const providerMeta = useMemo(
+    () => providers.find((item) => item.provider === provider),
+    [provider, providers]
   );
-  const providerMeta = useMemo(() => providers.find((p) => p.provider === provider), [providers, provider]);
+
+  const applyProvider = (nextProvider: string) => {
+    const next = providers.find((item) => item.provider === nextProvider);
+    if (!next) return;
+    setProvider(nextProvider);
+    setModel(next.default_model || next.models[0] || "");
+    setApiBase(next.preset_api_base || "");
+    setMsg("");
+  };
 
   const save = async () => {
-    if (!username) return;
+    if (!username || !providerMeta) return;
     setSaving(true);
     setMsg("");
     try {
       const payload = {
         username,
         provider,
+        provider_label: providerMeta.display_name || providerMeta.provider,
         model,
         api_base: apiBase,
         api_key: apiKey.trim() ? apiKey.trim() : null,
@@ -112,7 +126,8 @@ export default function ModelsSettingsPage() {
         throw new Error(data?.detail || data?.message || `保存失败(${res.status})`);
       }
       setApiKey("");
-      setMsg(`已保存：${data.provider} / ${data.model}`);
+      setApiKeyMasked(apiKey.trim() ? `${apiKey.trim().slice(0, 4)}***${apiKey.trim().slice(-4)}` : apiKeyMasked);
+      setMsg(`已导入 ${providerMeta.display_name || provider} / ${data.model}`);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "保存失败");
     } finally {
@@ -129,13 +144,13 @@ export default function ModelsSettingsPage() {
       badge={
         <WorkbenchBadge>
           <Settings2 className="h-3.5 w-3.5" />
-          MODEL SETTINGS
+          MODEL IMPORT
         </WorkbenchBadge>
       }
-      title="模型设置"
-      description="按账号保存模型接入方式。这里支持现成模型选择，也支持通过 URL、API Key 和自定义模型名接入 OpenAI 兼容模型。"
-      sidebarTitle="模型偏好"
-      sidebarDescription="把模型接入收口到这一页，聊天页只保留模型名称选择和思考模式。"
+      title="模型导入与接入"
+      description="先选接入类型，再填 endpoint、API Key 和模型名。这里按真实常见 provider 模式组织，不再只给一个粗糙兼容入口。"
+      sidebarTitle="模型配置"
+      sidebarDescription="聊天页只负责使用模型，这里负责接入和导入。"
       sidebarHeader={<PlatformSidebarHeader />}
       navItems={createPlatformNav("models")}
       footer={<PlatformSidebarFooter username={username} detail="模型设置账号" />}
@@ -144,17 +159,19 @@ export default function ModelsSettingsPage() {
           <Button variant="outline" onClick={() => router.push("/chat")}>
             返回会话
           </Button>
-          <Button onClick={save} disabled={saving}>
-            {saving ? "保存中..." : "保存设置"}
+          <Button onClick={save} disabled={saving || !providerMeta}>
+            <PlusCircle className="h-4 w-4" />
+            {saving ? "导入中..." : "导入配置"}
           </Button>
         </>
       }
     >
       <div className="grid gap-4">
-        <div className="grid gap-4 md:grid-cols-3">
-          <WorkbenchStatCard label="Providers" value={providers.length} hint="当前后端返回可用供应商" />
-          <WorkbenchStatCard label="Models" value={providerModels.length} hint="当前 provider 下的模型数" />
-          <WorkbenchStatCard label="Thinking" value={showThinking ? "On" : "Off"} hint="思考流前端显示状态" />
+        <div className="grid gap-4 md:grid-cols-4">
+          <WorkbenchStatCard label="Providers" value={providers.length} hint="当前可选接入方式" />
+          <WorkbenchStatCard label="Models" value={providerMeta?.models.length || 0} hint="当前 provider 的预置模型" />
+          <WorkbenchStatCard label="Reasoning" value={showThinking ? "On" : "Off"} hint="思考流显示状态" />
+          <WorkbenchStatCard label="Endpoint" value={providerMeta?.supports_custom_endpoint ? "Custom" : "Builtin"} hint="是否需要单独配置地址" />
         </div>
 
         {msg ? (
@@ -163,66 +180,94 @@ export default function ModelsSettingsPage() {
           </Card>
         ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-          <WorkbenchSection title="模型导入" description="先选接入方式，再决定是用预置模型还是自定义模型名。">
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-2">
-                <div className="text-sm font-medium text-slate-900">接入方式</div>
-                <select
-                  className="h-11 w-full rounded-xl border border-[hsl(var(--border))] bg-white px-3 text-sm outline-none ring-0"
-                  value={provider}
-                  onChange={(e) => {
-                    const nextProvider = e.target.value;
-                    setProvider(nextProvider);
-                    const defaultModel = providers.find((p) => p.provider === nextProvider)?.default_model || "";
-                    setModel(defaultModel);
-                  }}
+        <WorkbenchSection title="选择接入方式" description="先挑 provider，再进入具体配置。">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {providers.map((item) => {
+              const active = item.provider === provider;
+              return (
+                <button
+                  key={item.provider}
+                  type="button"
+                  onClick={() => applyProvider(item.provider)}
+                  className={cn(
+                    "rounded-2xl border p-4 text-left transition-colors",
+                    active
+                      ? "border-[hsl(var(--primary))] bg-blue-50/70"
+                      : "border-slate-200 bg-white hover:bg-slate-50"
+                  )}
                 >
-                  {providers.map((item) => (
-                    <option key={item.provider} value={item.provider}>
-                      {item.display_name || item.provider}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-950">{item.display_name || item.provider}</div>
+                      <div className="mt-1 text-xs leading-5 text-slate-500">{item.endpoint_hint || "常规模型接入方式"}</div>
+                    </div>
+                    <Badge variant={active ? "success" : "outline"}>{item.category || "provider"}</Badge>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                    <span>{item.supports_custom_endpoint ? "可自定义 endpoint" : "内置接入"}</span>
+                    <span>{item.supports_custom_model ? "可自定义 model" : "固定模型列表"}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </WorkbenchSection>
 
-              <label className="space-y-2">
-                <div className="text-sm font-medium text-slate-900">模型名称</div>
-                <select
-                  className="h-11 w-full rounded-xl border border-[hsl(var(--border))] bg-white px-3 text-sm outline-none ring-0"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                >
-                  {providerModels.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </label>
+        <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+          <WorkbenchSection title="导入配置" description="参考常见客户端模式：provider / endpoint / key / model 分开配置。">
+            <div className="grid gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="space-y-2">
+                  <div className="text-sm font-medium text-slate-900">模型名称</div>
+                  <select
+                    className="h-11 w-full rounded-xl border border-[hsl(var(--border))] bg-white px-3 text-sm outline-none"
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                  >
+                    {(providerMeta?.models || []).map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="space-y-2">
+                  <div className="text-sm font-medium text-slate-900">推理模式</div>
+                  <select
+                    className="h-11 w-full rounded-xl border border-[hsl(var(--border))] bg-white px-3 text-sm outline-none"
+                    value={reasoningMode}
+                    onChange={(e) => setReasoningMode(e.target.value)}
+                  >
+                    <option value="standard">标准</option>
+                    <option value="thinking">推理</option>
+                    <option value="deep">深度推理</option>
+                  </select>
+                </label>
+              </div>
 
               {providerMeta?.supports_custom_model ? (
-                <label className="space-y-2 md:col-span-2">
+                <label className="space-y-2">
                   <div className="text-sm font-medium text-slate-900">自定义模型名</div>
                   <Input
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
-                    placeholder="例如：gpt-4.1-mini / claude-3-7-sonnet / deepseek-chat / ollama/llama3.1"
+                    placeholder="例如：gpt-4.1-mini / deepseek-chat / claude-3-7-sonnet / llama3.1:8b"
                   />
                 </label>
               ) : null}
 
               {providerMeta?.supports_custom_endpoint ? (
-                <>
-                  <label className="space-y-2 md:col-span-2">
+                <div className="grid gap-4">
+                  <label className="space-y-2">
                     <div className="text-sm font-medium text-slate-900">API Base URL</div>
                     <Input
                       value={apiBase}
                       onChange={(e) => setApiBase(e.target.value)}
-                      placeholder="例如：https://api.openai.com/v1 或 http://127.0.0.1:11434/v1"
+                      placeholder={providerMeta?.preset_api_base || "https://api.openai.com/v1"}
                     />
                   </label>
-                  <label className="space-y-2 md:col-span-2">
+                  <label className="space-y-2">
                     <div className="text-sm font-medium text-slate-900">API Key</div>
                     <Input
                       value={apiKey}
@@ -230,60 +275,71 @@ export default function ModelsSettingsPage() {
                       placeholder={apiKeyMasked ? `已保存(${apiKeyMasked})，留空不修改` : "sk-..."}
                     />
                   </label>
-                </>
+                </div>
               ) : null}
-
-              <label className="space-y-2">
-                <div className="text-sm font-medium text-slate-900">推理模式</div>
-                <select
-                  className="h-11 w-full rounded-xl border border-[hsl(var(--border))] bg-white px-3 text-sm outline-none ring-0"
-                  value={reasoningMode}
-                  onChange={(e) => setReasoningMode(e.target.value)}
-                >
-                  <option value="standard">标准</option>
-                  <option value="thinking">推理</option>
-                  <option value="deep">深度推理</option>
-                </select>
-              </label>
 
               <label className="flex items-center gap-3 rounded-xl border border-[hsl(var(--border))] bg-slate-50 px-4 py-3">
                 <input type="checkbox" checked={showThinking} onChange={(e) => setShowThinking(e.target.checked)} />
                 <div>
                   <div className="text-sm font-medium text-slate-900">显示思考流</div>
-                  <div className="text-xs text-slate-500">仅在模型支持时有效</div>
+                  <div className="text-xs text-slate-500">仅在模型/网关支持时有效</div>
                 </div>
               </label>
             </div>
           </WorkbenchSection>
 
-          <WorkbenchSection title="接入摘要" description="确认当前到底接的是哪个模型、哪个地址。">
-            <div className="space-y-3">
+          <WorkbenchSection title="当前摘要" description="导入前确认一下当前到底会接到哪里。">
+            <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
-                <Badge variant="outline">{providerMeta?.display_name || provider || "provider"}</Badge>
-                <Badge variant="outline">{model || "model"}</Badge>
+                <Badge variant="outline">{providerMeta?.display_name || provider}</Badge>
+                <Badge variant="outline">{model || "未填写 model"}</Badge>
                 <Badge variant="secondary">{reasoningMode}</Badge>
                 <Badge variant={showThinking ? "success" : "outline"}>{showThinking ? "思考流开启" : "思考流关闭"}</Badge>
               </div>
-              {providerMeta?.supports_custom_endpoint ? (
-                <Card className="border-slate-200 bg-slate-50 shadow-none">
-                  <CardContent className="space-y-2 p-4 text-sm text-slate-600">
-                    <div className="text-slate-900">自定义接入信息</div>
-                    <div>Base URL: {apiBase || "未填写"}</div>
-                    <div>API Key: {apiKeyMasked || (apiKey ? "本次将写入新 key" : "未填写")}</div>
-                  </CardContent>
-                </Card>
-              ) : null}
+
               <Card className="border-slate-200 bg-slate-50 shadow-none">
-                <CardContent className="space-y-2 p-4 text-sm text-slate-600">
+                <CardContent className="space-y-3 p-4 text-sm text-slate-600">
                   <div className="flex items-center gap-2 text-slate-900">
-                    <BrainCircuit className="h-4 w-4 text-[hsl(var(--primary))]" />
-                    推理模式说明
+                    <Cable className="h-4 w-4 text-[hsl(var(--primary))]" />
+                    接入信息
                   </div>
-                  <div>标准：追求响应速度。</div>
-                  <div>推理：适合需要展示思考过程的复杂问答。</div>
-                  <div>深度推理：适合更长推导链路，但延迟更高。</div>
+                  <div>Provider: {providerMeta?.display_name || provider}</div>
+                  <div>Base URL: {providerMeta?.supports_custom_endpoint ? apiBase || providerMeta?.preset_api_base || "未填写" : "平台内置"}</div>
+                  <div>API Key: {providerMeta?.supports_custom_endpoint ? (apiKeyMasked || (apiKey ? "本次将写入新 key" : "未填写")) : "平台内置"}</div>
                 </CardContent>
               </Card>
+
+              <Card className="border-slate-200 bg-slate-50 shadow-none">
+                <CardContent className="space-y-3 p-4 text-sm text-slate-600">
+                  <div className="flex items-center gap-2 text-slate-900">
+                    <BrainCircuit className="h-4 w-4 text-[hsl(var(--primary))]" />
+                    使用说明
+                  </div>
+                  <div>标准：更快，适合常规对话。</div>
+                  <div>推理：适合较复杂问答，若服务端支持可展示思考流。</div>
+                  <div>深度推理：延迟更高，适合长链路分析。</div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-slate-200 bg-white shadow-none">
+                <CardContent className="space-y-2 p-4 text-sm text-slate-600">
+                  <div className="flex items-center gap-2 text-slate-900">
+                    <KeyRound className="h-4 w-4 text-[hsl(var(--primary))]" />
+                    常见导入方式
+                  </div>
+                  <div>OpenAI / OpenRouter / DeepSeek / SiliconFlow 这类通常填 `Base URL + API Key + model`。</div>
+                  <div>Ollama 一般填本地地址，例如 `http://127.0.0.1:11434/v1`，模型名填本地已拉取模型。</div>
+                  <div>平台内置千问则不需要额外导入。</div>
+                </CardContent>
+              </Card>
+
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-4 text-xs leading-6 text-slate-500">
+                <div className="mb-1 flex items-center gap-2 text-slate-900">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  导入动作
+                </div>
+                点右上角 `导入配置` 才会真正写入当前账号配置。
+              </div>
             </div>
           </WorkbenchSection>
         </div>

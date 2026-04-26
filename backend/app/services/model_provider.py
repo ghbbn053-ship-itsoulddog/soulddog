@@ -399,7 +399,7 @@ def get_model_provider_for_user(username: str, session_store) -> UnifiedModelPro
     pref = session_store.get_user_model_preference(username) if session_store else None
     if not pref:
         return get_model_provider()
-    provider = (pref.get("provider") or "qwen").strip().lower()
+    provider = (pref.get("runtime_provider") or pref.get("provider") or "qwen").strip().lower()
     model = (pref.get("model") or "").strip() or None
     api_base = (pref.get("api_base") or "").strip() or None
     api_key = (pref.get("api_key") or "").strip() or None

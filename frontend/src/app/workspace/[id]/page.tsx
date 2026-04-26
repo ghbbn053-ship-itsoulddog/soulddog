@@ -480,7 +480,7 @@ export default function WorkspaceDetailPage() {
               : "xl:grid-cols-[minmax(340px,430px)_minmax(0,1fr)]"
           )}
         >
-          <div className="min-w-0">
+          <div className="min-w-0 xl:self-stretch">
             {knowledgeCollapsed ? (
               <Card className="border-white/70 bg-white/90 shadow-[0_10px_32px_rgba(15,23,42,0.05)] xl:sticky xl:top-6">
                 <CardContent className="flex flex-col items-center gap-3 p-3">
@@ -524,10 +524,11 @@ export default function WorkspaceDetailPage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-4 xl:sticky xl:top-6">
+              <div className="grid gap-4 xl:sticky xl:top-6 xl:h-[calc(100vh-6.5rem)]">
                 <WorkbenchSection
                   title="知识库面板"
                   description="左侧负责知识可视化和入库，可以随时收起，把更多空间让给右侧对话。"
+                  className="xl:flex xl:h-full xl:flex-col"
                   actions={
                     <div className="flex flex-wrap gap-2">
                       <Button type="button" variant="outline" size="sm" onClick={() => router.push(`/knowledge?workspace_id=${workspaceId}`)}>
@@ -541,8 +542,8 @@ export default function WorkspaceDetailPage() {
                     </div>
                   }
                 >
-                  <div className="grid gap-4">
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+                  <div className="grid gap-4 xl:flex-1 xl:grid-rows-[minmax(0,1fr)_auto] xl:overflow-hidden">
+                    <ScrollArea className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 xl:min-h-0">
                       <KnowledgeVisualization
                         documents={documents.map((doc) => ({
                           id: doc.id,
@@ -555,7 +556,7 @@ export default function WorkspaceDetailPage() {
                         }))}
                         relationCount={stats.edges}
                       />
-                    </div>
+                    </ScrollArea>
 
                     <div className="space-y-4">
                       <div className="flex flex-wrap gap-2">
@@ -579,7 +580,7 @@ export default function WorkspaceDetailPage() {
                         <Textarea
                           value={textContent}
                           onChange={(e) => setTextContent(e.target.value)}
-                          className="min-h-44 bg-white"
+                          className="min-h-36 bg-white"
                           placeholder="在这里直接输入内容，或者下方选择文件。知识面板收起后，右侧对话会变成主视图。"
                         />
                         <div className="mt-3 flex flex-wrap gap-3">
@@ -657,10 +658,11 @@ export default function WorkspaceDetailPage() {
             )}
           </div>
 
-          <div className="min-w-0">
+          <div className="min-w-0 xl:self-stretch">
             <WorkbenchSection
               title="AI 对话"
               description={knowledgeCollapsed ? "知识库已收起，当前把更多宽度让给右侧对话。需要入库或看图谱时再展开左侧。" : "右侧保持主对话区，左侧负责知识可视化和入库。"}
+              className="xl:flex xl:h-[calc(100vh-6.5rem)] xl:flex-col"
               actions={
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" onClick={() => router.push("/composition")}>
@@ -676,7 +678,9 @@ export default function WorkspaceDetailPage() {
                 </div>
               }
             >
-              <AIPanel username={username} workspaceId={workspaceId} workspaceName={workspace?.name} />
+              <div className="xl:flex-1">
+                <AIPanel username={username} workspaceId={workspaceId} workspaceName={workspace?.name} />
+              </div>
             </WorkbenchSection>
           </div>
         </div>

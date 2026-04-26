@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, RefreshCcw, SearchCheck, ShieldAlert, Upload, Wrench } from "lucide-react";
+import { Activity, Github, RefreshCcw, SearchCheck, ShieldAlert, Trash2, Upload, Wrench } from "lucide-react";
 
 import { PlatformSidebarFooter, PlatformSidebarHeader, createPlatformNav } from "@/components/workspace/app-sidebar";
 import {
@@ -23,6 +23,9 @@ type MCPTool = {
   description: string;
   kind?: string;
   parameters?: Record<string, { type?: string; required?: boolean; description?: string }>;
+  enabled?: boolean;
+  source_type?: string;
+  source_ref?: string;
 };
 
 type PipelineItem = {
@@ -63,6 +66,7 @@ export default function MCPPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [tools, setTools] = useState<MCPTool[]>([]);
+  const [importedTools, setImportedTools] = useState<MCPTool[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -78,10 +82,11 @@ export default function MCPPage() {
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
 
-  const refresh = async () => {
-    const res = await fetch(`${API_BASE}/api/mcp/tools`, { credentials: "include" });
+  const refreshTools = async (uname: string) => {
+    const res = await fetch(`${API_BASE}/api/mcp/tools?username=${encodeURIComponent(uname)}`, { credentials: "include" });
     const data = res.ok ? await res.json() : null;
     setTools(data?.tools || []);
+    setImportedTools(data?.imported_tools || []);
   };
 
   const refreshHistory = async () => {
@@ -113,8 +118,9 @@ export default function MCPPage() {
           router.replace("/login");
           return;
         }
-        setUsername(String(me.username));
-        await refresh();
+        const uname = String(me.username);
+        setUsername(uname);
+        await refreshTools(uname);
         await refreshHistory();
         await refreshState();
         await refreshTasks();
@@ -129,25 +135,22 @@ export default function MCPPage() {
 
   useEffect(() => {
     const id = setInterval(() => {
-      refreshState();
-      refreshHistory();
-      refreshTasks();
+      void refreshHistory();
+      void refreshState();
+      void refreshTasks();
     }, 8000);
     return () => clearInterval(id);
-  }, [API_BASE]);
+  }, []);
 
   const reloadTools = async () => {
     setSaving(true);
     setMsg("");
     try {
-      const res = await fetch(`${API_BASE}/api/mcp/tools/reload`, {
-        method: "POST",
-        credentials: "include",
-      });
+      const res = await fetch(`${API_BASE}/api/mcp/tools/reload`, { method: "POST", credentials: "include" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `重载失败(${res.status})`);
-      setMsg(`重载成功，当前工具数：${data?.count ?? "-"}`);
-      await refresh();
+      if (username) await refreshTools(username);
+      setMsg(`重载成功，当前 registry 工具数：${data?.count ?? "-"}`);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "重载失败");
     } finally {
@@ -170,9 +173,9 @@ export default function MCPPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `导入失败(${res.status})`);
-      setMsg(`导入成功：${data?.imported ?? 0} 项`);
       setUploadFile(null);
-      await refresh();
+      await refreshTools(username);
+      setMsg(`文件导入成功：${data?.imported ?? 0} 项`);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "导入失败");
     } finally {
@@ -192,12 +195,56 @@ export default function MCPPage() {
         body: JSON.stringify({ username, url: importUrl.trim() }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `URL 导入失败(${res.status})`);
-      setMsg(`URL 导入成功：${data?.imported ?? 0} 项`);
+      if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `导入失败(${res.status})`);
       setImportUrl("");
-      await refresh();
+      await refreshTools(username);
+      setMsg(`URL / 仓库导入成功：${data?.imported ?? 0} 项`);
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "URL 导入失败");
+      setMsg(e instanceof Error ? e.message : "导入失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleImported = async (name: string, enabled: boolean) => {
+    if (!username) return;
+    setSaving(true);
+    setMsg("");
+    try {
+      const res = await fetch(`${API_BASE}/api/mcp/tools/${encodeURIComponent(name)}/enable`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username, enabled }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `操作失败(${res.status})`);
+      await refreshTools(username);
+      setMsg(`已${enabled ? "启用" : "停用"} ${name}`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "操作失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeImported = async (name: string) => {
+    if (!username) return;
+    setSaving(true);
+    setMsg("");
+    try {
+      const res = await fetch(`${API_BASE}/api/mcp/tools/${encodeURIComponent(name)}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `删除失败(${res.status})`);
+      await refreshTools(username);
+      setMsg(`已删除 ${name}`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "删除失败");
     } finally {
       setSaving(false);
     }
@@ -246,11 +293,7 @@ export default function MCPPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `流水线失败(${res.status})`);
-      if (data?.deduplicated) {
-        setMsg(`命中去重：复用任务 ${data?.run_id || "-"} · 队列=${data?.queue_size ?? "-"}`);
-      } else {
-        setMsg(`已入队：${data?.run_id || "-"} · 队列=${data?.queue_size ?? "-"}`);
-      }
+      setMsg(data?.deduplicated ? `命中去重：${data?.run_id || "-"}` : `已入队：${data?.run_id || "-"}`);
       await refreshHistory();
       await refreshState();
       await refreshTasks();
@@ -265,10 +308,7 @@ export default function MCPPage() {
     setSaving(true);
     setMsg("");
     try {
-      const res = await fetch(`${API_BASE}/api/intake/pipeline/unlock`, {
-        method: "POST",
-        credentials: "include",
-      });
+      const res = await fetch(`${API_BASE}/api/intake/pipeline/unlock`, { method: "POST", credentials: "include" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `解锁失败(${res.status})`);
       setMsg(data?.message || "已解锁");
@@ -294,7 +334,7 @@ export default function MCPPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `重试失败(${res.status})`);
-      setMsg(`重试任务已入队：${data?.run_id || runId} · 队列=${data?.queue_size ?? "-"}`);
+      setMsg(`重试任务已入队：${data?.run_id || runId}`);
       await refreshHistory();
       await refreshState();
       await refreshTasks();
@@ -317,7 +357,7 @@ export default function MCPPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `回滚失败(${res.status})`);
       setMsg(`回滚成功：${data?.restored?.restored_files ?? 0} 个文件`);
-      await refresh();
+      if (username) await refreshTools(username);
       await refreshState();
       await refreshTasks();
     } catch (e) {
@@ -349,6 +389,7 @@ export default function MCPPage() {
   };
 
   const sorted = useMemo(() => [...tools].sort((a, b) => a.name.localeCompare(b.name)), [tools]);
+  const importedSorted = useMemo(() => [...importedTools].sort((a, b) => a.name.localeCompare(b.name)), [importedTools]);
 
   if (loading) {
     return <div className="p-6 text-sm text-slate-500">加载中...</div>;
@@ -359,13 +400,13 @@ export default function MCPPage() {
       badge={
         <WorkbenchBadge>
           <Wrench className="h-3.5 w-3.5" />
-          MCP TOOLCHAIN
+          MCP OBJECTS
         </WorkbenchBadge>
       }
       title="MCP 工具管理"
-      description="统一管理 MCP 工具导入、探测、启用和流水线任务。按钮布局已改为稳定卡片栅格，不再发生文本顶出。"
+      description="MCP 现在按对象导入和管理。支持 JSON 文件、URL、GitHub 仓库地址自动探测，导入后可单独启停、删除，再进入组合编排。"
       sidebarTitle="工具接入"
-      sidebarDescription="导入现成配置，重载工具，并观察 intake pipeline 状态。"
+      sidebarDescription="MCP 已经不只是 registry 列表，而是用户侧可管理对象。"
       sidebarHeader={<PlatformSidebarHeader />}
       navItems={createPlatformNav("mcp")}
       footer={<PlatformSidebarFooter username={username} detail="MCP 管理账号" />}
@@ -380,10 +421,10 @@ export default function MCPPage() {
     >
       <div className="grid gap-4">
         <div className="grid gap-4 md:grid-cols-4">
-          <WorkbenchStatCard label="Tools" value={sorted.length} hint="已注册 MCP 工具" />
+          <WorkbenchStatCard label="Imported" value={importedSorted.length} hint="当前账号导入的 MCP 对象" />
+          <WorkbenchStatCard label="Registry" value={sorted.length} hint="当前 registry 实际可调用工具" />
           <WorkbenchStatCard label="Queue" value={queueSize} hint="等待中的流水线任务" />
-          <WorkbenchStatCard label="Running" value={runningCount} hint="当前正在执行" />
-          <WorkbenchStatCard label="State" value={state?.running ? "Running" : "Idle"} hint={state?.status || "暂无状态"} />
+          <WorkbenchStatCard label="Running" value={runningCount} hint={state?.status || "当前执行状态"} />
         </div>
 
         {msg ? (
@@ -394,20 +435,23 @@ export default function MCPPage() {
 
         <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr_0.95fr]">
           <div className="grid gap-4">
-            <WorkbenchSection title="导入与控制" description="这里把导入、探测、流水线控制拆成稳定区块，避免按钮挤压。">
+            <WorkbenchSection title="导入与控制" description="先导入对象，再重载 registry。GitHub 仓库会自动探测常见 JSON manifest。">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <div className="text-sm font-medium text-slate-900">URL 导入</div>
+                  <div className="text-sm font-medium text-slate-900">URL / GitHub 导入</div>
                   <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                     <Input
                       value={importUrl}
                       onChange={(e) => setImportUrl(e.target.value)}
-                      placeholder="MCP 配置 JSON 链接"
+                      placeholder="JSON 链接，或 GitHub 仓库 /blob/ 链接"
                     />
                     <Button variant="outline" onClick={importFromUrl} disabled={saving || !importUrl.trim()}>
-                      <Upload className="h-4 w-4" />
+                      <Github className="h-4 w-4" />
                       URL 导入
                     </Button>
+                  </div>
+                  <div className="text-xs leading-5 text-slate-500">
+                    自动探测 `mcp.json`、`tools.json`、`external_tools.json`、`manifest.json` 等常见文件名。
                   </div>
                 </div>
 
@@ -464,18 +508,34 @@ export default function MCPPage() {
               </div>
             </WorkbenchSection>
 
-            <WorkbenchSection title="已注册工具" description="工具 manifest 列表。">
+            <WorkbenchSection title="已导入 MCP 对象" description="当前账号真正持有的 MCP 对象，可单独启停和删除。">
               <ScrollArea className="h-[460px] pr-3">
                 <div className="space-y-3">
-                  {sorted.length === 0 ? <WorkbenchEmpty title="暂无 MCP 工具" description="先导入 JSON 或运行探测。" /> : null}
-                  {sorted.map((tool) => (
+                  {importedSorted.length === 0 ? <WorkbenchEmpty title="暂无导入对象" description="先导入 JSON 或 GitHub 仓库。" /> : null}
+                  {importedSorted.map((tool) => (
                     <Card key={tool.name} className="border-slate-200 shadow-none">
-                      <CardContent className="space-y-2 p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="text-sm font-semibold text-slate-950">{tool.name}</div>
-                          <Badge variant="outline">{tool.kind || "python"}</Badge>
+                      <CardContent className="space-y-3 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="text-sm font-semibold text-slate-950">{tool.name}</div>
+                            <div className="text-xs leading-5 text-slate-500">{tool.description || "无描述"}</div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant={tool.enabled ? "success" : "outline"}>{tool.enabled ? "enabled" : "disabled"}</Badge>
+                            <Badge variant="outline">{tool.kind || "python"}</Badge>
+                            <Badge variant="secondary">{tool.source_type || "file"}</Badge>
+                          </div>
                         </div>
-                        <div className="text-xs leading-5 text-slate-500">{tool.description || "无描述"}</div>
+                        {tool.source_ref ? <div className="text-xs text-slate-500">source: {tool.source_ref}</div> : null}
+                        <div className="flex flex-wrap gap-2">
+                          <Button size="sm" variant="outline" disabled={saving} onClick={() => toggleImported(tool.name, !tool.enabled)}>
+                            {tool.enabled ? "停用" : "启用"}
+                          </Button>
+                          <Button size="sm" variant="outline" disabled={saving} onClick={() => removeImported(tool.name)}>
+                            <Trash2 className="h-4 w-4" />
+                            删除
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   ))}
@@ -484,58 +544,18 @@ export default function MCPPage() {
             </WorkbenchSection>
           </div>
 
-          <WorkbenchSection title="任务队列" description="查看运行、失败、取消、回滚和重试。">
-            <ScrollArea className="h-[760px] pr-3">
+          <WorkbenchSection title="Registry 工具" description="这里是当前重载后实际可调用的工具集合。">
+            <ScrollArea className="h-[720px] pr-3">
               <div className="space-y-3">
-                {tasks.length === 0 ? <WorkbenchEmpty title="暂无任务" description="执行探测或流水线后，这里会出现任务。" /> : null}
-                {tasks.map((task) => (
-                  <Card key={task.run_id} className="border-slate-200 shadow-none">
-                    <CardContent className="space-y-3 p-4">
+                {sorted.length === 0 ? <WorkbenchEmpty title="暂无工具" description="先导入对象，再重载 registry。" /> : null}
+                {sorted.map((tool) => (
+                  <Card key={`registry-${tool.name}`} className="border-slate-200 shadow-none">
+                    <CardContent className="space-y-2 p-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm font-semibold text-slate-950">{task.run_id}</div>
-                        <Badge
-                          variant={
-                            task.status === "success"
-                              ? "success"
-                              : task.status === "failed"
-                                ? "destructive"
-                                : task.status === "running"
-                                  ? "warning"
-                                  : "outline"
-                          }
-                        >
-                          {task.status || "-"}
-                        </Badge>
+                        <div className="text-sm font-semibold text-slate-950">{tool.name}</div>
+                        <Badge variant="outline">{tool.kind || "python"}</Badge>
                       </div>
-                      <div className="text-xs leading-5 text-slate-500">
-                        {task.created_at || "-"} · 优先级 {task.priority || "normal"} · 重试 {task.retries ?? 0}/{task.max_retries ?? 0}
-                      </div>
-                      <div className="text-xs leading-5 text-slate-500">
-                        耗时 {task.duration_ms ?? "-"} ms · reload {task.reload_count ?? "-"} · 下次执行 {task.next_run_at || "-"}
-                      </div>
-                      {task.error ? <div className="text-xs text-rose-600 break-all">{task.error}</div> : null}
-                      {task.last_error ? <div className="text-xs text-rose-500 break-all">last_error: {task.last_error}</div> : null}
-                      <div className="grid gap-2 sm:grid-cols-3">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => cancelTask(task.run_id)}
-                          disabled={saving || !["queued", "running"].includes(String(task.status || ""))}
-                        >
-                          取消
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => retryTask(task.run_id)} disabled={saving || !!state?.running}>
-                          重试
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => rollbackTask(task.run_id)}
-                          disabled={saving || !!state?.running || !task.snapshot}
-                        >
-                          回滚
-                        </Button>
-                      </div>
+                      <div className="text-xs leading-5 text-slate-500">{tool.description || "无描述"}</div>
                     </CardContent>
                   </Card>
                 ))}
@@ -543,26 +563,61 @@ export default function MCPPage() {
             </ScrollArea>
           </WorkbenchSection>
 
-          <WorkbenchSection title="流水线历史" description="保留最近执行记录，便于回溯。">
-            <ScrollArea className="h-[760px] pr-3">
-              <div className="space-y-3">
-                {history.length === 0 ? <WorkbenchEmpty title="暂无记录" description="历史记录会在任务执行后出现。" /> : null}
-                {history.map((item, idx) => (
-                  <Card key={`${item.run_id || idx}`} className="border-slate-200 shadow-none">
-                    <CardContent className="space-y-2 p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm font-semibold text-slate-950">{item.run_id || "-"}</div>
-                        <Badge variant={item.success ? "success" : "destructive"}>{item.success ? "成功" : "失败"}</Badge>
-                      </div>
-                      <div className="text-xs leading-5 text-slate-500">
-                        {item.started_at || "-"} · 耗时 {item.duration_ms ?? "-"} ms · reload {item.reload_count ?? "-"}
-                      </div>
-                      {item.error ? <div className="text-xs text-rose-600 break-all">{item.error}</div> : null}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </ScrollArea>
+          <WorkbenchSection title="流水线任务" description="保留 intake pipeline 观测与控制。">
+            <div className="space-y-4">
+              <Card className="border-slate-200 bg-slate-50 shadow-none">
+                <CardContent className="space-y-2 p-4 text-sm text-slate-600">
+                  <div>state: {state?.status || "idle"}</div>
+                  <div>queue: {queueSize}</div>
+                  <div>running: {runningCount}</div>
+                </CardContent>
+              </Card>
+
+              <ScrollArea className="h-[300px] pr-3">
+                <div className="space-y-3">
+                  {tasks.length === 0 ? <WorkbenchEmpty title="暂无任务" description="还没有排队中的任务。" /> : null}
+                  {tasks.map((task) => (
+                    <Card key={task.run_id} className="border-slate-200 shadow-none">
+                      <CardContent className="space-y-3 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm font-semibold text-slate-950">{task.run_id}</div>
+                          <Badge variant="outline">{task.status || "unknown"}</Badge>
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          priority={task.priority || "-"} · retries={task.retries ?? 0}/{task.max_retries ?? 0}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button size="sm" variant="outline" disabled={saving} onClick={() => retryTask(task.run_id)}>
+                            重试
+                          </Button>
+                          <Button size="sm" variant="outline" disabled={saving} onClick={() => rollbackTask(task.run_id)}>
+                            回滚
+                          </Button>
+                          <Button size="sm" variant="outline" disabled={saving} onClick={() => cancelTask(task.run_id)}>
+                            取消
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
+
+              <ScrollArea className="h-[220px] pr-3">
+                <div className="space-y-3">
+                  {history.length === 0 ? <WorkbenchEmpty title="暂无历史" description="还没有完成过的流水线任务。" /> : null}
+                  {history.map((item) => (
+                    <Card key={item.run_id || Math.random()} className="border-slate-200 shadow-none">
+                      <CardContent className="space-y-2 p-4 text-xs text-slate-500">
+                        <div className="text-sm font-medium text-slate-900">{item.run_id || "unknown"}</div>
+                        <div>{item.success ? "success" : "failed"}</div>
+                        <div>{item.error || "无错误信息"}</div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
           </WorkbenchSection>
         </div>
       </div>

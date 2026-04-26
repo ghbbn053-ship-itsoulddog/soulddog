@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models.platform import SkillManifest, MCPServerManifest
 from app.services.skill_manager import get_skill_manager
 from app.services.mcp_registry import get_mcp_registry
+from app.services.mcp_manager import get_mcp_manager
 
 
 class PlatformRegistryService:
@@ -36,23 +37,30 @@ class PlatformRegistryService:
             record.enabled = bool(item.get("enabled", True))
             record.triggers = item.get("triggers", []) or []
             record.tools = item.get("tools", []) or []
-            record.source_type = "yaml"
-            record.source_ref = f"skills/{owner_username}/{name}.yaml"
+            record.source_type = str(item.get("source_type", "yaml")).strip() or "yaml"
+            record.source_ref = str(item.get("source_ref", f"skills/{owner_username}/{name}.yaml")).strip()
             record.metadata_json = {
                 "updated_at": item.get("updated_at"),
                 "input_schema": item.get("input_schema", {}) or {},
+                "always_on": bool(item.get("always_on", False)),
             }
             out.append(record)
         db.commit()
         return out
 
     def sync_mcp_tools(self, db: Session, owner_username: str) -> List[MCPServerManifest]:
+        imported_map = {
+            str(item.get("name", "")).strip(): item
+            for item in get_mcp_manager().list_tools(owner_username)
+            if str(item.get("name", "")).strip()
+        }
         tools = get_mcp_registry().list_tools()
         out: List[MCPServerManifest] = []
         for item in tools:
             name = str(item.get("name", "")).strip()
             if not name:
                 continue
+            imported = imported_map.get(name) or {}
             record = (
                 db.query(MCPServerManifest)
                 .filter(MCPServerManifest.owner_username == owner_username, MCPServerManifest.name == name)
@@ -63,16 +71,19 @@ class PlatformRegistryService:
                 db.add(record)
             record.description = str(item.get("description", "")).strip() or None
             record.kind = str(item.get("kind", "python")).strip().lower() or "python"
-            record.enabled = True
+            record.enabled = bool(imported.get("enabled", True))
             record.tool_schema = {
                 "name": name,
                 "description": item.get("description", ""),
                 "parameters": item.get("parameters", {}) or {},
                 "kind": record.kind,
             }
-            record.source_type = "registry"
-            record.source_ref = "mcp_registry"
-            record.metadata_json = {}
+            record.source_type = str(imported.get("source_type", "registry")).strip() or "registry"
+            record.source_ref = str(imported.get("source_ref", "mcp_registry")).strip() or "mcp_registry"
+            record.metadata_json = {
+                "updated_at": imported.get("updated_at"),
+                "owner_username": imported.get("owner_username", owner_username),
+            }
             out.append(record)
         db.commit()
         return out

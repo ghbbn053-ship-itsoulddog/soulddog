@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import re
 import time
 import yaml
 import requests
@@ -27,6 +28,16 @@ COMMON_SKILL_MANIFESTS = (
     "manifest.yaml",
     "manifest.yml",
 )
+COMMON_SKILL_GUIDES = (
+    "SKILL.md",
+    "README.md",
+    "CLAUDE.md",
+    "AGENTS.md",
+    "docs/SKILL.md",
+    "docs/README.md",
+    "prompts/SKILL.md",
+)
+GUIDE_PROMPT_LIMIT = 12_000
 
 
 @dataclass
@@ -50,8 +61,8 @@ class SkillManager:
         missing = [f for f in REQUIRED_FIELDS if f not in config]
         if missing:
             raise ValueError(f"Skill 缺少必填字段: {', '.join(missing)}")
-        if not isinstance(config.get("tools"), list) or not config["tools"]:
-            raise ValueError("tools 必须为非空数组")
+        if not isinstance(config.get("tools"), list):
+            raise ValueError("tools 必须是数组")
         if not isinstance(config.get("name"), str) or not config["name"].strip():
             raise ValueError("name 必须为非空字符串")
         input_schema = config.get("input_schema")
@@ -71,16 +82,22 @@ class SkillManager:
             if not isinstance(tool, dict) or "name" not in tool:
                 raise ValueError("每个 tool 必须是对象且包含 name")
 
+    @staticmethod
+    def _save_skill_config(target: Path, config: Dict[str, Any]) -> None:
+        target.write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
     def upload_skill(self, owner: str, yaml_content: str) -> Dict[str, Any]:
         config = self._parse_and_validate(yaml_content)
         self._validate(config)
         config.setdefault("enabled", True)
+        config.setdefault("source_type", "yaml")
+        config.setdefault("source_ref", "")
         config.setdefault("created_at", int(time.time()))
         config["updated_at"] = int(time.time())
 
         skill_name = str(config["name"]).strip()
         target = self._owner_dir(owner) / f"{skill_name}.yaml"
-        target.write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        self._save_skill_config(target, config)
         return {"owner": owner, "name": skill_name, "path": str(target)}
 
     def _parse_and_validate(self, yaml_content: str) -> Dict[str, Any]:
@@ -134,7 +151,7 @@ class SkillManager:
         parts = u.split("github.com/", 1)[1].split("/")
         if len(parts) < 2:
             return []
-        org, repo = parts[0], parts[1]
+        org, repo = parts[0], parts[1].removesuffix(".git")
         branches = ["main", "master"]
         candidates: List[str] = []
         for branch in branches:
@@ -143,6 +160,80 @@ class SkillManager:
                 candidates.append(f"https://raw.githubusercontent.com/{org}/{repo}/{branch}/skills/{manifest}")
                 candidates.append(f"https://raw.githubusercontent.com/{org}/{repo}/{branch}/manifests/{manifest}")
         return candidates
+
+    @staticmethod
+    def _github_repo_guide_candidates(url: str) -> List[str]:
+        u = (url or "").strip().rstrip("/")
+        if "github.com/" not in u:
+            return []
+        if "/blob/" in u or "raw.githubusercontent.com" in u:
+            return []
+        parts = u.split("github.com/", 1)[1].split("/")
+        if len(parts) < 2:
+            return []
+        org, repo = parts[0], parts[1].removesuffix(".git")
+        branches = ["main", "master"]
+        candidates: List[str] = []
+        for branch in branches:
+            for filename in COMMON_SKILL_GUIDES:
+                candidates.append(f"https://raw.githubusercontent.com/{org}/{repo}/{branch}/{filename}")
+        return candidates
+
+    @staticmethod
+    def _github_repo_meta(url: str) -> Dict[str, str]:
+        u = (url or "").strip().rstrip("/")
+        if "github.com/" not in u:
+            return {"org": "", "repo": "", "name": ""}
+        parts = u.split("github.com/", 1)[1].split("/")
+        if len(parts) < 2:
+            return {"org": "", "repo": "", "name": ""}
+        org, repo = parts[0], parts[1].removesuffix(".git")
+        safe_name = re.sub(r"[^a-zA-Z0-9._-]+", "-", repo).strip("-_.") or "imported-skill"
+        return {"org": org, "repo": repo, "name": safe_name}
+
+    @staticmethod
+    def _extract_guide_description(content: str, fallback: str) -> str:
+        for line in (content or "").splitlines():
+            text = line.strip().lstrip("#").strip()
+            if len(text) >= 8:
+                return text[:160]
+        return fallback
+
+    @staticmethod
+    def _extract_guide_prompt(content: str) -> str:
+        text = (content or "").strip()
+        if not text:
+            return ""
+        return text[:GUIDE_PROMPT_LIMIT]
+
+    def _save_repo_doc_skill(
+        self,
+        owner: str,
+        source_url: str,
+        source_ref: str,
+        content: str,
+    ) -> Dict[str, Any]:
+        repo_meta = self._github_repo_meta(source_url)
+        skill_name = repo_meta["name"]
+        description = self._extract_guide_description(content, f"{repo_meta['repo']} 导入的仓库型 Skill")
+        prompt = self._extract_guide_prompt(content)
+        config = {
+            "name": skill_name,
+            "version": "repo",
+            "description": description,
+            "triggers": [],
+            "tools": [],
+            "enabled": True,
+            "always_on": True,
+            "source_type": "repo_doc",
+            "source_ref": source_ref,
+            "prompt": prompt,
+            "created_at": int(time.time()),
+            "updated_at": int(time.time()),
+        }
+        target = self._owner_dir(owner) / f"{skill_name}.yaml"
+        self._save_skill_config(target, config)
+        return {"owner": owner, "name": skill_name, "path": str(target), "source_type": "repo_doc"}
 
     @staticmethod
     def _build_session() -> requests.Session:
@@ -164,7 +255,9 @@ class SkillManager:
         normalized = self._normalize_raw_url(url)
         if not normalized.startswith("http://") and not normalized.startswith("https://"):
             raise ValueError("仅支持 http/https URL")
-        candidates = [normalized, *self._github_repo_candidates(normalized)]
+        manifest_candidates = [normalized, *self._github_repo_candidates(normalized)]
+        guide_candidates = self._github_repo_guide_candidates(normalized)
+        candidates = [*manifest_candidates, *guide_candidates]
         seen = set()
         deduped_candidates = []
         for item in candidates:
@@ -203,6 +296,8 @@ class SkillManager:
                 if not content.strip():
                     last_error = f"{candidate} -> Skill 内容为空"
                     continue
+                if candidate.endswith((".md", ".txt")):
+                    return self._save_repo_doc_skill(owner, normalized, candidate, content)
                 return self.upload_skill(owner, content)
             except requests.RequestException as exc:
                 last_error = f"{candidate} -> {exc}"
@@ -222,9 +317,14 @@ class SkillManager:
                         "version": config.get("version", ""),
                         "description": config.get("description", ""),
                         "enabled": bool(config.get("enabled", True)),
+                        "always_on": bool(config.get("always_on", False)),
                         "triggers": config.get("triggers", []),
                         "input_schema": config.get("input_schema", {}) or {},
                         "tools": config.get("tools", []),
+                        "source_type": config.get("source_type", "yaml") or "yaml",
+                        "source_ref": config.get("source_ref", "") or "",
+                        "prompt": config.get("prompt", "") or "",
+                        "guidance_excerpt": (str(config.get("prompt", "")).strip()[:360] if config.get("prompt") else ""),
                         "updated_at": config.get("updated_at"),
                     }
                 )

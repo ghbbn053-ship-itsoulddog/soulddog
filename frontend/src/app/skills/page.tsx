@@ -24,9 +24,13 @@ type SkillItem = {
   version: string;
   description: string;
   enabled: boolean;
+  always_on?: boolean;
   triggers: string[];
   input_schema?: Record<string, unknown>;
   tools: Array<{ name?: string }>;
+  source_type?: string;
+  source_ref?: string;
+  guidance_excerpt?: string;
   updated_at?: number;
 };
 
@@ -209,7 +213,7 @@ export default function SkillsPage() {
         </WorkbenchBadge>
       }
       title="Skill 管理"
-      description="按文档方案，Skill 是平台可拼接能力对象。这里统一管理 YAML manifest、URL 导入和启停状态。"
+      description="Skill 分两类：工具型 manifest skill，以及仓库/文档型 repo skill。这里只展示真实可导入能力，不再把 GitHub 仓库误当成 YAML。"
       sidebarTitle="能力编排"
       sidebarDescription="以 Skill 为单位维护平台能力和触发路由。"
       sidebarHeader={<PlatformSidebarHeader />}
@@ -234,7 +238,7 @@ export default function SkillsPage() {
 
           <WorkbenchSection
             title="安装与导入"
-            description="支持直接粘贴 YAML、从 GitHub URL 导入，或上传本地 manifest 文件。"
+            description="YAML 用于工具型 manifest skill。GitHub 仓库地址会优先尝试 manifest，找不到时自动按 repo/doc skill 导入。"
           >
             <div className="space-y-4">
               <Textarea
@@ -246,7 +250,7 @@ export default function SkillsPage() {
                 <Input
                   value={importUrl}
                   onChange={(e) => setImportUrl(e.target.value)}
-                  placeholder="GitHub YAML 链接，支持 /blob/ 自动转换"
+                  placeholder="GitHub 仓库、raw YAML、/blob/ 文件链接都可以"
                 />
                 <Button variant="outline" onClick={importFromUrl} disabled={saving || !importUrl.trim()}>
                   <Github className="h-4 w-4" />
@@ -288,11 +292,13 @@ export default function SkillsPage() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="space-y-1">
                           <div className="text-sm font-semibold text-slate-950">{skill.name}</div>
-                          <div className="text-xs leading-5 text-slate-500">{skill.description || "无描述"}</div>
+                  <div className="text-xs leading-5 text-slate-500">{skill.description || "无描述"}</div>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <Badge variant={skill.enabled ? "success" : "outline"}>{skill.enabled ? "enabled" : "disabled"}</Badge>
                           <Badge variant="outline">v{skill.version || "-"}</Badge>
+                          <Badge variant="secondary">{skill.source_type || "yaml"}</Badge>
+                          {skill.always_on ? <Badge variant="outline">always on</Badge> : null}
                         </div>
                       </div>
 
@@ -308,9 +314,16 @@ export default function SkillsPage() {
                         )}
                       </div>
 
-                      <div className="text-xs text-slate-500">
-                        tools: {(skill.tools || []).map((tool) => tool?.name || "-").join(", ") || "-"}
+                      <div className="space-y-1 text-xs text-slate-500">
+                        <div>tools: {(skill.tools || []).map((tool) => tool?.name || "-").join(", ") || "-"}</div>
+                        {skill.source_ref ? <div>source: {skill.source_ref}</div> : null}
                       </div>
+
+                      {skill.guidance_excerpt ? (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-6 text-slate-600">
+                          {skill.guidance_excerpt}
+                        </div>
+                      ) : null}
 
                       {schemaProperties && Object.keys(schemaProperties).length > 0 ? (
                         <pre className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">

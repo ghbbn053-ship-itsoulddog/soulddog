@@ -15,6 +15,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
 import requests
+from app.services.mcp_manager import get_mcp_manager
 
 
 @dataclass
@@ -126,6 +127,7 @@ class MCPRegistry:
         从声明式配置加载外部工具（拿来主义接入位）：
         - backend/app/mcp/external_tools.json
         - backend/app/mcp/external_tools.generated.json
+        - backend/data/mcp_manifests/*.json
         """
         base = Path(__file__).resolve().parents[1] / "mcp"
         for filename in ["external_tools.json", "external_tools.generated.json"]:
@@ -164,6 +166,39 @@ class MCPRegistry:
             except Exception:
                 # 外部配置失败不影响内置工具可用性
                 continue
+
+        # 用户/平台导入的 MCP 对象
+        try:
+            imported_items = get_mcp_manager().list_all_tools()
+            for it in imported_items:
+                if it.get("enabled", True) is False:
+                    continue
+                name = str(it.get("name", "")).strip()
+                kind = str(it.get("kind", "python")).strip().lower() or "python"
+                module_path = str(it.get("module_path", "")).strip()
+                func_name = str(it.get("func_name", "")).strip()
+                if not name:
+                    continue
+                if kind == "python" and (not module_path or not func_name):
+                    continue
+                if kind == "http" and not str(it.get("url", "")).strip():
+                    continue
+                self.register(
+                    MCPToolSpec(
+                        name=name,
+                        description=str(it.get("description", "")).strip() or f"Imported MCP tool: {name}",
+                        module_path=module_path,
+                        func_name=func_name,
+                        parameters=it.get("parameters") or {},
+                        input_schema=it.get("input_schema"),
+                        kind=kind,
+                        method=str(it.get("method", "POST")).strip().upper() or "POST",
+                        url=str(it.get("url", "")).strip(),
+                        timeout=int(it.get("timeout", 12) or 12),
+                    )
+                )
+        except Exception:
+            pass
 
     def list_tools(self) -> List[Dict[str, Any]]:
         tools = []

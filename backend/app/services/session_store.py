@@ -202,6 +202,8 @@ class SessionStore:
             api_key = old.get("api_key", "")
         payload = {
             "provider": preference.get("provider", "qwen"),
+            "runtime_provider": preference.get("runtime_provider", old.get("runtime_provider", preference.get("provider", "qwen"))),
+            "provider_label": preference.get("provider_label", old.get("provider_label", preference.get("provider", "qwen"))),
             "model": preference.get("model", ""),
             "api_base": preference.get("api_base", old.get("api_base", "")),
             "api_key": api_key,
