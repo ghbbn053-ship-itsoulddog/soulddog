@@ -24,6 +24,10 @@ COMMON_MCP_MANIFESTS = (
     "tools.json",
     "external_tools.json",
     "manifest.json",
+    ".mcp.json",
+    ".mcp/config.json",
+    ".cursor/mcp.json",
+    ".vscode/mcp.json",
     "manifests/mcp.json",
     "manifests/tools.json",
     "mcp/manifest.json",
@@ -113,7 +117,58 @@ class MCPManager:
         return session
 
     @staticmethod
-    def _parse_payload(content: str) -> List[Dict[str, Any]]:
+    def _coerce_server_entry(name: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+        server = dict(raw)
+        normalized_name = str(name or server.get("name", "")).strip()
+        transport = str(server.get("transport", "")).strip().lower()
+        command = str(server.get("command", "")).strip()
+        url = str(server.get("url", "") or server.get("endpoint", "")).strip()
+
+        if not transport:
+            if command:
+                transport = "stdio"
+            elif url:
+                transport = "http"
+            else:
+                transport = "unknown"
+
+        kind = str(server.get("kind", "")).strip().lower()
+        if not kind:
+            if transport in {"stdio", "command"}:
+                kind = "stdio"
+            elif transport in {"sse"}:
+                kind = "sse"
+            elif transport in {"streamable_http", "http"}:
+                kind = "http"
+            else:
+                kind = transport or "unknown"
+
+        item: Dict[str, Any] = {
+            "name": normalized_name,
+            "description": str(server.get("description", "")).strip() or f"Imported MCP server: {normalized_name}",
+            "kind": kind,
+            "transport": transport,
+            "enabled": bool(server.get("enabled", True)),
+            "capabilities": server.get("capabilities") or [],
+            "parameters": server.get("parameters") or {},
+        }
+
+        if url:
+            item["url"] = url
+        if command:
+            item["command"] = command
+        if isinstance(server.get("args"), list):
+            item["args"] = server.get("args")
+        if isinstance(server.get("env"), dict):
+            item["env"] = server.get("env")
+        if str(server.get("module_path", "")).strip():
+            item["module_path"] = str(server.get("module_path", "")).strip()
+        if str(server.get("func_name", "")).strip():
+            item["func_name"] = str(server.get("func_name", "")).strip()
+        return item
+
+    @classmethod
+    def _parse_payload(cls, content: str) -> List[Dict[str, Any]]:
         try:
             payload = json.loads(content)
         except Exception as exc:
@@ -121,9 +176,18 @@ class MCPManager:
         if isinstance(payload, list):
             tools = payload
         else:
-            tools = payload.get("tools") if isinstance(payload, dict) else None
+            tools = None
+            if isinstance(payload, dict):
+                if isinstance(payload.get("tools"), list):
+                    tools = payload.get("tools")
+                elif isinstance(payload.get("mcpServers"), dict):
+                    tools = [cls._coerce_server_entry(name, item) for name, item in payload.get("mcpServers", {}).items() if isinstance(item, dict)]
+                elif isinstance(payload.get("servers"), dict):
+                    tools = [cls._coerce_server_entry(name, item) for name, item in payload.get("servers", {}).items() if isinstance(item, dict)]
+                elif isinstance(payload.get("mcp_servers"), dict):
+                    tools = [cls._coerce_server_entry(name, item) for name, item in payload.get("mcp_servers", {}).items() if isinstance(item, dict)]
         if not isinstance(tools, list) or not tools:
-            raise ValueError("配置格式错误：缺少 tools 数组")
+            raise ValueError("配置格式错误：缺少 tools 数组，或缺少 mcpServers/servers 映射")
         return [item for item in tools if isinstance(item, dict)]
 
     @staticmethod
@@ -134,17 +198,25 @@ class MCPManager:
             return None
         if kind == "python":
             if not str(item.get("module_path", "")).strip() or not str(item.get("func_name", "")).strip():
-                return None
+                normalized = dict(item)
+                normalized["name"] = name
+                normalized["kind"] = kind
+                normalized["enabled"] = bool(item.get("enabled", True))
+                normalized.setdefault("transport", "python")
+                return MCPManager._apply_tool_metadata(normalized)
         elif kind == "http":
             if not str(item.get("url", "")).strip():
-                return None
-        else:
-            return None
+                normalized = dict(item)
+                normalized["name"] = name
+                normalized["kind"] = kind
+                normalized["enabled"] = bool(item.get("enabled", True))
+                normalized.setdefault("transport", "http")
+                return MCPManager._apply_tool_metadata(normalized)
         normalized = dict(item)
         normalized["name"] = name
         normalized["kind"] = kind
         normalized["enabled"] = bool(item.get("enabled", True))
-        normalized.setdefault("transport", "python" if kind == "python" else "http")
+        normalized.setdefault("transport", "python" if kind == "python" else ("http" if kind == "http" else kind))
         normalized = MCPManager._apply_tool_metadata(normalized)
         return normalized
 
@@ -186,6 +258,28 @@ class MCPManager:
         notes: List[str] = []
 
         if kind not in {"python", "http"}:
+            if kind in {"stdio", "command"}:
+                command = str(item.get("command", "")).strip()
+                notes = ["检测到 stdio MCP server 配置"]
+                if command:
+                    notes.append(f"command: {command}")
+                notes.append("当前平台尚未接入 stdio MCP runtime；对象可导入，但还不能直接执行")
+                return {
+                    "compatibility_level": "adapted",
+                    "compatibility_notes": notes,
+                    "capabilities": capabilities,
+                }
+            if kind in {"sse", "streamable_http"}:
+                url = str(item.get("url", "") or item.get("endpoint", "")).strip()
+                notes = [f"检测到 {kind} MCP server 配置"]
+                if url:
+                    notes.append(f"endpoint: {url}")
+                notes.append("当前平台只支持内部 python/http tool 形态；需要加 MCP client 适配层")
+                return {
+                    "compatibility_level": "adapted",
+                    "compatibility_notes": notes,
+                    "capabilities": capabilities,
+                }
             return {
                 "compatibility_level": "incompatible",
                 "compatibility_notes": [f"当前仅支持 python/http 两类 MCP，收到不支持的 kind: {kind}"],
@@ -327,6 +421,9 @@ class MCPManager:
                     "module_path": item.get("module_path", ""),
                     "func_name": item.get("func_name", ""),
                     "url": item.get("url", ""),
+                    "command": item.get("command", ""),
+                    "args": item.get("args", []) or [],
+                    "env": item.get("env", {}) or {},
                     "updated_at": item.get("updated_at"),
                 }
             )
