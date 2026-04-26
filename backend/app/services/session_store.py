@@ -158,6 +158,12 @@ class SessionStore:
             return [k.split("user_session:", 1)[1] for k in keys]
         return list(self._user_sessions.keys())
 
+    def delete_user_session(self, username: str):
+        if self.redis_available:
+            self._redis_del(f"user_session:{username}")
+            return
+        self._user_sessions.pop(username, None)
+
     # ===== Sync Status =====
     def set_sync_status(self, username: str, status: Dict[str, Any], ttl: int = 6 * 3600):
         if self.redis_available:

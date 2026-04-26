@@ -1013,11 +1013,10 @@ export default function ChatPage() {
                   </Card>
                 ) : (
                   conversations.map((conv) => (
-                    <button
+                    <div
                       key={conv.id}
-                      onClick={() => selectConversation(conv.id)}
                       className={cn(
-                        "group w-full rounded-lg border px-3 py-3 text-left transition-colors",
+                        "group flex items-start gap-3 rounded-lg border px-3 py-3 transition-colors",
                         currentConversationId === conv.id
                           ? "border-[hsl(var(--primary))] bg-blue-50"
                           : "border-[hsl(var(--border))] bg-white hover:bg-[hsl(var(--accent))]"
@@ -1025,11 +1024,16 @@ export default function ChatPage() {
                     >
                       <div className="flex items-start gap-3">
                         <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                        <div className="min-w-0 flex-1">
+                        <button
+                          type="button"
+                          onClick={() => selectConversation(conv.id)}
+                          className="min-w-0 flex-1 text-left"
+                        >
                           <div className="truncate text-sm font-medium text-slate-900">{conv.title}</div>
                           <div className="mt-1 text-xs text-slate-500">{new Date(conv.created_at).toLocaleString("zh-CN")}</div>
-                        </div>
+                        </button>
                         <Button
+                          type="button"
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
@@ -1038,7 +1042,7 @@ export default function ChatPage() {
                           <Trash2 className="h-4 w-4 text-slate-500" />
                         </Button>
                       </div>
-                    </button>
+                    </div>
                   ))
                 )}
               </div>

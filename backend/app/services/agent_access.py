@@ -5,6 +5,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from scraper import JwxtScraper
 from sqlalchemy.orm import Session
 
 from app.models.platform import AgentAccessToken, ExternalServiceBinding
@@ -132,6 +133,27 @@ class AgentAccessService:
         binding = self.get_binding(db, owner_username, service_name)
         return bool(binding and binding.status == "active")
 
+    def _is_education_session_alive(self, owner_username: str) -> bool:
+        session_store = get_session_store()
+        current_session = session_store.get_user_session(owner_username)
+        if not current_session:
+            return False
+        try:
+            scraper = JwxtScraper(
+                session=current_session["session"],
+                base_url=current_session["server_url"],
+            )
+            result = scraper.get_personal_info()
+            if result.get("success"):
+                return True
+            message = str(result.get("message") or "")
+            if "会话已过期" in message:
+                session_store.delete_user_session(owner_username)
+                return False
+            return True
+        except Exception:
+            return False
+
     def sync_default_bindings(self, db: Session, owner_username: str) -> List[Dict[str, Any]]:
         session_store = get_session_store()
         current_session = session_store.get_user_session(owner_username)
@@ -154,13 +176,15 @@ class AgentAccessService:
             )
             db.add(education)
 
-        education.status = "active" if current_session else "pending"
+        has_live_session = self._is_education_session_alive(owner_username) if current_session else False
+        education.status = "active" if has_live_session else "pending"
         education.display_name = owner_username
         education.metadata_json = {
             "login_source": "web_login",
             "has_active_session": bool(current_session),
+            "has_live_session": has_live_session,
         }
-        education.last_verified_at = datetime.now(timezone.utc) if current_session else None
+        education.last_verified_at = datetime.now(timezone.utc) if has_live_session else None
         db.add(education)
         db.commit()
 
