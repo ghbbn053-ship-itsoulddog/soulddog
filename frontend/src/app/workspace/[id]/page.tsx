@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Blocks,
+  ChevronLeft,
+  ChevronRight,
   Database,
   FileText,
   Network,
@@ -27,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 type WorkspaceItem = {
   id: number;
@@ -194,9 +197,11 @@ export default function WorkspaceDetailPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadAuthority, setUploadAuthority] = useState("user");
   const [msg, setMsg] = useState("");
+  const [knowledgeCollapsed, setKnowledgeCollapsed] = useState(false);
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
+  const knowledgePanelStorageKey = useMemo(() => `workspace:${workspaceId}:knowledge-collapsed`, [workspaceId]);
 
   const refreshKnowledge = async (uname: string) => {
     const res = await fetch(`${API_BASE}/api/knowledge/${encodeURIComponent(uname)}/${workspaceId}`, {
@@ -388,6 +393,18 @@ export default function WorkspaceDetailPage() {
     setReminderOpen(true);
   }, [reminders]);
 
+  useEffect(() => {
+    if (!workspaceId || typeof window === "undefined") return;
+    const saved = window.localStorage.getItem(knowledgePanelStorageKey);
+    if (saved === null) return;
+    setKnowledgeCollapsed(saved === "1");
+  }, [knowledgePanelStorageKey, workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || typeof window === "undefined") return;
+    window.localStorage.setItem(knowledgePanelStorageKey, knowledgeCollapsed ? "1" : "0");
+  }, [knowledgeCollapsed, knowledgePanelStorageKey, workspaceId]);
+
   const handleSuggestionAction = async (suggestionId: number, action: "accept" | "dismiss") => {
     if (!username) return;
     const res = await fetch(`${API_BASE}/api/suggestions/${workspaceId}/${action}?suggestion_id=${suggestionId}`, {
@@ -431,158 +448,232 @@ export default function WorkspaceDetailPage() {
         </>
       }
     >
-      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="grid gap-4">
-          <WorkbenchSection title="WORKSPACE DETAIL" description="工作区状态和学习状态合并展示，不再拆很多解释板块。">
-            <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-              <div className="grid gap-3">
-                <WorkbenchStatCard label="Documents" value={stats.documents} />
-                <WorkbenchStatCard label="Knowledge Units" value={stats.nodes} />
-                <WorkbenchStatCard label="Relations" value={stats.edges} />
-                <WorkbenchStatCard label="Workspace" value={workspace?.name || "-"} hint={workspace?.slug || "当前工作区"} />
-              </div>
-              <div>
-                {learningStatus ? (
-                  <LearningStatus metrics={learningStatus.metrics} signals={learningStatus.signals} />
-                ) : (
-                  <WorkbenchEmpty title="暂无学习状态" description="等待工作区状态聚合完成。" />
-                )}
-              </div>
+      <div className="grid gap-4">
+        <WorkbenchSection title="WORKSPACE DETAIL" description="工作区状态和学习状态合并展示，不再拆很多解释板块。">
+          <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+            <div className="grid gap-3">
+              <WorkbenchStatCard label="Documents" value={stats.documents} />
+              <WorkbenchStatCard label="Knowledge Units" value={stats.nodes} />
+              <WorkbenchStatCard label="Relations" value={stats.edges} />
+              <WorkbenchStatCard label="Workspace" value={workspace?.name || "-"} hint={workspace?.slug || "当前工作区"} />
             </div>
-          </WorkbenchSection>
+            <div>
+              {learningStatus ? (
+                <LearningStatus metrics={learningStatus.metrics} signals={learningStatus.signals} />
+              ) : (
+                <WorkbenchEmpty title="暂无学习状态" description="等待工作区状态聚合完成。" />
+              )}
+            </div>
+          </div>
+        </WorkbenchSection>
 
-          <WorkbenchSection title="知识库可视化" description="中区主视图先聚焦知识库本身，展示文档结构、权威级别、状态和知识覆盖面。">
-            <KnowledgeVisualization
-              documents={documents.map((doc) => ({
-                id: doc.id,
-                title: doc.title,
-                docType: doc.doc_type,
-                status: doc.status,
-                tokenEstimate: doc.token_estimate,
-                authorityLevel: String(doc.metadata?.authority_level || "user"),
-                summary: doc.summary,
-              }))}
-              relationCount={stats.edges}
-            />
-          </WorkbenchSection>
-
-          <WorkbenchSection title="文档资料区" description="这里只保留一个简洁入口：可以打字，也可以丢文件，然后统一入库整理。">
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {["user", "school", "system"].map((level) => (
+        <div
+          className={cn(
+            "grid gap-4 xl:items-start",
+            knowledgeCollapsed
+              ? "xl:grid-cols-[92px_minmax(0,1fr)]"
+              : "xl:grid-cols-[minmax(340px,430px)_minmax(0,1fr)]"
+          )}
+        >
+          <div className="min-w-0">
+            {knowledgeCollapsed ? (
+              <Card className="border-white/70 bg-white/90 shadow-[0_10px_32px_rgba(15,23,42,0.05)] xl:sticky xl:top-6">
+                <CardContent className="flex flex-col items-center gap-3 p-3">
                   <Button
-                    key={level}
                     type="button"
-                    size="sm"
-                    variant={textAuthority === level ? "default" : "outline"}
-                    onClick={() => {
-                      setTextAuthority(level);
-                      setUploadAuthority(level);
-                    }}
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setKnowledgeCollapsed(false)}
+                    title="展开知识库"
                   >
-                    {level}
+                    <ChevronRight className="h-4 w-4" />
                   </Button>
-                ))}
-              </div>
-              <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-4">
-                <div className="mb-3 text-sm font-medium text-slate-900">输入文本或选择文件</div>
-                <Textarea
-                  value={textContent}
-                  onChange={(e) => setTextContent(e.target.value)}
-                  className="min-h-52 bg-white"
-                  placeholder="在这里直接输入内容，或者下方选择文件。这个页面不再堆文档清单和知识检索。"
-                />
-                <div className="mt-3 flex flex-wrap gap-3">
-                  <input
-                    type="text"
-                    value={textFilename}
-                    onChange={(e) => setTextFilename(e.target.value)}
-                    placeholder="notes.md"
-                    className="h-10 min-w-[220px] rounded-xl border border-[hsl(var(--border))] bg-white px-3 text-sm outline-none"
-                  />
-                  <input
-                    type="file"
-                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                    className="block min-w-[220px] text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2"
-                  />
-                  <Button onClick={saveTextDoc} disabled={saving || !textContent.trim()}>
-                    <FileText className="h-4 w-4" />
-                    入库整理
-                  </Button>
-                  <Button onClick={uploadDocument} disabled={saving || !uploadFile} variant="outline">
-                    <Upload className="h-4 w-4" />
-                    文件入库
-                  </Button>
-                  <Button variant="outline" onClick={() => router.push(`/knowledge?workspace_id=${workspaceId}`)}>
-                    打开这个工作区的知识库
-                  </Button>
-                </div>
-              </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                    <Database className="h-5 w-5" />
+                  </div>
+                  <div className="space-y-2 text-center">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">知识库</div>
+                    <div className="text-xl font-semibold text-slate-950">{stats.documents}</div>
+                    <div className="text-[11px] text-slate-500">docs</div>
+                  </div>
+                  <div className="space-y-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => router.push(`/knowledge?workspace_id=${workspaceId}`)}
+                      title="打开知识库"
+                    >
+                      <Network className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setKnowledgeCollapsed(false)}
+                      title="展开并入库"
+                    >
+                      <Upload className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 xl:sticky xl:top-6">
+                <WorkbenchSection
+                  title="知识库面板"
+                  description="左侧负责知识可视化和入库，可以随时收起，把更多空间让给右侧对话。"
+                  actions={
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => router.push(`/knowledge?workspace_id=${workspaceId}`)}>
+                        <Network className="h-4 w-4" />
+                        打开知识库
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setKnowledgeCollapsed(true)}>
+                        <ChevronLeft className="h-4 w-4" />
+                        收起知识库
+                      </Button>
+                    </div>
+                  }
+                >
+                  <div className="grid gap-4">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+                      <KnowledgeVisualization
+                        documents={documents.map((doc) => ({
+                          id: doc.id,
+                          title: doc.title,
+                          docType: doc.doc_type,
+                          status: doc.status,
+                          tokenEstimate: doc.token_estimate,
+                          authorityLevel: String(doc.metadata?.authority_level || "user"),
+                          summary: doc.summary,
+                        }))}
+                        relationCount={stats.edges}
+                      />
+                    </div>
 
-              {requestedDocId ? (
-                <Card className="shadow-none">
-                  <CardContent className="space-y-3 p-4">
-                    <div className="text-sm font-medium text-slate-900">引用定位</div>
-                    {documents
-                      .filter((doc) => doc.id === requestedDocId)
-                      .map((doc) => (
-                        <div key={doc.id} id={`doc-${doc.id}`} className="space-y-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <div className="text-sm font-medium text-slate-900">{doc.title}</div>
-                            <Badge variant="outline">{doc.doc_type}</Badge>
-                            <Badge variant={statusTone(doc.status) as "success"}>{doc.status}</Badge>
-                          </div>
-                          <div className="text-sm leading-6 text-slate-600">{doc.summary || "无摘要"}</div>
-                          {documentChunks.length > 0 ? (
-                            <ScrollArea className="h-[260px] pr-3">
-                              <div className="space-y-2">
-                                {documentChunks.map((chunk) => (
-                                  <div
-                                    key={chunk.id}
-                                    id={`chunk-${doc.id}-${chunk.chunk_index}`}
-                                    className={
-                                      chunk.chunk_index === requestedChunkIndex
-                                        ? "rounded-lg border border-[hsl(var(--primary))] bg-blue-50 px-3 py-2 text-xs leading-6 text-slate-700"
-                                        : "rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-6 text-slate-600"
-                                    }
-                                  >
-                                    <div className="mb-1 flex items-center justify-between gap-2">
-                                      <span className="font-medium text-slate-900">Chunk #{chunk.chunk_index}</span>
-                                      <span className="text-[11px] text-slate-400">{chunk.char_count} chars</span>
-                                    </div>
-                                    <div className="whitespace-pre-wrap">{chunk.content}</div>
-                                  </div>
-                                ))}
-                              </div>
-                            </ScrollArea>
-                          ) : (
-                            <WorkbenchEmpty title="暂无片段" description="当前引用文档没有可展示的 chunk。" />
-                          )}
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap gap-2">
+                        {["user", "school", "system"].map((level) => (
+                          <Button
+                            key={level}
+                            type="button"
+                            size="sm"
+                            variant={textAuthority === level ? "default" : "outline"}
+                            onClick={() => {
+                              setTextAuthority(level);
+                              setUploadAuthority(level);
+                            }}
+                          >
+                            {level}
+                          </Button>
+                        ))}
+                      </div>
+                      <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-4">
+                        <div className="mb-3 text-sm font-medium text-slate-900">输入文本或选择文件</div>
+                        <Textarea
+                          value={textContent}
+                          onChange={(e) => setTextContent(e.target.value)}
+                          className="min-h-44 bg-white"
+                          placeholder="在这里直接输入内容，或者下方选择文件。知识面板收起后，右侧对话会变成主视图。"
+                        />
+                        <div className="mt-3 flex flex-wrap gap-3">
+                          <input
+                            type="text"
+                            value={textFilename}
+                            onChange={(e) => setTextFilename(e.target.value)}
+                            placeholder="notes.md"
+                            className="h-10 min-w-[220px] rounded-xl border border-[hsl(var(--border))] bg-white px-3 text-sm outline-none"
+                          />
+                          <input
+                            type="file"
+                            onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                            className="block min-w-[220px] text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2"
+                          />
+                          <Button onClick={saveTextDoc} disabled={saving || !textContent.trim()}>
+                            <FileText className="h-4 w-4" />
+                            入库整理
+                          </Button>
+                          <Button onClick={uploadDocument} disabled={saving || !uploadFile} variant="outline">
+                            <Upload className="h-4 w-4" />
+                            文件入库
+                          </Button>
                         </div>
-                      ))}
-                  </CardContent>
-                </Card>
-              ) : null}
-            </div>
-          </WorkbenchSection>
-        </div>
+                      </div>
+                    </div>
+                  </div>
+                </WorkbenchSection>
 
-        <div>
-          <WorkbenchSection title="AI 对话" description="右边只保留对话，组合编排和知识治理都去专门页面处理。">
-            <div className="space-y-3">
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => router.push("/composition")}>
-                  <Blocks className="h-4 w-4" />
-                  去组合编排
-                </Button>
-                <Button variant="outline" onClick={() => router.push(`/knowledge?workspace_id=${workspaceId}`)}>
-                  <Network className="h-4 w-4" />
-                  这个工作区的知识库
-                </Button>
+                {requestedDocId ? (
+                  <Card className="shadow-none">
+                    <CardContent className="space-y-3 p-4">
+                      <div className="text-sm font-medium text-slate-900">引用定位</div>
+                      {documents
+                        .filter((doc) => doc.id === requestedDocId)
+                        .map((doc) => (
+                          <div key={doc.id} id={`doc-${doc.id}`} className="space-y-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="text-sm font-medium text-slate-900">{doc.title}</div>
+                              <Badge variant="outline">{doc.doc_type}</Badge>
+                              <Badge variant={statusTone(doc.status) as "success"}>{doc.status}</Badge>
+                            </div>
+                            <div className="text-sm leading-6 text-slate-600">{doc.summary || "无摘要"}</div>
+                            {documentChunks.length > 0 ? (
+                              <ScrollArea className="h-[260px] pr-3">
+                                <div className="space-y-2">
+                                  {documentChunks.map((chunk) => (
+                                    <div
+                                      key={chunk.id}
+                                      id={`chunk-${doc.id}-${chunk.chunk_index}`}
+                                      className={
+                                        chunk.chunk_index === requestedChunkIndex
+                                          ? "rounded-lg border border-[hsl(var(--primary))] bg-blue-50 px-3 py-2 text-xs leading-6 text-slate-700"
+                                          : "rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-6 text-slate-600"
+                                      }
+                                    >
+                                      <div className="mb-1 flex items-center justify-between gap-2">
+                                        <span className="font-medium text-slate-900">Chunk #{chunk.chunk_index}</span>
+                                        <span className="text-[11px] text-slate-400">{chunk.char_count} chars</span>
+                                      </div>
+                                      <div className="whitespace-pre-wrap">{chunk.content}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </ScrollArea>
+                            ) : (
+                              <WorkbenchEmpty title="暂无片段" description="当前引用文档没有可展示的 chunk。" />
+                            )}
+                          </div>
+                        ))}
+                    </CardContent>
+                  </Card>
+                ) : null}
               </div>
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <WorkbenchSection
+              title="AI 对话"
+              description={knowledgeCollapsed ? "知识库已收起，当前把更多宽度让给右侧对话。需要入库或看图谱时再展开左侧。" : "右侧保持主对话区，左侧负责知识可视化和入库。"}
+              actions={
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={() => router.push("/composition")}>
+                    <Blocks className="h-4 w-4" />
+                    去组合编排
+                  </Button>
+                  {knowledgeCollapsed ? (
+                    <Button variant="outline" onClick={() => setKnowledgeCollapsed(false)}>
+                      <ChevronRight className="h-4 w-4" />
+                      展开知识库
+                    </Button>
+                  ) : null}
+                </div>
+              }
+            >
               <AIPanel username={username} workspaceId={workspaceId} workspaceName={workspace?.name} />
-            </div>
-          </WorkbenchSection>
+            </WorkbenchSection>
+          </div>
         </div>
       </div>
 
