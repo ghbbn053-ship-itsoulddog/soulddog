@@ -272,7 +272,7 @@ export default function SkillsPage() {
                 </Button>
               </div>
               <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                <Input type="file" accept=".yaml,.yml" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+                <Input type="file" accept=".yaml,.yml,.md,.txt" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
                 <Button variant="outline" onClick={uploadFromFile} disabled={saving || !uploadFile}>
                   <FileUp className="h-4 w-4" />
                   文件安装

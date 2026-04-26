@@ -62,17 +62,26 @@ async def upload_skill_file(
     http_request: Request = None,
 ):
     """
-    通过文件上传安装 skill（支持 .yaml/.yml）。
+    通过文件上传安装 skill。
+    支持：
+    - .yaml/.yml: manifest skill
+    - .md/.txt: 文档型 rule skill
     """
     enforce_username_isolation(http_request, username)
     manager = get_skill_manager()
     filename = (skill_file.filename or "").lower()
-    if not (filename.endswith(".yaml") or filename.endswith(".yml")):
-        raise HTTPException(status_code=400, detail="仅支持 .yaml/.yml 文件")
+    if not (filename.endswith(".yaml") or filename.endswith(".yml") or filename.endswith(".md") or filename.endswith(".txt")):
+        raise HTTPException(status_code=400, detail="仅支持 .yaml/.yml/.md/.txt 文件")
     try:
         content_bytes = await skill_file.read()
-        yaml_content = content_bytes.decode("utf-8", errors="ignore")
-        saved = manager.upload_skill(username, yaml_content)
+        text_content = content_bytes.decode("utf-8", errors="ignore")
+        saved = manager.import_skill_from_text(
+            username,
+            text_content,
+            source_type="file",
+            source_ref=skill_file.filename or "upload",
+            file_name=skill_file.filename or "",
+        )
         return {"success": True, "skill": saved, "source": "file"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

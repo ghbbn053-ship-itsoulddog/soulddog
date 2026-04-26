@@ -94,6 +94,11 @@ class SkillManager:
     def _save_skill_config(target: Path, config: Dict[str, Any]) -> None:
         target.write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
+    @staticmethod
+    def _sanitize_skill_name(name: str) -> str:
+        safe_name = re.sub(r"[^a-zA-Z0-9._-]+", "-", str(name or "").strip()).strip("-_.")
+        return safe_name or "imported-skill"
+
     def upload_skill(self, owner: str, yaml_content: str) -> Dict[str, Any]:
         config = self._parse_and_validate(yaml_content)
         self._validate(config)
@@ -116,6 +121,37 @@ class SkillManager:
             "compatibility_notes": config.get("compatibility_notes", []) or [],
             "capabilities": config.get("capabilities", []) or [],
         }
+
+    def import_skill_from_text(
+        self,
+        owner: str,
+        content: str,
+        source_type: str,
+        source_ref: str,
+        file_name: str = "",
+    ) -> Dict[str, Any]:
+        text = (content or "").strip()
+        if not text:
+            raise ValueError("Skill 内容不能为空")
+
+        lower_name = str(file_name or source_ref or "").strip().lower()
+        if lower_name.endswith((".md", ".txt")):
+            return self._save_repo_doc_skill_from_text(owner, source_ref or file_name or "uploaded-skill", text, file_name=file_name)
+
+        try:
+            saved = self.upload_skill(owner, text)
+            skill = self.get_skill(owner, saved["name"]) or {}
+            skill["source_type"] = source_type
+            skill["source_ref"] = source_ref
+            target = self._owner_dir(owner) / f"{saved['name']}.yaml"
+            self._save_skill_config(target, skill)
+            saved["source_type"] = source_type
+            saved["source_ref"] = source_ref
+            return saved
+        except ValueError:
+            if lower_name.endswith((".md", ".txt")):
+                return self._save_repo_doc_skill_from_text(owner, source_ref or file_name or "uploaded-skill", text, file_name=file_name)
+            raise
 
     def _parse_and_validate(self, yaml_content: str) -> Dict[str, Any]:
         if not (yaml_content or "").strip():
@@ -363,6 +399,48 @@ class SkillManager:
             "capabilities": config.get("capabilities", []) or [],
         }
 
+    def _save_repo_doc_skill_from_text(
+        self,
+        owner: str,
+        source_ref: str,
+        content: str,
+        file_name: str = "",
+    ) -> Dict[str, Any]:
+        normalized_name = self._sanitize_skill_name(Path(file_name or source_ref or "imported-skill").stem)
+        description = self._extract_guide_description(content, f"{normalized_name} 导入的文档型 Skill")
+        prompt = self._extract_guide_prompt(content)
+        config = {
+            "name": normalized_name,
+            "version": "repo",
+            "description": description,
+            "triggers": [],
+            "tools": [],
+            "enabled": True,
+            "always_on": True,
+            "source_type": "repo_doc",
+            "source_ref": source_ref,
+            "mode": "rule",
+            "compatibility_level": "rule_only",
+            "compatibility_notes": ["来自 SKILL.md/README.md 等规则文档，仅做提示词注入，不直接调用工具"],
+            "capabilities": [],
+            "prompt": prompt,
+            "created_at": int(time.time()),
+            "updated_at": int(time.time()),
+        }
+        config = self._apply_skill_metadata(config)
+        target = self._owner_dir(owner) / f"{normalized_name}.yaml"
+        self._save_skill_config(target, config)
+        return {
+            "owner": owner,
+            "name": normalized_name,
+            "path": str(target),
+            "source_type": "repo_doc",
+            "mode": config.get("mode", "rule"),
+            "compatibility_level": config.get("compatibility_level", "rule_only"),
+            "compatibility_notes": config.get("compatibility_notes", []) or [],
+            "capabilities": config.get("capabilities", []) or [],
+        }
+
     @staticmethod
     def _build_session() -> requests.Session:
         retry = Retry(
@@ -426,7 +504,15 @@ class SkillManager:
                     continue
                 if candidate.endswith((".md", ".txt")):
                     return self._save_repo_doc_skill(owner, normalized, candidate, content)
-                return self.upload_skill(owner, content)
+                saved = self.upload_skill(owner, content)
+                skill = self.get_skill(owner, saved["name"]) or {}
+                skill["source_type"] = "github_repo" if candidate != normalized and "raw.githubusercontent.com" in candidate else "url"
+                skill["source_ref"] = candidate
+                target = self._owner_dir(owner) / f"{saved['name']}.yaml"
+                self._save_skill_config(target, skill)
+                saved["source_type"] = skill["source_type"]
+                saved["source_ref"] = candidate
+                return saved
             except requests.RequestException as exc:
                 last_error = f"{candidate} -> {exc}"
                 continue
