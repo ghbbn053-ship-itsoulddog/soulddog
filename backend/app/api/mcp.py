@@ -48,6 +48,48 @@ class MCPToolDeleteRequest(BaseModel):
     username: str
 
 
+@router.get("/service-catalog")
+async def service_catalog():
+    """
+    平台托管能力目录：
+    - Web 平台内部能力
+    - 可对外提供给 OpenClaw / Claude Desktop / 其他 Agent 的远程能力
+    """
+    registry = get_mcp_registry()
+    tools = registry.list_tools()
+    web_tools = [item for item in tools if item.get("kind") in {"python", "http"}]
+    remote_tools = [
+        item
+        for item in tools
+        if item.get("kind") in {"python", "http"} and item.get("capabilities")
+    ]
+    return {
+        "success": True,
+        "service_positioning": {
+            "web_platform": "面向 Web 用户的托管知识库与对话平台，只调用平台可托管远程能力",
+            "agent_integration": "面向 OpenClaw / Claude Desktop / 其他 Agent 的远程能力服务目录",
+        },
+        "recommended_split": {
+            "hosted_web_tools": len(web_tools),
+            "remote_agent_services": len(remote_tools),
+        },
+        "remote_mcp_entrypoints": [
+            {
+                "name": "education-mcp-http",
+                "description": "通过平台 HTTP API 暴露教务类能力，供外部 Agent 复用",
+                "entry": "/api/mcp/tools/{tool_name}",
+                "tool_schema": "/api/mcp/tools/{tool_name}/schema",
+            },
+            {
+                "name": "education-mcp-stdio",
+                "description": "本仓库内置 stdio MCP server，适合本地 Agent 或受控环境接入",
+                "entry": "python backend/mcp_server.py",
+            },
+        ],
+        "tools": tools,
+    }
+
+
 @router.get("/tools")
 async def list_tools(username: Optional[str] = None, http_request: Request = None):
     """列出所有可用的MCP工具"""

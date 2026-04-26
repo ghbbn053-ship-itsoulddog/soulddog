@@ -47,6 +47,9 @@ class PlatformRegistryService:
                 "compatibility_level": item.get("compatibility_level", "direct"),
                 "compatibility_notes": item.get("compatibility_notes", []) or [],
                 "capabilities": item.get("capabilities", []) or [],
+                "execution_boundary": item.get("execution_boundary", "hosted_web"),
+                "execution_boundary_notes": item.get("execution_boundary_notes", []) or [],
+                "web_enabled": bool(item.get("web_enabled", True)),
             }
             out.append(record)
         db.commit()
@@ -91,6 +94,10 @@ class PlatformRegistryService:
                 "compatibility_level": imported.get("compatibility_level", "direct"),
                 "compatibility_notes": imported.get("compatibility_notes", []) or [],
                 "capabilities": imported.get("capabilities", []) or [],
+                "execution_boundary": imported.get("execution_boundary", "hosted_web"),
+                "execution_boundary_notes": imported.get("execution_boundary_notes", []) or [],
+                "web_enabled": bool(imported.get("web_enabled", True)),
+                "service_scope": imported.get("service_scope", "web_internal_service"),
             }
             out.append(record)
         db.commit()

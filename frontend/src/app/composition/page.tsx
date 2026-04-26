@@ -45,6 +45,9 @@ type PlatformSkill = {
   compatibility_level?: string;
   compatibility_notes?: string[];
   capabilities?: string[];
+  execution_boundary?: string;
+  execution_boundary_notes?: string[];
+  web_enabled?: boolean;
   always_on?: boolean;
   source_type?: string;
   source_ref?: string;
@@ -62,6 +65,10 @@ type PlatformMcp = {
   compatibility_level?: string;
   compatibility_notes?: string[];
   capabilities?: string[];
+  execution_boundary?: string;
+  execution_boundary_notes?: string[];
+  web_enabled?: boolean;
+  service_scope?: string;
   tool_schema?: {
     parameters?: Record<string, { type?: string; required?: boolean; description?: string }>;
   };
@@ -80,6 +87,13 @@ const COMPATIBILITY_LABELS: Record<string, string> = {
   adapted: "需要适配",
   rule_only: "仅规则注入",
   incompatible: "暂不兼容",
+};
+
+const BOUNDARY_LABELS: Record<string, string> = {
+  hosted_web: "Web 可托管",
+  remote_service: "远程服务",
+  agent_local_only: "仅本地 Agent",
+  unsupported: "暂不支持",
 };
 
 export default function CompositionPage() {
@@ -445,6 +459,9 @@ export default function CompositionPage() {
                         <div className="flex flex-wrap gap-2">
                           <Badge variant="outline">{platformSkills.find((item) => item.name === skill)?.mode || "rule"}</Badge>
                           <Badge variant="secondary">{platformSkills.find((item) => item.name === skill)?.compatibility_level || "direct"}</Badge>
+                          <Badge variant="outline">
+                            {BOUNDARY_LABELS[platformSkills.find((item) => item.name === skill)?.execution_boundary || "hosted_web"] || "边界未知"}
+                          </Badge>
                           {platformSkills.find((item) => item.name === skill)?.source_type ? (
                             <Badge variant="outline">{platformSkills.find((item) => item.name === skill)?.source_type}</Badge>
                           ) : null}
@@ -452,25 +469,38 @@ export default function CompositionPage() {
                         <div className="text-[11px] text-slate-500">
                           compatibility: {COMPATIBILITY_LABELS[platformSkills.find((item) => item.name === skill)?.compatibility_level || "direct"] || "-"}
                         </div>
-                        <div className="text-[11px] text-slate-500">
-                          capabilities: {(platformSkills.find((item) => item.name === skill)?.capabilities || []).join(", ") || "-"}
-                        </div>
-                        {(platformSkills.find((item) => item.name === skill)?.compatibility_notes || []).length > 0 ? (
-                          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-600">
-                            {(platformSkills.find((item) => item.name === skill)?.compatibility_notes || []).join("；")}
+                          <div className="text-[11px] text-slate-500">
+                            capabilities: {(platformSkills.find((item) => item.name === skill)?.capabilities || []).join(", ") || "-"}
                           </div>
-                        ) : null}
-                        {platformSkills.find((item) => item.name === skill)?.input_schema ? (
-                          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-600">
-                            schema: {JSON.stringify(platformSkills.find((item) => item.name === skill)?.input_schema || {})}
+                          <div className="text-[11px] text-slate-500">
+                            web: {platformSkills.find((item) => item.name === skill)?.web_enabled === false ? "不可直接启用" : "可启用"}
                           </div>
+                          {(platformSkills.find((item) => item.name === skill)?.compatibility_notes || []).length > 0 ? (
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-600">
+                              {(platformSkills.find((item) => item.name === skill)?.compatibility_notes || []).join("；")}
+                            </div>
+                          ) : null}
+                          {(platformSkills.find((item) => item.name === skill)?.execution_boundary_notes || []).length > 0 ? (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-700">
+                              {(platformSkills.find((item) => item.name === skill)?.execution_boundary_notes || []).join("；")}
+                            </div>
+                          ) : null}
+                          {platformSkills.find((item) => item.name === skill)?.input_schema ? (
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-600">
+                              schema: {JSON.stringify(platformSkills.find((item) => item.name === skill)?.input_schema || {})}
+                            </div>
                         ) : null}
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant={skillEnabled(skill) ? "success" : "outline"}>
                           {skillEnabled(skill) ? "enabled" : "disabled"}
                         </Badge>
-                        <Button size="sm" variant="outline" disabled={saving} onClick={() => toggleSkill(skill, !skillEnabled(skill))}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={saving || (!skillEnabled(skill) && platformSkills.find((item) => item.name === skill)?.web_enabled === false)}
+                          onClick={() => toggleSkill(skill, !skillEnabled(skill))}
+                        >
                           {skillEnabled(skill) ? "禁用" : "启用"}
                         </Button>
                       </div>
@@ -499,6 +529,9 @@ export default function CompositionPage() {
                           <div className="flex flex-wrap gap-2">
                             <Badge variant="outline">{platformMcpTools.find((item) => item.name === tool)?.transport || platformMcpTools.find((item) => item.name === tool)?.kind || "python"}</Badge>
                             <Badge variant="secondary">{platformMcpTools.find((item) => item.name === tool)?.compatibility_level || "direct"}</Badge>
+                            <Badge variant="outline">
+                              {BOUNDARY_LABELS[platformMcpTools.find((item) => item.name === tool)?.execution_boundary || "hosted_web"] || "边界未知"}
+                            </Badge>
                             {platformMcpTools.find((item) => item.name === tool)?.source_type ? (
                               <Badge variant="outline">{platformMcpTools.find((item) => item.name === tool)?.source_type}</Badge>
                             ) : null}
@@ -509,9 +542,17 @@ export default function CompositionPage() {
                           <div className="text-[11px] text-slate-500">
                             capabilities: {(platformMcpTools.find((item) => item.name === tool)?.capabilities || []).join(", ") || "-"}
                           </div>
+                          <div className="text-[11px] text-slate-500">
+                            web: {platformMcpTools.find((item) => item.name === tool)?.web_enabled === false ? "不可直接启用" : "可启用"} · scope: {platformMcpTools.find((item) => item.name === tool)?.service_scope || "-"}
+                          </div>
                           {(platformMcpTools.find((item) => item.name === tool)?.compatibility_notes || []).length > 0 ? (
                             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-600">
                               {(platformMcpTools.find((item) => item.name === tool)?.compatibility_notes || []).join("；")}
+                            </div>
+                          ) : null}
+                          {(platformMcpTools.find((item) => item.name === tool)?.execution_boundary_notes || []).length > 0 ? (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-700">
+                              {(platformMcpTools.find((item) => item.name === tool)?.execution_boundary_notes || []).join("；")}
                             </div>
                           ) : null}
                           {platformMcpTools.find((item) => item.name === tool)?.tool_schema?.parameters ? (
@@ -521,13 +562,18 @@ export default function CompositionPage() {
                           ) : null}
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge variant={mcpEnabled(tool) ? "success" : "outline"}>
-                            {mcpEnabled(tool) ? "enabled" : "disabled"}
-                          </Badge>
-                          <Button size="sm" variant="outline" disabled={saving} onClick={() => toggleMcp(tool, !mcpEnabled(tool))}>
-                            {mcpEnabled(tool) ? "禁用" : "启用"}
-                          </Button>
-                        </div>
+                        <Badge variant={mcpEnabled(tool) ? "success" : "outline"}>
+                          {mcpEnabled(tool) ? "enabled" : "disabled"}
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={saving || (!mcpEnabled(tool) && platformMcpTools.find((item) => item.name === tool)?.web_enabled === false)}
+                          onClick={() => toggleMcp(tool, !mcpEnabled(tool))}
+                        >
+                          {mcpEnabled(tool) ? "禁用" : "启用"}
+                        </Button>
+                      </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button size="sm" variant="outline" disabled={saving || idx === 0} onClick={() => move(idx, -1)}>

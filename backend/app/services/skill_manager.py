@@ -206,6 +206,9 @@ class SkillManager:
         normalized["compatibility_level"] = classified["compatibility_level"]
         normalized["compatibility_notes"] = classified["compatibility_notes"]
         normalized["capabilities"] = classified["capabilities"]
+        normalized["execution_boundary"] = classified["execution_boundary"]
+        normalized["execution_boundary_notes"] = classified["execution_boundary_notes"]
+        normalized["web_enabled"] = classified["web_enabled"]
         return normalized
 
     def _classify_skill_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -232,6 +235,9 @@ class SkillManager:
                 "compatibility_level": "rule_only",
                 "compatibility_notes": notes,
                 "capabilities": capabilities,
+                "execution_boundary": "hosted_web",
+                "execution_boundary_notes": ["规则型 Skill，可直接在 Web 平台作为提示词/路由规则使用"],
+                "web_enabled": True,
             }
 
         if not tool_names:
@@ -247,12 +253,18 @@ class SkillManager:
                     "compatibility_level": "rule_only",
                     "compatibility_notes": notes,
                     "capabilities": capabilities,
+                    "execution_boundary": "hosted_web",
+                    "execution_boundary_notes": ["该 Skill 不依赖本地工具，可在 Web 平台以规则方式运行"],
+                    "web_enabled": True,
                 }
             return {
                 "mode": "rule",
                 "compatibility_level": "incompatible",
                 "compatibility_notes": ["既没有工具，也没有可注入规则或触发条件，当前运行时无法发挥作用"],
                 "capabilities": [],
+                "execution_boundary": "unsupported",
+                "execution_boundary_notes": ["当前既不能作为 Web 规则运行，也没有可执行工具"],
+                "web_enabled": False,
             }
 
         if capabilities:
@@ -269,6 +281,9 @@ class SkillManager:
                 "compatibility_level": "adapted",
                 "compatibility_notes": notes,
                 "capabilities": capabilities,
+                "execution_boundary": "agent_local_only",
+                "execution_boundary_notes": ["依赖当前平台未托管的工具或本地能力，不应直接在 Web 平台启用"],
+                "web_enabled": False,
             }
 
         return {
@@ -276,6 +291,9 @@ class SkillManager:
             "compatibility_level": "direct",
             "compatibility_notes": notes or ["工具名与当前运行时映射兼容，可直接进入编排和调用链路"],
             "capabilities": capabilities,
+            "execution_boundary": "hosted_web",
+            "execution_boundary_notes": ["依赖平台已托管的工具链，可直接在 Web 平台启用"],
+            "web_enabled": True,
         }
 
     def validate_skill_yaml(self, yaml_content: str) -> Dict[str, Any]:
@@ -292,6 +310,9 @@ class SkillManager:
             "compatibility_level": config.get("compatibility_level", "direct"),
             "compatibility_notes": config.get("compatibility_notes", []) or [],
             "capabilities": config.get("capabilities", []) or [],
+            "execution_boundary": config.get("execution_boundary", "hosted_web"),
+            "execution_boundary_notes": config.get("execution_boundary_notes", []) or [],
+            "web_enabled": bool(config.get("web_enabled", True)),
         }
 
     @staticmethod
@@ -563,6 +584,9 @@ class SkillManager:
                         "compatibility_level": config.get("compatibility_level", "direct") or "direct",
                         "compatibility_notes": config.get("compatibility_notes", []) or [],
                         "capabilities": config.get("capabilities", []) or [],
+                        "execution_boundary": config.get("execution_boundary", "hosted_web") or "hosted_web",
+                        "execution_boundary_notes": config.get("execution_boundary_notes", []) or [],
+                        "web_enabled": bool(config.get("web_enabled", True)),
                         "prompt": config.get("prompt", "") or "",
                         "guidance_excerpt": (str(config.get("prompt", "")).strip()[:360] if config.get("prompt") else ""),
                         "updated_at": config.get("updated_at"),

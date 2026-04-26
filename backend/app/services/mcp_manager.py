@@ -296,6 +296,10 @@ class MCPManager:
         normalized["compatibility_level"] = classified["compatibility_level"]
         normalized["compatibility_notes"] = classified["compatibility_notes"]
         normalized["capabilities"] = classified["capabilities"]
+        normalized["execution_boundary"] = classified["execution_boundary"]
+        normalized["execution_boundary_notes"] = classified["execution_boundary_notes"]
+        normalized["web_enabled"] = classified["web_enabled"]
+        normalized["service_scope"] = classified["service_scope"]
         return normalized
 
     @staticmethod
@@ -322,6 +326,10 @@ class MCPManager:
                     "compatibility_level": "direct" if tool_name and command else "adapted",
                     "compatibility_notes": notes,
                     "capabilities": capabilities,
+                    "execution_boundary": "agent_local_only",
+                    "execution_boundary_notes": ["stdio/command 依赖服务器本地进程或本地环境，不适合开放给普通 Web 用户自由导入"],
+                    "web_enabled": False,
+                    "service_scope": "agent_integration",
                 }
             if kind in {"sse", "streamable_http"}:
                 url = str(item.get("url", "") or item.get("endpoint", "")).strip()
@@ -336,11 +344,19 @@ class MCPManager:
                     "compatibility_level": "direct" if tool_name and url else "adapted",
                     "compatibility_notes": notes,
                     "capabilities": capabilities,
+                    "execution_boundary": "remote_service",
+                    "execution_boundary_notes": ["远程 MCP 服务，可由 Web 平台托管调用，也适合作为对外 Agent 服务能力"],
+                    "web_enabled": True,
+                    "service_scope": "shared_remote_service",
                 }
             return {
                 "compatibility_level": "incompatible",
                 "compatibility_notes": [f"当前仅支持 python/http 两类 MCP，收到不支持的 kind: {kind}"],
                 "capabilities": capabilities,
+                "execution_boundary": "unsupported",
+                "execution_boundary_notes": ["该类型当前不在平台支持范围内"],
+                "web_enabled": False,
+                "service_scope": "unsupported",
             }
 
         if kind == "python":
@@ -351,6 +367,10 @@ class MCPManager:
                     "compatibility_level": "incompatible",
                     "compatibility_notes": ["python MCP 缺少 module_path 或 func_name，当前运行时无法执行"],
                     "capabilities": capabilities,
+                    "execution_boundary": "unsupported",
+                    "execution_boundary_notes": ["缺少平台托管的 Python 入口，不应暴露给 Web 使用"],
+                    "web_enabled": False,
+                    "service_scope": "unsupported",
                 }
             notes.append(f"python 入口: {module_path}:{func_name}")
         else:
@@ -360,6 +380,10 @@ class MCPManager:
                     "compatibility_level": "incompatible",
                     "compatibility_notes": ["http MCP 缺少 url，当前运行时无法执行"],
                     "capabilities": capabilities,
+                    "execution_boundary": "unsupported",
+                    "execution_boundary_notes": ["缺少远程服务地址，不应暴露给 Web 使用"],
+                    "web_enabled": False,
+                    "service_scope": "unsupported",
                 }
             notes.append(f"http 入口: {url}")
 
@@ -372,6 +396,12 @@ class MCPManager:
                 "compatibility_level": "direct",
                 "compatibility_notes": notes,
                 "capabilities": capabilities,
+                "execution_boundary": "hosted_web" if kind == "python" else "remote_service",
+                "execution_boundary_notes": [
+                    "平台托管能力，可直接为 Web 用户服务" if kind == "python" else "远程 HTTP/MCP 服务，可同时服务 Web 与外部 Agent"
+                ],
+                "web_enabled": True,
+                "service_scope": "shared_remote_service" if kind == "http" else "web_internal_service",
             }
 
         if name:
@@ -381,6 +411,14 @@ class MCPManager:
             "compatibility_level": "adapted",
             "compatibility_notes": notes,
             "capabilities": capabilities,
+            "execution_boundary": "hosted_web" if kind == "python" else "remote_service",
+            "execution_boundary_notes": [
+                "可以作为平台托管能力存在，但在 Web 里应谨慎开放"
+                if kind == "python"
+                else "远程服务可接入，但需要补齐 capability 或平台路由规则"
+            ],
+            "web_enabled": kind in {"python", "http"},
+            "service_scope": "shared_remote_service" if kind == "http" else "web_internal_service",
         }
 
     @staticmethod
@@ -474,6 +512,10 @@ class MCPManager:
                     "compatibility_level": item.get("compatibility_level", "direct"),
                     "compatibility_notes": item.get("compatibility_notes", []) or [],
                     "capabilities": item.get("capabilities", []) or [],
+                    "execution_boundary": item.get("execution_boundary", "hosted_web"),
+                    "execution_boundary_notes": item.get("execution_boundary_notes", []) or [],
+                    "web_enabled": bool(item.get("web_enabled", True)),
+                    "service_scope": item.get("service_scope", "web_internal_service"),
                     "owner_username": item.get("owner_username", owner),
                     "module_path": item.get("module_path", ""),
                     "func_name": item.get("func_name", ""),

@@ -33,6 +33,9 @@ async def list_platform_skills(username: str, http_request: Request, db: Session
                 "compatibility_level": (row.metadata_json or {}).get("compatibility_level", "direct"),
                 "compatibility_notes": (row.metadata_json or {}).get("compatibility_notes", []),
                 "capabilities": (row.metadata_json or {}).get("capabilities", []),
+                "execution_boundary": (row.metadata_json or {}).get("execution_boundary", "hosted_web"),
+                "execution_boundary_notes": (row.metadata_json or {}).get("execution_boundary_notes", []),
+                "web_enabled": (row.metadata_json or {}).get("web_enabled", True),
                 "always_on": (row.metadata_json or {}).get("always_on", False),
                 "source_type": row.source_type,
                 "source_ref": row.source_ref,
@@ -63,6 +66,10 @@ async def list_platform_mcp(username: str, http_request: Request, db: Session = 
                 "compatibility_level": (row.metadata_json or {}).get("compatibility_level", "direct"),
                 "compatibility_notes": (row.metadata_json or {}).get("compatibility_notes", []),
                 "capabilities": (row.metadata_json or {}).get("capabilities", []),
+                "execution_boundary": (row.metadata_json or {}).get("execution_boundary", "hosted_web"),
+                "execution_boundary_notes": (row.metadata_json or {}).get("execution_boundary_notes", []),
+                "web_enabled": (row.metadata_json or {}).get("web_enabled", True),
+                "service_scope": (row.metadata_json or {}).get("service_scope", "web_internal_service"),
             }
             for row in rows
         ],
