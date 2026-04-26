@@ -38,6 +38,13 @@ type SkillItem = {
   updated_at?: number;
 };
 
+const COMPATIBILITY_LABELS: Record<string, string> = {
+  direct: "可直接使用",
+  adapted: "需要适配",
+  rule_only: "仅规则注入",
+  incompatible: "暂不兼容",
+};
+
 const DEFAULT_SKILL_YAML = `name: sample_schedule_skill
 version: 1.0.0
 description: 示例课表技能
@@ -122,7 +129,8 @@ export default function SkillsPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `上传失败(${res.status})`);
-      setMsg("Skill 上传成功");
+      const skill = data?.skill || {};
+      setMsg(`Skill 上传成功：${COMPATIBILITY_LABELS[skill?.compatibility_level || "direct"] || "可直接使用"}`);
       await refresh(username);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "上传失败");
@@ -144,7 +152,8 @@ export default function SkillsPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `导入失败(${res.status})`);
-      setMsg("Skill 导入成功");
+      const skill = data?.skill || {};
+      setMsg(`Skill 导入成功：${COMPATIBILITY_LABELS[skill?.compatibility_level || "direct"] || "可直接使用"}`);
       setImportUrl("");
       await refresh(username);
     } catch (e) {
@@ -169,7 +178,8 @@ export default function SkillsPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `文件安装失败(${res.status})`);
-      setMsg("Skill 文件安装成功");
+      const skill = data?.skill || {};
+      setMsg(`Skill 文件安装成功：${COMPATIBILITY_LABELS[skill?.compatibility_level || "direct"] || "可直接使用"}`);
       setUploadFile(null);
       await refresh(username);
     } catch (e) {
@@ -321,10 +331,17 @@ export default function SkillsPage() {
                       </div>
 
                       <div className="space-y-1 text-xs text-slate-500">
+                        <div>compatibility: {COMPATIBILITY_LABELS[skill.compatibility_level || "direct"] || skill.compatibility_level || "-"}</div>
                         <div>tools: {(skill.tools || []).map((tool) => tool?.name || "-").join(", ") || "-"}</div>
                         <div>capabilities: {(skill.capabilities || []).join(", ") || "-"}</div>
                         {skill.source_ref ? <div>source: {skill.source_ref}</div> : null}
                       </div>
+
+                      {skill.compatibility_notes && skill.compatibility_notes.length > 0 ? (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-6 text-slate-600">
+                          {skill.compatibility_notes.join("；")}
+                        </div>
+                      ) : null}
 
                       {skill.guidance_excerpt ? (
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-6 text-slate-600">

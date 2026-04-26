@@ -75,6 +75,13 @@ type WorkspaceItem = {
   is_default: boolean;
 };
 
+const COMPATIBILITY_LABELS: Record<string, string> = {
+  direct: "可直接使用",
+  adapted: "需要适配",
+  rule_only: "仅规则注入",
+  incompatible: "暂不兼容",
+};
+
 export default function CompositionPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -443,8 +450,16 @@ export default function CompositionPage() {
                           ) : null}
                         </div>
                         <div className="text-[11px] text-slate-500">
+                          compatibility: {COMPATIBILITY_LABELS[platformSkills.find((item) => item.name === skill)?.compatibility_level || "direct"] || "-"}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
                           capabilities: {(platformSkills.find((item) => item.name === skill)?.capabilities || []).join(", ") || "-"}
                         </div>
+                        {(platformSkills.find((item) => item.name === skill)?.compatibility_notes || []).length > 0 ? (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-600">
+                            {(platformSkills.find((item) => item.name === skill)?.compatibility_notes || []).join("；")}
+                          </div>
+                        ) : null}
                         {platformSkills.find((item) => item.name === skill)?.input_schema ? (
                           <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-600">
                             schema: {JSON.stringify(platformSkills.find((item) => item.name === skill)?.input_schema || {})}
@@ -489,8 +504,16 @@ export default function CompositionPage() {
                             ) : null}
                           </div>
                           <div className="text-[11px] text-slate-500">
+                            compatibility: {COMPATIBILITY_LABELS[platformMcpTools.find((item) => item.name === tool)?.compatibility_level || "direct"] || "-"}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
                             capabilities: {(platformMcpTools.find((item) => item.name === tool)?.capabilities || []).join(", ") || "-"}
                           </div>
+                          {(platformMcpTools.find((item) => item.name === tool)?.compatibility_notes || []).length > 0 ? (
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-600">
+                              {(platformMcpTools.find((item) => item.name === tool)?.compatibility_notes || []).join("；")}
+                            </div>
+                          ) : null}
                           {platformMcpTools.find((item) => item.name === tool)?.tool_schema?.parameters ? (
                             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-600">
                               params: {JSON.stringify(platformMcpTools.find((item) => item.name === tool)?.tool_schema?.parameters || {})}

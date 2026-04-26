@@ -38,6 +38,14 @@ COMMON_SKILL_GUIDES = (
     "prompts/SKILL.md",
 )
 GUIDE_PROMPT_LIMIT = 12_000
+KNOWN_SKILL_TOOL_CAPABILITIES = {
+    "query_schedule": "schedule.query",
+    "query_grades": "grade.query",
+    "query_exam_schedule": "exam.query",
+    "query_training_plan": "training_plan.query",
+    "query_academic_progress": "academic_progress.query",
+    "query_personal_info": "personal_info.query",
+}
 
 
 @dataclass
@@ -92,17 +100,22 @@ class SkillManager:
         config.setdefault("enabled", True)
         config.setdefault("source_type", "yaml")
         config.setdefault("source_ref", "")
-        config.setdefault("mode", "tool" if config.get("tools") else "rule")
-        config.setdefault("compatibility_level", "direct")
-        config.setdefault("compatibility_notes", [])
-        config.setdefault("capabilities", self._infer_capabilities(config))
         config.setdefault("created_at", int(time.time()))
         config["updated_at"] = int(time.time())
+        config = self._apply_skill_metadata(config)
 
         skill_name = str(config["name"]).strip()
         target = self._owner_dir(owner) / f"{skill_name}.yaml"
         self._save_skill_config(target, config)
-        return {"owner": owner, "name": skill_name, "path": str(target)}
+        return {
+            "owner": owner,
+            "name": skill_name,
+            "path": str(target),
+            "mode": config.get("mode", "rule"),
+            "compatibility_level": config.get("compatibility_level", "direct"),
+            "compatibility_notes": config.get("compatibility_notes", []) or [],
+            "capabilities": config.get("capabilities", []) or [],
+        }
 
     def _parse_and_validate(self, yaml_content: str) -> Dict[str, Any]:
         if not (yaml_content or "").strip():
@@ -120,24 +133,97 @@ class SkillManager:
     def _infer_capabilities(config: Dict[str, Any]) -> List[str]:
         capabilities = []
         tools = config.get("tools") or []
-        tool_name_to_cap = {
-            "query_schedule": "schedule.query",
-            "query_grades": "grade.query",
-            "query_exam_schedule": "exam.query",
-            "query_training_plan": "training_plan.query",
-            "query_academic_progress": "academic_progress.query",
-            "query_personal_info": "personal_info.query",
-        }
+        declared = config.get("capabilities")
+        if isinstance(declared, list):
+            for item in declared:
+                text = str(item or "").strip()
+                if text:
+                    capabilities.append(text)
         for tool in tools:
             if not isinstance(tool, dict):
                 continue
             name = str(tool.get("name", "")).strip()
-            if name in tool_name_to_cap:
-                capabilities.append(tool_name_to_cap[name])
+            if name in KNOWN_SKILL_TOOL_CAPABILITIES:
+                capabilities.append(KNOWN_SKILL_TOOL_CAPABILITIES[name])
         return list(dict.fromkeys(capabilities))
+
+    def _apply_skill_metadata(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        classified = self._classify_skill_config(config)
+        normalized = dict(config)
+        normalized["mode"] = classified["mode"]
+        normalized["compatibility_level"] = classified["compatibility_level"]
+        normalized["compatibility_notes"] = classified["compatibility_notes"]
+        normalized["capabilities"] = classified["capabilities"]
+        return normalized
+
+    def _classify_skill_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        source_type = str(config.get("source_type", "yaml")).strip() or "yaml"
+        triggers = [str(item).strip() for item in (config.get("triggers") or []) if str(item).strip()]
+        prompt = str(config.get("prompt", "") or "").strip()
+        always_on = bool(config.get("always_on", False))
+        tools = [item for item in (config.get("tools") or []) if isinstance(item, dict)]
+        tool_names = [str(item.get("name", "")).strip() for item in tools if str(item.get("name", "")).strip()]
+        capabilities = self._infer_capabilities(config)
+        known_tools = [name for name in tool_names if name in KNOWN_SKILL_TOOL_CAPABILITIES]
+        unknown_tools = [name for name in tool_names if name not in KNOWN_SKILL_TOOL_CAPABILITIES]
+        notes: List[str] = []
+
+        if source_type == "repo_doc":
+            notes.append("仓库文档型 Skill，仅做规则/提示词注入，不直接调用工具")
+            if always_on:
+                notes.append("当前为 always_on，会持续参与系统提示词构建")
+            return {
+                "mode": "rule",
+                "compatibility_level": "rule_only",
+                "compatibility_notes": notes,
+                "capabilities": [],
+            }
+
+        if not tool_names:
+            if triggers:
+                notes.append(f"未声明工具，依赖触发词生效: {', '.join(triggers[:4])}")
+            if prompt or always_on:
+                notes.append("存在规则内容，可作为轻量规则型 Skill 使用")
+            if notes:
+                return {
+                    "mode": "rule",
+                    "compatibility_level": "rule_only",
+                    "compatibility_notes": notes,
+                    "capabilities": [],
+                }
+            return {
+                "mode": "rule",
+                "compatibility_level": "incompatible",
+                "compatibility_notes": ["既没有工具，也没有可注入规则或触发条件，当前运行时无法发挥作用"],
+                "capabilities": [],
+            }
+
+        if capabilities:
+            notes.append(f"已识别 {len(capabilities)} 个平台能力: {', '.join(capabilities[:4])}")
+        if known_tools:
+            notes.append(f"可直接识别的工具: {', '.join(known_tools[:4])}")
+        if unknown_tools:
+            notes.append(f"未映射到当前平台能力的工具: {', '.join(unknown_tools[:4])}")
+
+        if unknown_tools:
+            notes.append("结构可导入，但要想真正执行这些工具，需要补 tool name -> capability/runtime 映射")
+            return {
+                "mode": "tool",
+                "compatibility_level": "adapted",
+                "compatibility_notes": notes,
+                "capabilities": capabilities,
+            }
+
+        return {
+            "mode": "tool",
+            "compatibility_level": "direct",
+            "compatibility_notes": notes or ["工具名与当前运行时映射兼容，可直接进入编排和调用链路"],
+            "capabilities": capabilities,
+        }
 
     def validate_skill_yaml(self, yaml_content: str) -> Dict[str, Any]:
         config = self._parse_and_validate(yaml_content)
+        config = self._apply_skill_metadata(config)
         return {
             "name": str(config.get("name", "")).strip(),
             "version": str(config.get("version", "")).strip(),
@@ -145,6 +231,10 @@ class SkillManager:
             "tools_count": len(config.get("tools", [])),
             "triggers": config.get("triggers", []),
             "input_schema": config.get("input_schema") or {},
+            "mode": config.get("mode", "rule"),
+            "compatibility_level": config.get("compatibility_level", "direct"),
+            "compatibility_notes": config.get("compatibility_notes", []) or [],
+            "capabilities": config.get("capabilities", []) or [],
         }
 
     @staticmethod
@@ -259,9 +349,19 @@ class SkillManager:
             "created_at": int(time.time()),
             "updated_at": int(time.time()),
         }
+        config = self._apply_skill_metadata(config)
         target = self._owner_dir(owner) / f"{skill_name}.yaml"
         self._save_skill_config(target, config)
-        return {"owner": owner, "name": skill_name, "path": str(target), "source_type": "repo_doc"}
+        return {
+            "owner": owner,
+            "name": skill_name,
+            "path": str(target),
+            "source_type": "repo_doc",
+            "mode": config.get("mode", "rule"),
+            "compatibility_level": config.get("compatibility_level", "rule_only"),
+            "compatibility_notes": config.get("compatibility_notes", []) or [],
+            "capabilities": config.get("capabilities", []) or [],
+        }
 
     @staticmethod
     def _build_session() -> requests.Session:
@@ -339,6 +439,7 @@ class SkillManager:
         for f in owner_dir.glob("*.yaml"):
             try:
                 config = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+                config = self._apply_skill_metadata(config)
                 result.append(
                     {
                         "name": config.get("name", f.stem),
@@ -372,6 +473,7 @@ class SkillManager:
         config = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
         config["enabled"] = bool(enabled)
         config["updated_at"] = int(time.time())
+        config = self._apply_skill_metadata(config)
         f.write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding="utf-8")
         return {"name": skill_name, "enabled": bool(enabled)}
 
@@ -386,7 +488,8 @@ class SkillManager:
         f = self._owner_dir(owner) / f"{skill_name}.yaml"
         if not f.exists():
             return None
-        return yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+        config = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+        return self._apply_skill_metadata(config)
 
 
 _skill_manager_singleton: Optional[SkillManager] = None

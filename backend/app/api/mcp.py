@@ -160,6 +160,8 @@ async def import_mcp_tools_file(
         "imported": result.get("imported", 0),
         "total_tools": len(registry.list_tools()),
         "imported_tools": result.get("tools", []),
+        "summary": result.get("summary", {}),
+        "items": result.get("items", []),
     }
 
 
@@ -181,6 +183,8 @@ async def import_mcp_tools_url(payload: MCPImportUrlRequest, http_request: Reque
         "imported": result.get("imported", 0),
         "total_tools": len(registry.list_tools()),
         "imported_tools": result.get("tools", []),
+        "summary": result.get("summary", {}),
+        "items": result.get("items", []),
         "source": "url",
     }
 

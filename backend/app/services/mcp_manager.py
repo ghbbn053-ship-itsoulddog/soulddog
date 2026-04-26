@@ -28,6 +28,14 @@ COMMON_MCP_MANIFESTS = (
     "manifests/tools.json",
     "mcp/manifest.json",
 )
+KNOWN_MCP_CAPABILITIES = {
+    "query_schedule": "schedule.query",
+    "query_grades": "grade.query",
+    "query_exam_schedule": "exam.query",
+    "query_training_plan": "training_plan.query",
+    "query_academic_progress": "academic_progress.query",
+    "query_personal_info": "personal_info.query",
+}
 
 
 class MCPManager:
@@ -137,24 +145,101 @@ class MCPManager:
         normalized["kind"] = kind
         normalized["enabled"] = bool(item.get("enabled", True))
         normalized.setdefault("transport", "python" if kind == "python" else "http")
-        normalized.setdefault("compatibility_level", "direct")
-        normalized.setdefault("compatibility_notes", [])
-        normalized.setdefault("capabilities", MCPManager._infer_capabilities(normalized))
+        normalized = MCPManager._apply_tool_metadata(normalized)
         return normalized
 
     @staticmethod
     def _infer_capabilities(item: Dict[str, Any]) -> List[str]:
-        mapping = {
-            "query_schedule": "schedule.query",
-            "query_grades": "grade.query",
-            "query_exam_schedule": "exam.query",
-            "query_training_plan": "training_plan.query",
-            "query_academic_progress": "academic_progress.query",
-            "query_personal_info": "personal_info.query",
-        }
+        capabilities: List[str] = []
+        declared = item.get("capabilities")
+        if isinstance(declared, list):
+            for value in declared:
+                text = str(value or "").strip()
+                if text:
+                    capabilities.append(text)
         name = str(item.get("name", "")).strip()
-        capability = mapping.get(name)
-        return [capability] if capability else []
+        capability = KNOWN_MCP_CAPABILITIES.get(name)
+        if capability:
+            capabilities.append(capability)
+        return list(dict.fromkeys(capabilities))
+
+    @staticmethod
+    def _apply_tool_metadata(item: Dict[str, Any]) -> Dict[str, Any]:
+        classified = MCPManager._classify_tool_item(item)
+        normalized = dict(item)
+        normalized["transport"] = str(item.get("transport", "python" if item.get("kind") == "python" else "http")).strip().lower() or (
+            "python" if item.get("kind") == "python" else "http"
+        )
+        normalized["compatibility_level"] = classified["compatibility_level"]
+        normalized["compatibility_notes"] = classified["compatibility_notes"]
+        normalized["capabilities"] = classified["capabilities"]
+        return normalized
+
+    @staticmethod
+    def _classify_tool_item(item: Dict[str, Any]) -> Dict[str, Any]:
+        name = str(item.get("name", "")).strip()
+        kind = str(item.get("kind", "python")).strip().lower() or "python"
+        transport = str(item.get("transport", "python" if kind == "python" else "http")).strip().lower() or (
+            "python" if kind == "python" else "http"
+        )
+        capabilities = MCPManager._infer_capabilities(item)
+        notes: List[str] = []
+
+        if kind not in {"python", "http"}:
+            return {
+                "compatibility_level": "incompatible",
+                "compatibility_notes": [f"当前仅支持 python/http 两类 MCP，收到不支持的 kind: {kind}"],
+                "capabilities": capabilities,
+            }
+
+        if kind == "python":
+            module_path = str(item.get("module_path", "")).strip()
+            func_name = str(item.get("func_name", "")).strip()
+            if not module_path or not func_name:
+                return {
+                    "compatibility_level": "incompatible",
+                    "compatibility_notes": ["python MCP 缺少 module_path 或 func_name，当前运行时无法执行"],
+                    "capabilities": capabilities,
+                }
+            notes.append(f"python 入口: {module_path}:{func_name}")
+        else:
+            url = str(item.get("url", "")).strip()
+            if not url:
+                return {
+                    "compatibility_level": "incompatible",
+                    "compatibility_notes": ["http MCP 缺少 url，当前运行时无法执行"],
+                    "capabilities": capabilities,
+                }
+            notes.append(f"http 入口: {url}")
+
+        if transport not in {"python", "http"}:
+            notes.append(f"transport={transport} 不在当前标准传输集中，已按 {kind} 兼容处理")
+
+        if capabilities:
+            notes.append(f"已识别平台能力: {', '.join(capabilities[:4])}")
+            return {
+                "compatibility_level": "direct",
+                "compatibility_notes": notes,
+                "capabilities": capabilities,
+            }
+
+        if name:
+            notes.append(f"工具 {name} 结构可导入，但未映射到平台 capability")
+        notes.append("当前可作为对象管理和编排项存在，真正调用前需要补能力映射或工具路由规则")
+        return {
+            "compatibility_level": "adapted",
+            "compatibility_notes": notes,
+            "capabilities": capabilities,
+        }
+
+    @staticmethod
+    def _build_import_summary(items: List[Dict[str, Any]]) -> Dict[str, int]:
+        summary = {"direct": 0, "adapted": 0, "rule_only": 0, "incompatible": 0}
+        for item in items:
+            level = str(item.get("compatibility_level", "")).strip().lower()
+            if level in summary:
+                summary[level] += 1
+        return summary
 
     def import_tools(self, owner: str, tools: List[Dict[str, Any]], source_type: str, source_ref: str) -> Dict[str, Any]:
         existing = self._load_owner_tools(owner)
@@ -164,6 +249,7 @@ class MCPManager:
             if isinstance(item, dict) and str(item.get("name", "")).strip()
         }
         imported = 0
+        imported_items: List[Dict[str, Any]] = []
         for raw in tools:
             item = self._validate_tool_item(raw)
             if item is None:
@@ -174,9 +260,15 @@ class MCPManager:
             item["updated_at"] = int(time.time())
             by_name[item["name"]] = item
             imported += 1
+            imported_items.append(item)
         merged = [value for key, value in by_name.items() if key]
         self._save_owner_tools(owner, merged)
-        return {"imported": imported, "total": len(merged)}
+        return {
+            "imported": imported,
+            "total": len(merged),
+            "items": imported_items,
+            "summary": self._build_import_summary(imported_items),
+        }
 
     def import_from_content(self, owner: str, content: str, source_type: str, source_ref: str) -> Dict[str, Any]:
         tools = self._parse_payload(content)
@@ -217,6 +309,7 @@ class MCPManager:
         items = self._load_owner_tools(owner)
         result: List[Dict[str, Any]] = []
         for item in items:
+            item = self._apply_tool_metadata(item)
             result.append(
                 {
                     "name": str(item.get("name", "")).strip(),

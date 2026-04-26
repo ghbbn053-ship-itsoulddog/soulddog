@@ -66,6 +66,13 @@ type PipelineTask = {
   last_error?: string;
 };
 
+const COMPATIBILITY_LABELS: Record<string, string> = {
+  direct: "可直接使用",
+  adapted: "需要适配",
+  rule_only: "仅规则注入",
+  incompatible: "暂不兼容",
+};
+
 export default function MCPPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -179,7 +186,10 @@ export default function MCPPage() {
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `导入失败(${res.status})`);
       setUploadFile(null);
       await refreshTools(username);
-      setMsg(`文件导入成功：${data?.imported ?? 0} 项`);
+      const summary = data?.summary || {};
+      setMsg(
+        `文件导入成功：${data?.imported ?? 0} 项，direct ${summary.direct ?? 0}，adapted ${summary.adapted ?? 0}，incompatible ${summary.incompatible ?? 0}`
+      );
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "导入失败");
     } finally {
@@ -202,7 +212,10 @@ export default function MCPPage() {
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `导入失败(${res.status})`);
       setImportUrl("");
       await refreshTools(username);
-      setMsg(`URL / 仓库导入成功：${data?.imported ?? 0} 项`);
+      const summary = data?.summary || {};
+      setMsg(
+        `URL / 仓库导入成功：${data?.imported ?? 0} 项，direct ${summary.direct ?? 0}，adapted ${summary.adapted ?? 0}，incompatible ${summary.incompatible ?? 0}`
+      );
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "导入失败");
     } finally {
@@ -533,7 +546,15 @@ export default function MCPPage() {
                         </div>
                       </div>
                       {tool.source_ref ? <div className="text-xs text-slate-500">source: {tool.source_ref}</div> : null}
+                      <div className="text-xs text-slate-500">
+                        compatibility: {COMPATIBILITY_LABELS[tool.compatibility_level || "direct"] || tool.compatibility_level || "-"}
+                      </div>
                       <div className="text-xs text-slate-500">capabilities: {(tool.capabilities || []).join(", ") || "-"}</div>
+                      {tool.compatibility_notes && tool.compatibility_notes.length > 0 ? (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-6 text-slate-600">
+                          {tool.compatibility_notes.join("；")}
+                        </div>
+                      ) : null}
                       <div className="flex flex-wrap gap-2">
                           <Button size="sm" variant="outline" disabled={saving} onClick={() => toggleImported(tool.name, !tool.enabled)}>
                             {tool.enabled ? "停用" : "启用"}
