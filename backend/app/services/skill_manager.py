@@ -10,12 +10,23 @@ from typing import Any, Dict, List, Optional
 import time
 import yaml
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from urllib.parse import urlparse
 
 
 REQUIRED_FIELDS = {"name", "version", "description", "tools"}
 ALLOWED_IMPORT_HOSTS = {"raw.githubusercontent.com", "github.com"}
 MAX_SKILL_BYTES = 256 * 1024
+DEFAULT_IMPORT_TIMEOUT = 20
+COMMON_SKILL_MANIFESTS = (
+    "skill.yaml",
+    "skill.yml",
+    "skills.yaml",
+    "skills.yml",
+    "manifest.yaml",
+    "manifest.yml",
+)
 
 
 @dataclass
@@ -113,38 +124,91 @@ class SkillManager:
                 return f"https://raw.githubusercontent.com/{org}/{repo}/{branch}/{tail}"
         return u
 
-    def import_skill_from_url(self, owner: str, url: str, timeout: int = 12) -> Dict[str, Any]:
-        raw_url = self._normalize_raw_url(url)
-        if not raw_url.startswith("http://") and not raw_url.startswith("https://"):
-            raise ValueError("仅支持 http/https URL")
-        parsed = urlparse(raw_url)
-        if (parsed.hostname or "").lower() not in ALLOWED_IMPORT_HOSTS:
-            raise ValueError("仅允许从 GitHub 官方域名导入")
+    @staticmethod
+    def _github_repo_candidates(url: str) -> List[str]:
+        u = (url or "").strip().rstrip("/")
+        if "github.com/" not in u:
+            return []
+        if "/blob/" in u or "raw.githubusercontent.com" in u:
+            return []
+        parts = u.split("github.com/", 1)[1].split("/")
+        if len(parts) < 2:
+            return []
+        org, repo = parts[0], parts[1]
+        branches = ["main", "master"]
+        candidates: List[str] = []
+        for branch in branches:
+            for manifest in COMMON_SKILL_MANIFESTS:
+                candidates.append(f"https://raw.githubusercontent.com/{org}/{repo}/{branch}/{manifest}")
+                candidates.append(f"https://raw.githubusercontent.com/{org}/{repo}/{branch}/skills/{manifest}")
+                candidates.append(f"https://raw.githubusercontent.com/{org}/{repo}/{branch}/manifests/{manifest}")
+        return candidates
 
-        resp = requests.get(
-            raw_url,
-            timeout=timeout,
-            headers={"User-Agent": "campus-ai-skill-importer/1.0"},
+    @staticmethod
+    def _build_session() -> requests.Session:
+        retry = Retry(
+            total=2,
+            connect=2,
+            read=2,
+            backoff_factor=1.2,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET"],
         )
-        if resp.status_code != 200:
-            raise ValueError(f"下载 Skill 失败: HTTP {resp.status_code}")
+        adapter = HTTPAdapter(max_retries=retry)
+        session = requests.Session()
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        return session
 
-        content_length = resp.headers.get("Content-Length")
-        if content_length:
+    def import_skill_from_url(self, owner: str, url: str, timeout: int = DEFAULT_IMPORT_TIMEOUT) -> Dict[str, Any]:
+        normalized = self._normalize_raw_url(url)
+        if not normalized.startswith("http://") and not normalized.startswith("https://"):
+            raise ValueError("仅支持 http/https URL")
+        candidates = [normalized, *self._github_repo_candidates(normalized)]
+        seen = set()
+        deduped_candidates = []
+        for item in candidates:
+            if item in seen:
+                continue
+            seen.add(item)
+            deduped_candidates.append(item)
+
+        session = self._build_session()
+        headers = {"User-Agent": "campus-ai-skill-importer/1.0"}
+        last_error = "未知错误"
+
+        for candidate in deduped_candidates:
+            parsed = urlparse(candidate)
+            if (parsed.hostname or "").lower() not in ALLOWED_IMPORT_HOSTS:
+                continue
             try:
-                if int(content_length) > MAX_SKILL_BYTES:
-                    raise ValueError("Skill 文件过大（超过 256KB）")
-            except ValueError:
-                raise
-            except Exception:
-                pass
+                resp = session.get(candidate, timeout=timeout, headers=headers)
+                if resp.status_code != 200:
+                    last_error = f"{candidate} -> HTTP {resp.status_code}"
+                    continue
 
-        content = resp.text or ""
-        if len(content.encode("utf-8")) > MAX_SKILL_BYTES:
-            raise ValueError("Skill 文件过大（超过 256KB）")
-        if not content.strip():
-            raise ValueError("Skill 内容为空")
-        return self.upload_skill(owner, content)
+                content_length = resp.headers.get("Content-Length")
+                if content_length:
+                    try:
+                        if int(content_length) > MAX_SKILL_BYTES:
+                            last_error = f"{candidate} -> Skill 文件过大（超过 256KB）"
+                            continue
+                    except Exception:
+                        pass
+
+                content = resp.text or ""
+                if len(content.encode("utf-8")) > MAX_SKILL_BYTES:
+                    last_error = f"{candidate} -> Skill 文件过大（超过 256KB）"
+                    continue
+                if not content.strip():
+                    last_error = f"{candidate} -> Skill 内容为空"
+                    continue
+                return self.upload_skill(owner, content)
+            except requests.RequestException as exc:
+                last_error = f"{candidate} -> {exc}"
+                continue
+
+        raise ValueError(f"导入失败，未找到可用的 Skill manifest。最后错误: {last_error}")
 
     def list_skills(self, owner: str) -> List[Dict[str, Any]]:
         owner_dir = self._owner_dir(owner)

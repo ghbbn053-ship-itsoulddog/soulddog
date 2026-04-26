@@ -449,20 +449,25 @@ export default function WorkspaceDetailPage() {
       }
     >
       <div className="grid gap-4">
-        <WorkbenchSection title="WORKSPACE DETAIL" description="工作区状态和学习状态合并展示，不再拆很多解释板块。">
-          <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-            <div className="grid gap-3">
-              <WorkbenchStatCard label="Documents" value={stats.documents} />
-              <WorkbenchStatCard label="Knowledge Units" value={stats.nodes} />
-              <WorkbenchStatCard label="Relations" value={stats.edges} />
-              <WorkbenchStatCard label="Workspace" value={workspace?.name || "-"} hint={workspace?.slug || "当前工作区"} />
+        <WorkbenchSection title="WORKSPACE DETAIL" description="默认工作区和当前知识空间摘要放到这一栏，不再占据太多主界面空间。">
+          <div className="grid gap-3 xl:grid-cols-[1.2fr_0.8fr]">
+            <div className="grid gap-3 md:grid-cols-4">
+              <WorkbenchStatCard label="Workspace" value={workspace?.name || "-"} hint={workspace?.description || workspace?.slug || "当前知识空间"} />
+              <WorkbenchStatCard label="Default" value={workspace?.is_default ? "Yes" : "No"} hint={workspace?.is_default ? "平台默认知识空间" : "非默认工作区"} />
+              <WorkbenchStatCard label="Documents" value={stats.documents} hint={`nodes ${stats.nodes} · edges ${stats.edges}`} />
+              <WorkbenchStatCard
+                label="Learning"
+                value={learningStatus ? `${learningStatus.metrics.today_minutes}m` : "-"}
+                hint={learningStatus ? `today prompts ${learningStatus.metrics.today_prompts}` : "等待学习状态聚合"}
+              />
             </div>
-            <div>
-              {learningStatus ? (
-                <LearningStatus metrics={learningStatus.metrics} signals={learningStatus.signals} />
-              ) : (
-                <WorkbenchEmpty title="暂无学习状态" description="等待工作区状态聚合完成。" />
-              )}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-4 text-sm text-slate-600">
+              <div className="font-medium text-slate-900">{workspace?.is_default ? "默认工作区" : "当前工作区"}</div>
+              <div className="mt-2 leading-6">
+                {workspace?.is_default
+                  ? "平台默认知识空间已启用。这里的知识可视化、入库和 AI 对话都围绕这一工作区联动。"
+                  : "当前知识空间已启用。这里的知识可视化、入库和 AI 对话都围绕这一工作区联动。"}
+              </div>
             </div>
           </div>
         </WorkbenchSection>
