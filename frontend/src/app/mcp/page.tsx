@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
 
 type MCPTool = {
   name: string;
@@ -112,6 +113,17 @@ type AgentAccessState = {
   };
 };
 
+type AgentBootstrap = {
+  username: string;
+  has_active_education_binding?: boolean;
+  bridge?: {
+    script_path?: string;
+    env?: Record<string, string>;
+    claude_desktop?: unknown;
+    openclaw_skill?: unknown;
+  };
+};
+
 const COMPATIBILITY_LABELS: Record<string, string> = {
   direct: "可直接使用",
   adapted: "需要适配",
@@ -146,6 +158,7 @@ export default function MCPPage() {
   const [agentAccess, setAgentAccess] = useState<AgentAccessState | null>(null);
   const [agentTokenName, setAgentTokenName] = useState("OpenClaw");
   const [createdAgentToken, setCreatedAgentToken] = useState("");
+  const [agentBootstrap, setAgentBootstrap] = useState<AgentBootstrap | null>(null);
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
@@ -191,6 +204,12 @@ export default function MCPPage() {
     );
   };
 
+  const refreshAgentBootstrap = async (uname: string) => {
+    const res = await fetch(`${API_BASE}/api/agent-access/${encodeURIComponent(uname)}/bootstrap`, { credentials: "include" });
+    const data = res.ok ? await res.json() : null;
+    setAgentBootstrap(data?.success ? (data as AgentBootstrap) : null);
+  };
+
   useEffect(() => {
     const run = async () => {
       try {
@@ -208,6 +227,7 @@ export default function MCPPage() {
           refreshState(),
           refreshTasks(),
           refreshAgentAccess(uname),
+          refreshAgentBootstrap(uname),
         ]);
       } catch {
         router.replace("/chat");
@@ -247,6 +267,7 @@ export default function MCPPage() {
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `创建失败(${res.status})`);
       setCreatedAgentToken(String(data?.token?.token || ""));
       await refreshAgentAccess(username);
+      await refreshAgentBootstrap(username);
       setMsg(`已创建 Agent Token：${data?.token?.token_name || agentTokenName.trim()}`);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "创建失败");
@@ -269,6 +290,7 @@ export default function MCPPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `撤销失败(${res.status})`);
       await refreshAgentAccess(username);
+      await refreshAgentBootstrap(username);
       setMsg("已撤销 Agent Token");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "撤销失败");
@@ -643,6 +665,32 @@ export default function MCPPage() {
                       </div>
                     ))
                   )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-slate-900">Bridge Bootstrap</div>
+                    <div className="mt-1 text-xs text-slate-500">给 Claude Desktop / OpenClaw 的最小接入配置。</div>
+                  </div>
+                  <Badge variant={agentBootstrap?.has_active_education_binding ? "success" : "outline"}>
+                    {agentBootstrap?.has_active_education_binding ? "教育绑定已激活" : "教育绑定未激活"}
+                  </Badge>
+                </div>
+
+                <div className="mt-3 space-y-3">
+                  <div className="text-xs text-slate-500">script: {agentBootstrap?.bridge?.script_path || "backend/mcp_agent_bridge.py"}</div>
+                  <Textarea
+                    readOnly
+                    value={JSON.stringify(agentBootstrap?.bridge?.claude_desktop || {}, null, 2)}
+                    className="min-h-[150px] font-mono text-xs"
+                  />
+                  <Textarea
+                    readOnly
+                    value={JSON.stringify(agentBootstrap?.bridge?.openclaw_skill || {}, null, 2)}
+                    className="min-h-[200px] font-mono text-xs"
+                  />
                 </div>
               </div>
             </div>
