@@ -25,6 +25,24 @@ logger = logging.getLogger(__name__)
 
 
 class AgentRuntimeService:
+    async def build_chat_runtime_context(
+        self,
+        username: str,
+        message: str,
+        session_store,
+        workspace_id: int | None = None,
+    ) -> Dict[str, Any]:
+        runtime_context = self._build_runtime_context(username, message, session_store, workspace_id=workspace_id)
+        tool_context, tool_trace = await self._build_tool_context(username, message, runtime_context)
+        if tool_context:
+            runtime_context["tool_results"] = tool_context
+        return {
+            "runtime_context": runtime_context,
+            "system_context": self._render_runtime_context(runtime_context),
+            "tool_results": tool_context,
+            "tool_trace": tool_trace,
+        }
+
     def available_frameworks(self) -> List[Dict[str, Any]]:
         return [
             {
@@ -45,11 +63,10 @@ class AgentRuntimeService:
 
     async def run(self, username: str, message: str, framework: str, session_store, workspace_id: int | None = None) -> Dict[str, Any]:
         fw = (framework or "openai_agents").strip().lower()
-        runtime_context = self._build_runtime_context(username, message, session_store, workspace_id=workspace_id)
-        tool_context, tool_trace = await self._build_tool_context(username, message, runtime_context)
-        if tool_context:
-            runtime_context["tool_results"] = tool_context
-        system_context = self._render_runtime_context(runtime_context)
+        prepared = await self.build_chat_runtime_context(username, message, session_store, workspace_id=workspace_id)
+        runtime_context = prepared["runtime_context"]
+        tool_trace = prepared["tool_trace"]
+        system_context = prepared["system_context"]
         if fw == "openai_agents":
             result = self._run_openai_agents(message, system_context)
             if result.get("success"):
@@ -176,6 +193,13 @@ class AgentRuntimeService:
                 params[key] = candidates["week"]
             elif lowered in {"student_id", "xh"} and candidates.get("numeric"):
                 params[key] = candidates["numeric"]
+            elif lowered in {"location", "city", "place"}:
+                msg = (message or "").strip()
+                if msg:
+                    location = re.sub(r"^(查(一下)?|查询|看看|帮我查(一下)?|帮我看看)\s*", "", msg)
+                    location = re.sub(r"(天气|温度|气温|降雨|预报)", "", location).strip(" ，,。？?")
+                    if location:
+                        params[key] = location
         return params
 
     async def _build_tool_context(self, username: str, message: str, runtime_context: Dict[str, Any]) -> tuple[List[Dict[str, str]], List[Dict[str, Any]]]:
@@ -184,16 +208,41 @@ class AgentRuntimeService:
             return [], []
 
         registry = get_mcp_registry()
+        capability_to_tools: Dict[str, List[str]] = {}
+        for tool in runtime_context.get("mcp_tools") or []:
+            tool_name = str(tool.get("name", "")).strip()
+            if not tool_name:
+                continue
+            for capability in tool.get("capabilities") or []:
+                cap = str(capability or "").strip()
+                if not cap:
+                    continue
+                capability_to_tools.setdefault(cap, [])
+                if tool_name not in capability_to_tools[cap]:
+                    capability_to_tools[cap].append(tool_name)
         results: List[Dict[str, str]] = []
         traces: List[Dict[str, Any]] = []
         tried_tools = set()
 
         for skill in skills:
+            candidate_tools: List[str] = []
             tool_defs = skill.get("tools") or []
             for tool_def in tool_defs:
                 if not isinstance(tool_def, dict):
                     continue
                 tool_name = str(tool_def.get("name", "")).strip()
+                if tool_name:
+                    candidate_tools.append(tool_name)
+
+            for capability in skill.get("capabilities") or []:
+                cap = str(capability or "").strip()
+                if not cap:
+                    continue
+                for tool_name in capability_to_tools.get(cap, []):
+                    if tool_name not in candidate_tools:
+                        candidate_tools.append(tool_name)
+
+            for tool_name in candidate_tools:
                 if not tool_name or tool_name in tried_tools or not registry.has_tool(tool_name):
                     continue
                 tried_tools.add(tool_name)

@@ -283,9 +283,9 @@ export default function KnowledgePage() {
             <RefreshCcw className="h-4 w-4" />
             刷新
           </Button>
-          <Button onClick={() => router.push(workspaceId ? `/chat?workspace_id=${workspaceId}` : "/chat")}>
+          <Button onClick={() => router.push(workspaceId ? `/workspace/${workspaceId}` : "/workspace")}>
             <Bot className="h-4 w-4" />
-            进入对话验证
+            进入工作区对话
           </Button>
         </>
       }
@@ -437,8 +437,8 @@ export default function KnowledgePage() {
                           <Button size="sm" variant="outline" onClick={() => router.push(`/workspace/${workspaceId}?doc=${doc.id}`)}>
                             定位到工作区
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => router.push(`/chat?workspace_id=${workspaceId}`)}>
-                            去聊天验证
+                          <Button size="sm" variant="outline" onClick={() => router.push(`/workspace/${workspaceId}`)}>
+                            去工作区对话
                           </Button>
                           <Button size="sm" variant="outline" disabled={saving} onClick={() => void handleDelete(doc.id)}>
                             <Trash2 className="h-4 w-4" />

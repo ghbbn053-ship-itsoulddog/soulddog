@@ -444,7 +444,7 @@ export default function WorkspaceDetailPage() {
       topActions={
         <>
           <Button variant="outline" onClick={() => router.push("/workspace")}>工作区列表</Button>
-          <Button onClick={() => router.push(`/chat?workspace_id=${workspaceId}`)}>打开对话</Button>
+          <Button onClick={() => router.push(`/workspace/${workspaceId}`)}>工作区对话</Button>
         </>
       }
     >

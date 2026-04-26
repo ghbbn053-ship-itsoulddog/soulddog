@@ -725,6 +725,48 @@ class JwxtScraper:
             courses = []
             rows = schedule_table.find_all('tr')
 
+            # 课表单元格大量使用 rowspan/colspan。
+            # 直接按当前行 cells[1:8] 读取会导致被 rowspan 挤压后的行列错位，
+            # 典型表现就是某些天（例如周三）课程缺失。
+            active_rowspans = {}
+            expanded_rows = []
+
+            for row in rows:
+                base_cells = row.find_all(['th', 'td'], recursive=False)
+                if not base_cells:
+                    continue
+
+                expanded_cells = []
+                col_idx = 0
+
+                def consume_active_spans() -> None:
+                    nonlocal col_idx
+                    while col_idx in active_rowspans:
+                        span = active_rowspans[col_idx]
+                        expanded_cells.append(span["cell"])
+                        span["remaining"] -= 1
+                        if span["remaining"] <= 0:
+                            del active_rowspans[col_idx]
+                        col_idx += 1
+
+                consume_active_spans()
+
+                for cell in base_cells:
+                    consume_active_spans()
+                    rowspan = max(int(cell.get("rowspan", 1) or 1), 1)
+                    colspan = max(int(cell.get("colspan", 1) or 1), 1)
+                    for _ in range(colspan):
+                        expanded_cells.append(cell)
+                        if rowspan > 1:
+                            active_rowspans[col_idx] = {
+                                "cell": cell,
+                                "remaining": rowspan - 1,
+                            }
+                        col_idx += 1
+
+                consume_active_spans()
+                expanded_rows.append(expanded_cells)
+
             # 节次映射
             period_map = {
                 "第一二节": "1-2",
@@ -736,12 +778,11 @@ class JwxtScraper:
             }
 
             # 跳过表头行（第一行是星期标题）
-            for row_idx, row in enumerate(rows):
+            for row_idx, cells in enumerate(expanded_rows):
                 # 只跳过第一行（表头：星期一、星期二...）
                 if row_idx == 0:
                     continue
-                    
-                cells = row.find_all(['th', 'td'])
+
                 if len(cells) >= 8:
                     # 节次信息 (第一二节、第三四节等)
                     period_text = cells[0].get_text(strip=True)
@@ -750,9 +791,14 @@ class JwxtScraper:
                     # 遍历每天的课程 (周一到周日)
                     days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
                     for i, cell in enumerate(cells[1:8], 1):
-                        # 使用 kbcontent 解析（含教师信息），按 HTML 块切分支持多课程单元格
+                        # 某些教务页面同时存在：
+                        # - kbcontent1: 默认展示层，通常不含教师
+                        # - kbcontent: 隐藏详情层，包含教师/地点/周次
+                        # 旧逻辑只抓 kbcontent，遇到页面结构变体时容易整格丢失。
                         import re as _kb_re
-                        course_divs = cell.find_all('div', class_='kbcontent')
+                        detail_divs = cell.find_all('div', class_='kbcontent')
+                        summary_divs = cell.find_all('div', class_='kbcontent1')
+                        course_divs = detail_divs or summary_divs
 
                         for div in course_divs:
                             # 跳过空单元格

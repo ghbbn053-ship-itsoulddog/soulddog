@@ -337,8 +337,8 @@ export function AIPanel({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => router.push(`/chat?workspace_id=${workspaceId}`)}>
-              打开完整聊天页
+            <Button size="sm" variant="outline" onClick={() => router.push(`/workspace/${workspaceId}`)}>
+              返回工作区对话
             </Button>
             <Button size="sm" variant="outline" onClick={() => router.push("/composition")}>
               继续调整编排
@@ -443,6 +443,11 @@ export function AIPanel({
                                 <div className="mt-1 leading-6">
                                   {skill.always_on ? "always on" : `matched triggers: ${(skill.matched_triggers || []).join(", ") || "-"}`}
                                 </div>
+                                {skill.compatibility_level === "rule_only" ? (
+                                  <div className="leading-6 text-amber-700">
+                                    仅规则注入：会影响提示词，不会直接调用外部天气/搜索等工具。
+                                  </div>
+                                ) : null}
                                 <div className="leading-6">
                                   capabilities: {(skill.capabilities || []).join(", ") || "-"}
                                 </div>

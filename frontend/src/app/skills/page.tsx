@@ -252,7 +252,7 @@ export default function SkillsPage() {
 
           <WorkbenchSection
             title="安装与导入"
-            description="YAML 用于工具型 manifest skill。GitHub 仓库地址会优先尝试 manifest，找不到时自动按 repo/doc skill 导入。"
+            description="YAML 用于工具型 manifest skill。GitHub 仓库地址会优先尝试 manifest，找不到时自动按 repo/doc skill 导入。注意：repo/doc skill 只会注入规则，不会自动变成可执行工具。"
           >
             <div className="space-y-4">
               <Textarea
@@ -340,6 +340,12 @@ export default function SkillsPage() {
                       {skill.compatibility_notes && skill.compatibility_notes.length > 0 ? (
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-6 text-slate-600">
                           {skill.compatibility_notes.join("；")}
+                        </div>
+                      ) : null}
+
+                      {skill.compatibility_level === "rule_only" ? (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-800">
+                          这个 Skill 目前只是规则/提示词注入，不具备真实工具执行能力。像天气、搜索这类外部能力，必须再接入对应 MCP 或平台工具，单靠文档型 Skill 不能直接查询。
                         </div>
                       ) : null}
 

@@ -8,7 +8,9 @@ import os
 import logging
 from typing import List, Dict, Optional
 import json
+import asyncio
 from app.services.education_normalizer import summarize_education_payload
+from app.mcp.tools import query_weather as mcp_query_weather
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +132,23 @@ class QwenService:
                         "type": "object",
                         "properties": {},
                         "required": []
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "query_weather",
+                    "description": "查询指定地点天气，包括天气现象、温度、体感和当天预报",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "location": {
+                                "type": "string",
+                                "description": "地点，如 佛山、广州、北京"
+                            }
+                        },
+                        "required": ["location"]
                     }
                 }
             },
@@ -465,6 +484,13 @@ class QwenService:
                         "总数": result.get("count", 0)
                     }
                 return {"error": result.get("message", "查询失败")}
+
+            elif func_name == "query_weather":
+                location = str(args.get("location", "") or "").strip()
+                if not location:
+                    return {"error": "缺少 location 参数"}
+                weather_text = asyncio.run(mcp_query_weather(username or "", location))
+                return {"地点": location, "天气": weather_text}
             
             elif func_name == "query_academic_progress":
                 result = scraper.get_academic_progress()

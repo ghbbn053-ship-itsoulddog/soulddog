@@ -9,6 +9,41 @@ from typing import Dict, List
 
 from app.services.composition_manager import get_composition_manager
 from app.services.skill_manager import get_skill_manager
+from app.services.mcp_registry import get_mcp_registry
+
+
+def _resolve_runtime_tools(owner: str, skill: Dict) -> List[str]:
+    declared_tools = [
+        str(t.get("name", "")).strip()
+        for t in (skill.get("tools") or [])
+        if isinstance(t, dict) and str(t.get("name", "")).strip()
+    ]
+
+    registry_tools = get_mcp_registry().list_tools()
+    capability_map: Dict[str, List[str]] = {}
+    for item in registry_tools:
+        tool_name = str(item.get("name", "")).strip()
+        if not tool_name:
+            continue
+        capabilities = item.get("capabilities", []) or []
+        for capability in capabilities:
+            cap = str(capability or "").strip()
+            if not cap:
+                continue
+            capability_map.setdefault(cap, [])
+            if tool_name not in capability_map[cap]:
+                capability_map[cap].append(tool_name)
+
+    resolved = list(declared_tools)
+    comp = get_composition_manager()
+    for capability in skill.get("capabilities", []) or []:
+        cap = str(capability or "").strip()
+        if not cap:
+            continue
+        for tool_name in capability_map.get(cap, []):
+            if comp.is_mcp_tool_enabled(owner, tool_name) and tool_name not in resolved:
+                resolved.append(tool_name)
+    return resolved
 
 
 def match_enabled_skills(owner: str, question: str, max_match: int = 3) -> List[Dict]:
@@ -48,6 +83,7 @@ def explain_skill_matches(owner: str, question: str, max_match: int = 3) -> List
     for s in matched:
         triggers = [str(t).strip() for t in (s.get("triggers") or []) if str(t).strip()]
         matched_triggers = [t for t in triggers if t.lower() in q]
+        runtime_tools = _resolve_runtime_tools(owner, s)
         out.append(
             {
                 "name": s.get("name", "unknown"),
@@ -57,12 +93,8 @@ def explain_skill_matches(owner: str, question: str, max_match: int = 3) -> List
                 "capabilities": s.get("capabilities", []) or [],
                 "always_on": bool(s.get("always_on", False)),
                 "matched_triggers": matched_triggers,
-                "has_tools": bool(s.get("tools")),
-                "tools": [
-                    str(t.get("name", "")).strip()
-                    for t in (s.get("tools") or [])
-                    if isinstance(t, dict) and str(t.get("name", "")).strip()
-                ],
+                "has_tools": bool(runtime_tools),
+                "tools": runtime_tools,
             }
         )
     return out

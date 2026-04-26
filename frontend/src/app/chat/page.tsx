@@ -52,6 +52,18 @@ interface ToolTrace {
   error?: string;
 }
 
+interface SkillMatch {
+  name: string;
+  mode?: string;
+  source_type?: string;
+  compatibility_level?: string;
+  capabilities?: string[];
+  always_on?: boolean;
+  matched_triggers?: string[];
+  has_tools?: boolean;
+  tools?: string[];
+}
+
 interface MessageHighlight {
   source: string;
   title: string;
@@ -70,6 +82,7 @@ interface Message {
   highlights?: MessageHighlight[];
   tool_calls?: ToolCall[];
   tool_trace?: ToolTrace[];
+  skill_matches?: SkillMatch[];
   timestamp?: string;
   streaming?: boolean;
 }
@@ -108,6 +121,7 @@ function toolDisplayName(name: string) {
       query_schedule: "课表查询",
       query_exam_schedule: "考试安排",
       query_academic_progress: "学业进度",
+      query_weather: "天气查询",
       refresh_all_data: "刷新数据",
     }[name] || name
   );
@@ -137,6 +151,7 @@ function buildConversationMarkdown(messages: Message[], conversationId: number |
     }
     lines.push(msg.content || "");
     lines.push("");
+
     if (msg.tool_trace && msg.tool_trace.length > 0) {
       lines.push("### Tool Trace");
       lines.push("");
@@ -147,6 +162,21 @@ function buildConversationMarkdown(messages: Message[], conversationId: number |
         }
         if (trace.error) {
           lines.push(`  - error: ${trace.error}`);
+        }
+      }
+      lines.push("");
+    }
+
+    if (msg.skill_matches && msg.skill_matches.length > 0) {
+      lines.push("### Matched Skills");
+      lines.push("");
+      for (const skill of msg.skill_matches) {
+        lines.push(`- ${skill.name} [${skill.compatibility_level || "direct"}]`);
+        if (skill.tools && skill.tools.length > 0) {
+          lines.push(`  - tools: ${skill.tools.join(", ")}`);
+        }
+        if (skill.capabilities && skill.capabilities.length > 0) {
+          lines.push(`  - capabilities: ${skill.capabilities.join(", ")}`);
         }
       }
       lines.push("");
@@ -230,6 +260,13 @@ export default function ChatPage() {
     const parsed = Number(raw || 0);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   }, [searchParams]);
+
+  useEffect(() => {
+    if (requestedWorkspaceId) {
+      router.replace(`/workspace/${requestedWorkspaceId}`);
+      return;
+    }
+  }, [requestedWorkspaceId, router]);
 
   useEffect(() => {
     currentConversationIdRef.current = currentConversationId;
@@ -376,6 +413,7 @@ export default function ChatPage() {
                 highlights: m.meta?.highlights || [],
                 tool_calls: m.meta?.tool_calls || [],
                 tool_trace: m.meta?.tool_trace || [],
+                skill_matches: m.meta?.skill_matches || [],
                 timestamp: new Date(m.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
               }))
             );
@@ -446,6 +484,7 @@ export default function ChatPage() {
                   highlights: data?.highlights || [],
                   tool_calls: data?.tool_calls || [],
                   tool_trace: data?.tool_trace || [],
+                  skill_matches: data?.skill_matches || [],
                 }
               : msg
           )
@@ -611,6 +650,7 @@ export default function ChatPage() {
                     highlights: data.highlights || next[idx].highlights || [],
                     tool_calls: data.tool_calls || next[idx].tool_calls || [],
                     tool_trace: data.tool_trace || next[idx].tool_trace || [],
+                    skill_matches: data.skill_matches || next[idx].skill_matches || [],
                     streaming: false,
                   };
                   return next;
@@ -754,6 +794,7 @@ export default function ChatPage() {
                 highlights: m.meta?.highlights || [],
                 tool_calls: m.meta?.tool_calls || [],
                 tool_trace: m.meta?.tool_trace || [],
+                skill_matches: m.meta?.skill_matches || [],
                 timestamp: new Date(m.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
               }))
             );
@@ -1146,6 +1187,38 @@ export default function ChatPage() {
                                         <div className="mt-1 text-slate-500">params: {JSON.stringify(trace.params)}</div>
                                       )}
                                       {trace.error && <div className="mt-1 text-rose-600">{trace.error}</div>}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {msg.skill_matches && msg.skill_matches.length > 0 && (
+                              <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
+                                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Matched Skills</div>
+                                <div className="space-y-2">
+                                  {msg.skill_matches.map((skill, i) => (
+                                    <div key={`${skill.name}-${i}`} className="rounded-md border border-[hsl(var(--border))] bg-white px-3 py-2 text-xs text-slate-700">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-medium">{skill.name}</span>
+                                        <Badge variant="outline">{skill.mode || "rule"}</Badge>
+                                        <Badge variant="secondary">{skill.compatibility_level || "direct"}</Badge>
+                                        {skill.source_type ? <Badge variant="outline">{skill.source_type}</Badge> : null}
+                                      </div>
+                                      <div className="mt-1 text-slate-500">
+                                        {skill.always_on ? "always on" : `matched triggers: ${(skill.matched_triggers || []).join(", ") || "-"}`}
+                                      </div>
+                                      {skill.compatibility_level === "rule_only" ? (
+                                        <div className="mt-1 text-amber-700">
+                                          仅规则注入：会影响提示词，不会直接调用外部天气/搜索等工具。
+                                        </div>
+                                      ) : null}
+                                      <div className="mt-1 text-slate-500">
+                                        capabilities: {(skill.capabilities || []).join(", ") || "-"}
+                                      </div>
+                                      <div className="mt-1 text-slate-500">
+                                        tools: {(skill.tools || []).join(", ") || "-"}
+                                      </div>
                                     </div>
                                   ))}
                                 </div>

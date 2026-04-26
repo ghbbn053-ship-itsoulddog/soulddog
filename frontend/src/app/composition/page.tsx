@@ -387,9 +387,9 @@ export default function CompositionPage() {
                   <LibraryBig className="h-4 w-4" />
                   这个工作区的知识库
                 </Button>
-                <Button variant="outline" onClick={() => router.push(workspaceId ? `/chat?workspace_id=${workspaceId}` : "/chat")}>
+                <Button variant="outline" onClick={() => router.push(workspaceId ? `/workspace/${workspaceId}` : "/workspace")}>
                   <Bot className="h-4 w-4" />
-                  这个工作区的聊天验证
+                  这个工作区的对话验证
                 </Button>
               </div>
             </div>

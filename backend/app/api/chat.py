@@ -270,6 +270,25 @@ def _build_message_meta(base: dict | None = None, workspace_id: int | None = Non
     return meta
 
 
+async def _prepare_runtime_hint(
+    username: str,
+    message: str,
+    session_store,
+    workspace_id: int | None,
+) -> tuple[str, List[dict]]:
+    try:
+        prepared = await get_agent_runtime().build_chat_runtime_context(
+            username=username,
+            message=message,
+            session_store=session_store,
+            workspace_id=workspace_id,
+        )
+        return prepared.get("system_context", "") or "", prepared.get("tool_trace", []) or []
+    except Exception as e:
+        logger.warning(f"运行态提示构建失败: {e}")
+        return "", []
+
+
 # ============ 数据模型 ============
 
 class ChatRequest(BaseModel):
@@ -390,9 +409,16 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
             }
         skill_context = build_skill_prompt_hint(request.username, request.message)
         skill_matches = explain_skill_matches(request.username, request.message)
+        runtime_hint, runtime_tool_trace = await _prepare_runtime_hint(
+            request.username,
+            request.message,
+            session_store,
+            request.workspace_id,
+        )
         history_for_model = history
-        if skill_context:
-            history_for_model = [{"role": "system", "content": skill_context}] + history
+        system_blocks = [block for block in [skill_context, runtime_hint] if block.strip()]
+        if system_blocks:
+            history_for_model = [{"role": "system", "content": "\n\n".join(system_blocks)}] + history
         
         ai_result = None
 
@@ -433,6 +459,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
                             "tool_calls": [],
                             "usage": {},
                             "skill_matches": skill_matches,
+                            "tool_trace": runtime_tool_trace,
                         }
                 except Exception as e:
                     logger.warning(f"结构化直答构建失败: {e}")
@@ -499,7 +526,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
                 "sources": ai_result.get("sources", []),
                 "highlights": ai_result.get("highlights", []),
                 "tool_calls": ai_result.get("tool_calls", []),
-                "tool_trace": ai_result.get("tool_trace", []),
+                "tool_trace": ai_result.get("tool_trace", []) or runtime_tool_trace,
             }, workspace_id=request.workspace_id),
         )
         db.add(ai_msg)
@@ -512,7 +539,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
             sources=ai_result.get("sources", []),
             highlights=ai_result.get("highlights", []),
             tool_calls=ai_result.get("tool_calls", []),
-            tool_trace=ai_result.get("tool_trace", []),
+            tool_trace=ai_result.get("tool_trace", []) or runtime_tool_trace,
             usage=ai_result.get("usage", {})
         )
         
@@ -732,9 +759,16 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
             }
         skill_context = build_skill_prompt_hint(request.username, request.message)
         skill_matches = explain_skill_matches(request.username, request.message)
+        runtime_hint, runtime_tool_trace = await _prepare_runtime_hint(
+            request.username,
+            request.message,
+            session_store,
+            request.workspace_id,
+        )
         history_for_model = history
-        if skill_context:
-            history_for_model = [{"role": "system", "content": skill_context}] + history
+        system_blocks = [block for block in [skill_context, runtime_hint] if block.strip()]
+        if system_blocks:
+            history_for_model = [{"role": "system", "content": "\n\n".join(system_blocks)}] + history
         
         # 6. 构建教务数据上下文（从数据库缓存，按学期组织）
         edu_context = ""
@@ -753,11 +787,11 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                             conversation_id=conversation.id,
                             role="assistant",
                             content=grounded_answer,
-                            message_meta=_build_message_meta({"sources": ["grounded_structured_data"]}, workspace_id=request.workspace_id),
+                            message_meta=_build_message_meta({"sources": ["grounded_structured_data"], "tool_trace": runtime_tool_trace}, workspace_id=request.workspace_id),
                         )
                         db.add(ai_msg)
                         db.commit()
-                        yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id})}\n\n"
+                        yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_trace': runtime_tool_trace, 'skill_matches': skill_matches})}\n\n"
 
                     return StreamingResponse(
                         grounded_stream(),
@@ -818,7 +852,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
             loop = asyncio.get_running_loop()
             chunk_queue: asyncio.Queue = asyncio.Queue()
             tool_calls_info = []
-            tool_trace_info = []
+            tool_trace_info = runtime_tool_trace[:]
             skill_matches_info = skill_matches[:]
             response_sources = workspace_sources[:]
             response_highlights = workspace_highlights[:]
