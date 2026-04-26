@@ -34,6 +34,7 @@ from app.api.skills import router as skills_router
 from app.api.agents import router as agents_router
 from app.api.intake import router as intake_router
 from app.api.composition import router as composition_router
+from app.api.agent_access import router as agent_access_router
 
 app = FastAPI(title="教务系统 AI 助手 API", version="1.0.0")
 app.state.session_store = session_store
@@ -87,6 +88,7 @@ app.include_router(skills_router)
 app.include_router(agents_router)
 app.include_router(intake_router)
 app.include_router(composition_router)
+app.include_router(agent_access_router)
 app.include_router(workspace_router.router)
 app.include_router(workspace_pref_router.router)
 app.include_router(platform_router.router)

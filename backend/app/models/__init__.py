@@ -15,6 +15,8 @@ from app.models.platform import (
     SkillManifest,
     MCPServerManifest,
     WorkspaceSuggestion,
+    AgentAccessToken,
+    ExternalServiceBinding,
 )
 
 # 创建所有表
@@ -41,4 +43,6 @@ __all__ = [
     "SkillManifest",
     "MCPServerManifest",
     "WorkspaceSuggestion",
+    "AgentAccessToken",
+    "ExternalServiceBinding",
 ]

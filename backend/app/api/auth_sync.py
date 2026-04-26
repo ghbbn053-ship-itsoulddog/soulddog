@@ -16,6 +16,7 @@ from app.core.config import SERVERS
 from app.core.runtime import DB_AVAILABLE, EducationData, User, get_db, logger, session_store
 from app.models import EducationSyncSnapshot
 from app.services.education_sync import auto_crawl_and_store
+from app.services.agent_access import get_agent_access_service
 from app.security import enforce_username_isolation
 
 router = APIRouter(tags=["认证与同步"])
@@ -190,6 +191,16 @@ async def login(request: Request, background_tasks: BackgroundTasks):
             # 服务端登录会话（强绑定 username/user_id）
             auth_session_id = secrets.token_urlsafe(32)
             session_store.set_auth_session(auth_session_id, username=username, user_id=user_id)
+
+            if DB_AVAILABLE:
+                try:
+                    db = next(get_db())
+                    try:
+                        get_agent_access_service().sync_default_bindings(db, username)
+                    finally:
+                        db.close()
+                except Exception as e:
+                    logger.warning(f"【登录】同步外部服务绑定状态失败: {e}")
 
             resp = JSONResponse(
                 content={

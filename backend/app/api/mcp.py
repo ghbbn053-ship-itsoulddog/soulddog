@@ -3,7 +3,7 @@ MCP HTTP API - 通过HTTP提供MCP服务
 允许远程调用MCP工具，支持Web端和其他客户端
 """
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import Optional, Any
 import logging
@@ -13,7 +13,11 @@ from pathlib import Path
 from app.services import get_mcp_registry
 from app.services.mcp_registry import reload_mcp_registry
 from app.services.mcp_manager import get_mcp_manager
+from app.models import get_db
+from sqlalchemy.orm import Session
+from app.security_agent import resolve_agent_identity
 from app.security import enforce_username_isolation
+from app.services.agent_access import get_agent_access_service
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +52,61 @@ class MCPToolDeleteRequest(BaseModel):
     username: str
 
 
+EDUCATION_CAPABILITY_PREFIXES = (
+    "grade.",
+    "schedule.",
+    "academic_progress.",
+    "training_plan.",
+    "exam.",
+    "personal_info.",
+)
+
+
+def _tool_boundary(item: dict) -> str:
+    return str(item.get("execution_boundary") or "").strip() or (
+        "remote_service" if item.get("kind") == "http" else "hosted_web"
+    )
+
+
+def _tool_scope(item: dict) -> str:
+    return str(item.get("service_scope") or "").strip() or (
+        "shared_remote_service" if item.get("kind") == "http" else "web_internal_service"
+    )
+
+
+def _resolve_call_identity(
+    http_request: Request,
+    db: Session,
+    requested_username: str,
+    tool_meta: dict,
+) -> tuple[str, str]:
+    agent_identity = resolve_agent_identity(http_request, db)
+    if agent_identity:
+        owner_username = str(agent_identity.get("owner_username") or "").strip()
+        if not owner_username:
+            raise HTTPException(status_code=401, detail="Agent Token 无法解析所属用户")
+
+        allowed_boundaries = set(
+            (((agent_identity.get("scope_json") or {}).get("mcp") or {}).get("allowed_boundaries") or [])
+        )
+        boundary = _tool_boundary(tool_meta)
+        if allowed_boundaries and boundary not in allowed_boundaries:
+            raise HTTPException(status_code=403, detail=f"当前 Agent Token 无权调用 {boundary} 类型能力")
+
+        capabilities = tool_meta.get("capabilities") or []
+        service_scope = _tool_scope(tool_meta)
+        if service_scope == "web_internal_service" or any(
+            str(capability).startswith(EDUCATION_CAPABILITY_PREFIXES) for capability in capabilities
+        ):
+            if not get_agent_access_service().has_active_binding(db, owner_username, "education"):
+                raise HTTPException(status_code=403, detail="教务服务绑定未激活，请先在 Web 端重新完成教务系统登录")
+
+        return owner_username, "agent"
+
+    enforce_username_isolation(http_request, requested_username)
+    return requested_username, "web"
+
+
 @router.get("/service-catalog")
 async def service_catalog():
     """
@@ -57,12 +116,9 @@ async def service_catalog():
     """
     registry = get_mcp_registry()
     tools = registry.list_tools()
-    web_tools = [item for item in tools if item.get("kind") in {"python", "http"}]
-    remote_tools = [
-        item
-        for item in tools
-        if item.get("kind") in {"python", "http"} and item.get("capabilities")
-    ]
+    hosted_web_tools = [item for item in tools if _tool_boundary(item) == "hosted_web"]
+    remote_tools = [item for item in tools if _tool_boundary(item) == "remote_service"]
+    agent_local_only = [item for item in tools if _tool_boundary(item) == "agent_local_only"]
     return {
         "success": True,
         "service_positioning": {
@@ -70,8 +126,14 @@ async def service_catalog():
             "agent_integration": "面向 OpenClaw / Claude Desktop / 其他 Agent 的远程能力服务目录",
         },
         "recommended_split": {
-            "hosted_web_tools": len(web_tools),
+            "hosted_web_tools": len(hosted_web_tools),
             "remote_agent_services": len(remote_tools),
+            "agent_local_only": len(agent_local_only),
+        },
+        "groups": {
+            "hosted_web": hosted_web_tools,
+            "remote_service": remote_tools,
+            "agent_local_only": agent_local_only,
         },
         "remote_mcp_entrypoints": [
             {
@@ -87,6 +149,107 @@ async def service_catalog():
             },
         ],
         "tools": tools,
+    }
+
+
+@router.get("/agent/catalog")
+async def agent_catalog(request: Request, db: Session = Depends(get_db)):
+    identity = resolve_agent_identity(request, db)
+    if not identity:
+        raise HTTPException(status_code=401, detail="缺少有效的 Agent Access Token")
+
+    registry = get_mcp_registry()
+    tools = registry.list_tools()
+    allowed_boundaries = set((((identity.get("scope_json") or {}).get("mcp") or {}).get("allowed_boundaries") or []))
+    if not allowed_boundaries:
+        allowed_boundaries = {"hosted_web", "remote_service"}
+
+    visible_tools = [
+        item
+        for item in tools
+        if _tool_boundary(item) in allowed_boundaries and item.get("capabilities")
+    ]
+    return {
+        "success": True,
+        "owner_username": identity.get("owner_username"),
+        "token_name": identity.get("token_name"),
+        "visible_tools": visible_tools,
+        "message": "外部 Agent 不直接登录教务系统，只复用 Web 端用户完成的绑定与授权状态",
+    }
+
+
+@router.get("/tools/{tool_name}/probe")
+async def probe_tool(tool_name: str, username: Optional[str] = None, http_request: Request = None):
+    """
+    轻量探测单个工具是否具备上线条件。
+    - 不做真正业务调用
+    - 只判断 transport / 配置完备性 / 适用边界
+    """
+    registry = get_mcp_registry()
+    meta = registry.get_tool_meta(tool_name)
+    if not meta:
+        raise HTTPException(status_code=404, detail="工具不存在")
+
+    if username:
+        enforce_username_isolation(http_request, username)
+
+    boundary = _tool_boundary(meta)
+    scope = _tool_scope(meta)
+    transport = str(meta.get("transport") or meta.get("kind") or "unknown")
+    kind = str(meta.get("kind") or "unknown")
+    checks: list[dict[str, Any]] = []
+
+    if boundary == "agent_local_only":
+        checks.append({"name": "boundary", "ok": False, "detail": "该能力依赖本地 Agent / 本地进程，不适合作为 Web 托管能力开放"})
+    else:
+        checks.append({"name": "boundary", "ok": True, "detail": f"适用边界：{boundary}"})
+
+    if kind == "python":
+        checks.append(
+            {
+                "name": "runtime_entry",
+                "ok": bool(meta.get("module_path")) and bool(meta.get("func_name")),
+                "detail": f"module={meta.get('module_path') or '-'} func={meta.get('func_name') or '-'}",
+            }
+        )
+    elif kind in {"http", "streamable_http", "sse"}:
+        checks.append(
+            {
+                "name": "endpoint",
+                "ok": bool(meta.get("url")),
+                "detail": f"url={meta.get('url') or '-'}",
+            }
+        )
+    elif kind in {"stdio", "command"}:
+        checks.append(
+            {
+                "name": "command",
+                "ok": bool(meta.get("command")) and bool(meta.get("tool_name")),
+                "detail": f"command={meta.get('command') or '-'} tool={meta.get('tool_name') or '-'}",
+            }
+        )
+    else:
+        checks.append({"name": "kind", "ok": False, "detail": f"当前 kind={kind} 不在受支持范围内"})
+
+    checks.append(
+        {
+            "name": "capabilities",
+            "ok": bool(meta.get("capabilities")),
+            "detail": f"capabilities={(meta.get('capabilities') or [])}",
+        }
+    )
+
+    ready = all(item["ok"] for item in checks)
+    return {
+        "success": True,
+        "tool": tool_name,
+        "ready": ready,
+        "boundary": boundary,
+        "service_scope": scope,
+        "transport": transport,
+        "kind": kind,
+        "checks": checks,
+        "meta": meta,
     }
 
 
@@ -108,7 +271,7 @@ async def list_tools(username: Optional[str] = None, http_request: Request = Non
 
 
 @router.post("/tools/{tool_name}", response_model=MCPToolResponse)
-async def call_tool(tool_name: str, request: MCPToolRequest):
+async def call_tool(tool_name: str, request: MCPToolRequest, http_request: Request, db: Session = Depends(get_db)):
     """
     调用MCP工具
     
@@ -125,9 +288,12 @@ async def call_tool(tool_name: str, request: MCPToolRequest):
             status_code=404,
             detail=f"工具 '{tool_name}' 不存在"
         )
-    
     try:
-        result = await registry.call_tool(tool_name, request.username, request.params)
+        tool_meta = registry.get_tool_meta(tool_name)
+        if not tool_meta:
+            raise HTTPException(status_code=404, detail="工具元数据不存在")
+        effective_username, _identity_type = _resolve_call_identity(http_request, db, request.username, tool_meta)
+        result = await registry.call_tool(tool_name, effective_username, request.params)
         
         return MCPToolResponse(
             success=True,

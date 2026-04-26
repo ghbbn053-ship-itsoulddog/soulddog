@@ -187,3 +187,39 @@ class WorkspaceSuggestion(Base):
     __table_args__ = (
         UniqueConstraint("workspace_id", "suggestion_key", name="uq_workspace_suggestion_workspace_key"),
     )
+
+
+class AgentAccessToken(Base):
+    __tablename__ = "agent_access_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_username = Column(String(50), nullable=False, index=True)
+    token_name = Column(String(120), nullable=False, comment="用户给该 token 的备注名")
+    token_hash = Column(String(255), nullable=False, unique=True, index=True)
+    token_prefix = Column(String(32), nullable=False, comment="用于 UI 展示的前缀")
+    status = Column(String(20), nullable=False, default="active", comment="active/revoked/expired")
+    scope_json = Column(JSON, default=dict, comment="可访问能力范围")
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class ExternalServiceBinding(Base):
+    __tablename__ = "external_service_bindings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_username = Column(String(50), nullable=False, index=True)
+    service_name = Column(String(80), nullable=False, comment="education/learning_pass/yuketang/...")
+    auth_type = Column(String(40), nullable=False, default="web_session", comment="web_session/api_key/oauth/...")
+    status = Column(String(20), nullable=False, default="active", comment="active/expired/revoked/pending")
+    display_name = Column(String(200), nullable=True, comment="展示给用户看的账号标识")
+    metadata_json = Column(JSON, default=dict)
+    last_verified_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("owner_username", "service_name", name="uq_service_binding_owner_service"),
+    )

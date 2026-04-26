@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, Github, RefreshCcw, SearchCheck, ShieldAlert, Trash2, Upload, Wrench } from "lucide-react";
+import { Activity, Github, KeyRound, RefreshCcw, SearchCheck, ShieldAlert, Trash2, Upload, Wrench } from "lucide-react";
 
 import { PlatformSidebarFooter, PlatformSidebarHeader, createPlatformNav } from "@/components/workspace/app-sidebar";
 import {
@@ -30,6 +30,21 @@ type MCPTool = {
   compatibility_level?: string;
   compatibility_notes?: string[];
   capabilities?: string[];
+  execution_boundary?: string;
+  execution_boundary_notes?: string[];
+  web_enabled?: boolean;
+  service_scope?: string;
+};
+
+type ProbeResult = {
+  success: boolean;
+  tool: string;
+  ready: boolean;
+  boundary: string;
+  service_scope: string;
+  transport: string;
+  kind: string;
+  checks: Array<{ name: string; ok: boolean; detail: string }>;
 };
 
 type PipelineItem = {
@@ -66,11 +81,49 @@ type PipelineTask = {
   last_error?: string;
 };
 
+type AgentToken = {
+  id: number;
+  token_name: string;
+  token_prefix: string;
+  status: string;
+  scope_json?: Record<string, unknown>;
+  last_used_at?: string | null;
+  expires_at?: string | null;
+  created_at?: string | null;
+};
+
+type ServiceBinding = {
+  id: number;
+  service_name: string;
+  auth_type: string;
+  status: string;
+  display_name?: string | null;
+  metadata_json?: Record<string, unknown>;
+  last_verified_at?: string | null;
+  expires_at?: string | null;
+};
+
+type AgentAccessState = {
+  tokens: AgentToken[];
+  bindings: ServiceBinding[];
+  login_policy?: {
+    web_login_source?: string;
+    agent_rule?: string;
+  };
+};
+
 const COMPATIBILITY_LABELS: Record<string, string> = {
   direct: "可直接使用",
   adapted: "需要适配",
   rule_only: "仅规则注入",
   incompatible: "暂不兼容",
+};
+
+const BOUNDARY_LABELS: Record<string, string> = {
+  hosted_web: "Web 可托管",
+  remote_service: "远程服务",
+  agent_local_only: "仅本地 Agent",
+  unsupported: "暂不支持",
 };
 
 export default function MCPPage() {
@@ -89,6 +142,10 @@ export default function MCPPage() {
   const [queueSize, setQueueSize] = useState(0);
   const [runningCount, setRunningCount] = useState(0);
   const [priority, setPriority] = useState<"high" | "normal" | "low">("normal");
+  const [probeMap, setProbeMap] = useState<Record<string, ProbeResult>>({});
+  const [agentAccess, setAgentAccess] = useState<AgentAccessState | null>(null);
+  const [agentTokenName, setAgentTokenName] = useState("OpenClaw");
+  const [createdAgentToken, setCreatedAgentToken] = useState("");
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
@@ -120,6 +177,20 @@ export default function MCPPage() {
     setTasks(data?.items || []);
   };
 
+  const refreshAgentAccess = async (uname: string) => {
+    const res = await fetch(`${API_BASE}/api/agent-access/${encodeURIComponent(uname)}`, { credentials: "include" });
+    const data = res.ok ? await res.json() : null;
+    setAgentAccess(
+      data?.success
+        ? {
+            tokens: data?.tokens || [],
+            bindings: data?.bindings || [],
+            login_policy: data?.login_policy || {},
+          }
+        : null
+    );
+  };
+
   useEffect(() => {
     const run = async () => {
       try {
@@ -131,10 +202,13 @@ export default function MCPPage() {
         }
         const uname = String(me.username);
         setUsername(uname);
-        await refreshTools(uname);
-        await refreshHistory();
-        await refreshState();
-        await refreshTasks();
+        await Promise.all([
+          refreshTools(uname),
+          refreshHistory(),
+          refreshState(),
+          refreshTasks(),
+          refreshAgentAccess(uname),
+        ]);
       } catch {
         router.replace("/chat");
       } finally {
@@ -152,6 +226,56 @@ export default function MCPPage() {
     }, 8000);
     return () => clearInterval(id);
   }, []);
+
+  const createAgentToken = async () => {
+    if (!username || !agentTokenName.trim()) return;
+    setSaving(true);
+    setMsg("");
+    setCreatedAgentToken("");
+    try {
+      const res = await fetch(`${API_BASE}/api/agent-access/tokens`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          username,
+          token_name: agentTokenName.trim(),
+          ttl_days: 30,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `创建失败(${res.status})`);
+      setCreatedAgentToken(String(data?.token?.token || ""));
+      await refreshAgentAccess(username);
+      setMsg(`已创建 Agent Token：${data?.token?.token_name || agentTokenName.trim()}`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "创建失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const revokeAgentToken = async (tokenId: number) => {
+    if (!username || !tokenId) return;
+    setSaving(true);
+    setMsg("");
+    try {
+      const res = await fetch(`${API_BASE}/api/agent-access/tokens/${tokenId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `撤销失败(${res.status})`);
+      await refreshAgentAccess(username);
+      setMsg("已撤销 Agent Token");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "撤销失败");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const reloadTools = async () => {
     setSaving(true);
@@ -240,6 +364,24 @@ export default function MCPPage() {
       setMsg(`已${enabled ? "启用" : "停用"} ${name}`);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "操作失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const probeSingleTool = async (name: string) => {
+    setSaving(true);
+    setMsg("");
+    try {
+      const res = await fetch(`${API_BASE}/api/mcp/tools/${encodeURIComponent(name)}/probe?username=${encodeURIComponent(username)}`, {
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) throw new Error(data?.detail || data?.message || `探测失败(${res.status})`);
+      setProbeMap((prev) => ({ ...prev, [name]: data as ProbeResult }));
+      setMsg(`${name} 探测完成：${data.ready ? "ready" : "not ready"}`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "探测失败");
     } finally {
       setSaving(false);
     }
@@ -450,6 +592,93 @@ export default function MCPPage() {
           </Card>
         ) : null}
 
+        <WorkbenchSection
+          title="Agent Access"
+          description="Web 端仍然统一走教务系统登录。外部 Agent 只拿平台发放的 token，并复用当前账号已绑定的服务授权。"
+        >
+          <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-900">
+                  <KeyRound className="h-4 w-4" />
+                  创建 Agent Token
+                </div>
+                <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                  <Input value={agentTokenName} onChange={(e) => setAgentTokenName(e.target.value)} placeholder="例如 OpenClaw / Claude Desktop" />
+                  <Button onClick={createAgentToken} disabled={saving || !agentTokenName.trim()}>
+                    创建 Token
+                  </Button>
+                </div>
+                <div className="mt-2 text-xs leading-5 text-slate-500">
+                  {agentAccess?.login_policy?.web_login_source || "教务系统登录"} 是统一登录入口。外部 Agent 不直接登录教务系统。
+                </div>
+              </div>
+
+              {createdAgentToken ? (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="text-sm font-medium text-emerald-900">新 Token</div>
+                  <div className="mt-2 break-all font-mono text-xs leading-6 text-emerald-800">{createdAgentToken}</div>
+                  <div className="mt-2 text-xs text-emerald-700">这个值只会在创建后返回一次，外部 Agent 接入时直接作为 `Authorization: Bearer &lt;token&gt;` 使用。</div>
+                </div>
+              ) : null}
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="text-sm font-medium text-slate-900">服务绑定</div>
+                <div className="mt-3 space-y-3">
+                  {(agentAccess?.bindings || []).length === 0 ? (
+                    <div className="text-sm text-slate-500">暂无绑定信息</div>
+                  ) : (
+                    (agentAccess?.bindings || []).map((binding) => (
+                      <div key={binding.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm font-medium text-slate-900">{binding.service_name}</div>
+                          <Badge variant={binding.status === "active" ? "success" : "outline"}>{binding.status}</Badge>
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          auth: {binding.auth_type} · account: {binding.display_name || username}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          verified: {binding.last_verified_at || "-"}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="text-sm font-medium text-slate-900">已发放 Token</div>
+              <div className="mt-3 space-y-3">
+                {(agentAccess?.tokens || []).length === 0 ? (
+                  <div className="text-sm text-slate-500">当前账号还没有 Agent Token</div>
+                ) : (
+                  (agentAccess?.tokens || []).map((token) => (
+                    <div key={token.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="text-sm font-medium text-slate-900">{token.token_name}</div>
+                          <div className="font-mono text-xs text-slate-500">{token.token_prefix}...</div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={token.status === "active" ? "success" : "outline"}>{token.status}</Badge>
+                          <Button size="sm" variant="outline" disabled={saving || token.status !== "active"} onClick={() => revokeAgentToken(token.id)}>
+                            撤销
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-xs text-slate-500">
+                        created: {token.created_at || "-"} · last used: {token.last_used_at || "-"}
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">expires: {token.expires_at || "-"}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </WorkbenchSection>
+
         <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr_0.95fr]">
           <div className="grid gap-4">
             <WorkbenchSection title="导入与控制" description="先导入对象，再重载 registry。GitHub 仓库会自动探测常见 JSON manifest。">
@@ -543,6 +772,7 @@ export default function MCPPage() {
                           <Badge variant="secondary">{tool.source_type || "file"}</Badge>
                           <Badge variant="outline">{tool.transport || tool.kind || "python"}</Badge>
                           <Badge variant="secondary">{tool.compatibility_level || "direct"}</Badge>
+                          <Badge variant="outline">{BOUNDARY_LABELS[tool.execution_boundary || "hosted_web"] || "边界未知"}</Badge>
                         </div>
                       </div>
                       {tool.source_ref ? <div className="text-xs text-slate-500">source: {tool.source_ref}</div> : null}
@@ -550,12 +780,28 @@ export default function MCPPage() {
                         compatibility: {COMPATIBILITY_LABELS[tool.compatibility_level || "direct"] || tool.compatibility_level || "-"}
                       </div>
                       <div className="text-xs text-slate-500">capabilities: {(tool.capabilities || []).join(", ") || "-"}</div>
+                      <div className="text-xs text-slate-500">
+                        web: {tool.web_enabled === false ? "不可直接启用" : "可托管"} · scope: {tool.service_scope || "-"}
+                      </div>
                       {tool.compatibility_notes && tool.compatibility_notes.length > 0 ? (
                         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-6 text-slate-600">
                           {tool.compatibility_notes.join("；")}
                         </div>
                       ) : null}
+                      {tool.execution_boundary_notes && tool.execution_boundary_notes.length > 0 ? (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-6 text-amber-700">
+                          {tool.execution_boundary_notes.join("；")}
+                        </div>
+                      ) : null}
+                      {probeMap[tool.name] ? (
+                        <div className={`rounded-xl border px-3 py-2 text-xs leading-6 ${probeMap[tool.name].ready ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                          {probeMap[tool.name].checks.map((item) => `${item.name}: ${item.ok ? "ok" : "fail"} (${item.detail})`).join("；")}
+                        </div>
+                      ) : null}
                       <div className="flex flex-wrap gap-2">
+                          <Button size="sm" variant="outline" disabled={saving} onClick={() => probeSingleTool(tool.name)}>
+                            单项探测
+                          </Button>
                           <Button size="sm" variant="outline" disabled={saving} onClick={() => toggleImported(tool.name, !tool.enabled)}>
                             {tool.enabled ? "停用" : "启用"}
                           </Button>
@@ -635,7 +881,7 @@ export default function MCPPage() {
                 <div className="space-y-3">
                   {history.length === 0 ? <WorkbenchEmpty title="暂无历史" description="还没有完成过的流水线任务。" /> : null}
                   {history.map((item) => (
-                    <Card key={item.run_id || Math.random()} className="border-slate-200 shadow-none">
+                    <Card key={item.run_id || `${item.started_at || "unknown"}-${item.error || "none"}`} className="border-slate-200 shadow-none">
                       <CardContent className="space-y-2 p-4 text-xs text-slate-500">
                         <div className="text-sm font-medium text-slate-900">{item.run_id || "unknown"}</div>
                         <div>{item.success ? "success" : "failed"}</div>

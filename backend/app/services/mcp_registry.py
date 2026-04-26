@@ -45,6 +45,10 @@ class MCPToolSpec:
     cwd: str = ""
     headers: Optional[Dict[str, Any]] = None
     tool_name: str = ""
+    execution_boundary: str = "hosted_web"
+    execution_boundary_notes: Optional[List[str]] = None
+    web_enabled: bool = True
+    service_scope: str = "web_internal_service"
 
 
 class MCPRegistry:
@@ -216,6 +220,10 @@ class MCPRegistry:
                         cwd=str(it.get("cwd", "")).strip(),
                         headers=it.get("headers") or {},
                         tool_name=str(it.get("tool_name", "")).strip() or name,
+                        execution_boundary=str(it.get("execution_boundary", "hosted_web")).strip() or "hosted_web",
+                        execution_boundary_notes=it.get("execution_boundary_notes") or [],
+                        web_enabled=bool(it.get("web_enabled", True)),
+                        service_scope=str(it.get("service_scope", "web_internal_service")).strip() or "web_internal_service",
                     )
                     self.register(spec)
             except Exception:
@@ -263,6 +271,10 @@ class MCPRegistry:
                         cwd=str(it.get("cwd", "")).strip(),
                         headers=it.get("headers") or {},
                         tool_name=str(it.get("tool_name", "")).strip() or name,
+                        execution_boundary=str(it.get("execution_boundary", "hosted_web")).strip() or "hosted_web",
+                        execution_boundary_notes=it.get("execution_boundary_notes") or [],
+                        web_enabled=bool(it.get("web_enabled", True)),
+                        service_scope=str(it.get("service_scope", "web_internal_service")).strip() or "web_internal_service",
                     )
                 )
         except Exception:
@@ -290,9 +302,42 @@ class MCPRegistry:
                     "cwd": spec.cwd,
                     "headers": spec.headers or {},
                     "tool_name": spec.tool_name or spec.name,
+                    "execution_boundary": getattr(spec, "execution_boundary", None),
+                    "execution_boundary_notes": getattr(spec, "execution_boundary_notes", None) or [],
+                    "web_enabled": getattr(spec, "web_enabled", True),
+                    "service_scope": getattr(spec, "service_scope", None),
                 }
             )
         return tools
+
+    def get_tool_meta(self, name: str) -> Optional[Dict[str, Any]]:
+        spec = self._tools.get(name)
+        if not spec:
+            return None
+        return {
+            "name": spec.name,
+            "description": spec.description,
+            "kind": spec.kind,
+            "transport": spec.transport,
+            "source_type": spec.source_type,
+            "source_ref": spec.source_ref,
+            "compatibility_level": spec.compatibility_level,
+            "compatibility_notes": spec.compatibility_notes or [],
+            "capabilities": spec.capabilities or [],
+            "owner_username": spec.owner_username,
+            "command": spec.command,
+            "args": spec.args or [],
+            "env": spec.env or {},
+            "cwd": spec.cwd,
+            "headers": spec.headers or {},
+            "tool_name": spec.tool_name or spec.name,
+            "parameters": spec.parameters,
+            "input_schema": spec.input_schema,
+            "execution_boundary": getattr(spec, "execution_boundary", None),
+            "execution_boundary_notes": getattr(spec, "execution_boundary_notes", None) or [],
+            "web_enabled": getattr(spec, "web_enabled", True),
+            "service_scope": getattr(spec, "service_scope", None),
+        }
 
     def has_tool(self, name: str) -> bool:
         return name in self._tools
