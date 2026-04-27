@@ -2,6 +2,8 @@
 后端核心配置常量。
 """
 
+import os
+
 JWXT_BASE_URL = "http://jwxt.gdufe.edu.cn/jsxsd/"
 VERIFY_CODE_URL = f"{JWXT_BASE_URL}verifycode.servlet"
 LOGIN_URL = f"{JWXT_BASE_URL}xk/LoginToXkLdap"
@@ -24,3 +26,32 @@ SERVERS = [
     "http://172.19.13.109:80/jsxsd/",
 ]
 
+PUBLIC_SERVERS = [
+    JWXT_BASE_URL,
+]
+
+
+def get_server_candidates(preferred_index: int | None = None) -> list[str]:
+    """
+    返回教务入口候选列表。
+    优先顺序：
+    1. 显式环境变量 `EDUCATION_SYSTEM_URL`
+    2. 学号映射到的内网地址
+    3. 其余内网地址
+    4. 公网 JWXT_BASE_URL
+    """
+    candidates: list[str] = []
+    configured = (os.getenv("EDUCATION_SYSTEM_URL", "") or "").strip()
+    if configured:
+        normalized = configured if configured.endswith("/") else f"{configured}/"
+        candidates.append(normalized)
+
+    ordered_servers = list(SERVERS)
+    if preferred_index is not None and 0 <= preferred_index < len(SERVERS):
+        preferred = SERVERS[preferred_index]
+        ordered_servers = [preferred] + [server for server in SERVERS if server != preferred]
+
+    for server in ordered_servers + PUBLIC_SERVERS:
+        if server not in candidates:
+            candidates.append(server)
+    return candidates

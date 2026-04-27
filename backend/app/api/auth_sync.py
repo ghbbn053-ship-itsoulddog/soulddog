@@ -12,7 +12,7 @@ import requests
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from app.core.config import SERVERS
+from app.core.config import SERVERS, get_server_candidates
 from app.core.runtime import DB_AVAILABLE, EducationData, User, get_db, logger, session_store
 from app.models import EducationSyncSnapshot
 from app.services.education_sync import auto_crawl_and_store
@@ -37,13 +37,8 @@ async def get_captcha(username: str = None):
     try:
         if username and username.isdigit():
             server_index = int(username) % len(SERVERS)
-            server_url = SERVERS[server_index]
         else:
             server_index = 0
-            server_url = SERVERS[0]
-
-        captcha_url = f"{server_url}verifycode.servlet"
-        logger.info(f"【验证码】使用服务器: {server_url}")
 
         session = requests.Session()
         session.headers.update(
@@ -55,15 +50,32 @@ async def get_captcha(username: str = None):
             }
         )
 
-        response = session.get(captcha_url, timeout=10)
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=f"获取验证码失败: {response.status_code}")
-        if len(response.content) < 100:
-            raise HTTPException(status_code=500, detail="获取验证码失败：返回内容不是有效的图片")
+        last_error = None
+        selected_server_url = ""
+        response = None
+        for server_url in get_server_candidates(server_index):
+            captcha_url = f"{server_url}verifycode.servlet"
+            logger.info(f"【验证码】尝试服务器: {server_url}")
+            try:
+                response = session.get(captcha_url, timeout=10)
+                if response.status_code != 200:
+                    last_error = f"{server_url} -> HTTP {response.status_code}"
+                    continue
+                if len(response.content) < 100:
+                    last_error = f"{server_url} -> 返回内容不是有效的图片"
+                    continue
+                selected_server_url = server_url
+                break
+            except Exception as e:
+                last_error = f"{server_url} -> {e}"
+                continue
+
+        if response is None or not selected_server_url:
+            raise HTTPException(status_code=500, detail=f"获取验证码失败: {last_error or '未找到可用教务入口'}")
 
         image_base64 = base64.b64encode(response.content).decode("utf-8")
         captcha_session_id = f"captcha_{time.time()}_{server_index}"
-        session_store.set_captcha_session(captcha_session_id, session)
+        session_store.set_captcha_session(captcha_session_id, session, server_url=selected_server_url)
 
         return {"success": True, "image": f"data:image/jpeg;base64,{image_base64}", "captcha_session_id": captcha_session_id}
     except Exception as e:
@@ -92,11 +104,15 @@ async def login(request: Request, background_tasks: BackgroundTasks):
                 except ValueError:
                     pass
 
-        session = session_store.pop_captcha_session(captcha_session_id) if captcha_session_id else None
-        if not session:
+        captcha_payload = session_store.pop_captcha_session(captcha_session_id) if captcha_session_id else None
+        if not captcha_payload:
             return {"success": False, "message": "验证码已过期，请刷新验证码后重试"}
+        session = captcha_payload["session"]
 
-        if server_index is not None and 0 <= server_index < len(SERVERS):
+        stored_server_url = (captcha_payload.get("server_url") or "").strip()
+        if stored_server_url:
+            server_url = stored_server_url
+        elif server_index is not None and 0 <= server_index < len(SERVERS):
             server_url = SERVERS[server_index]
         else:
             server_url = select_server(username)

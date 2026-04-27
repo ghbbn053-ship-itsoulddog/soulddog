@@ -92,9 +92,10 @@ class SessionStore:
             self._redis.delete(key)
 
     # ===== Captcha Session =====
-    def set_captcha_session(self, captcha_session_id: str, session: requests.Session, ttl: int = 300):
+    def set_captcha_session(self, captcha_session_id: str, session: requests.Session, server_url: str = "", ttl: int = 300):
         payload = {
             "session": self._serialize_session(session),
+            "server_url": server_url,
             "created_at": time.time(),
         }
         if self.redis_available:
@@ -102,19 +103,25 @@ class SessionStore:
         else:
             self._captcha_sessions[captcha_session_id] = payload
 
-    def pop_captcha_session(self, captcha_session_id: str) -> Optional[requests.Session]:
+    def pop_captcha_session(self, captcha_session_id: str) -> Optional[Dict[str, Any]]:
         if self.redis_available:
             key = f"captcha:{captcha_session_id}"
             payload = self._redis_get_json(key)
             self._redis_del(key)
             if not payload:
                 return None
-            return self._deserialize_session(payload.get("session", {}))
+            return {
+                "session": self._deserialize_session(payload.get("session", {})),
+                "server_url": payload.get("server_url", ""),
+            }
 
         payload = self._captcha_sessions.pop(captcha_session_id, None)
         if not payload:
             return None
-        return self._deserialize_session(payload.get("session", {}))
+        return {
+            "session": self._deserialize_session(payload.get("session", {})),
+            "server_url": payload.get("server_url", ""),
+        }
 
     def list_captcha_ids(self):
         if self.redis_available:
