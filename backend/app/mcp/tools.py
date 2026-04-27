@@ -125,12 +125,11 @@ def _format_cached_schedule(username: str, semester: str = "") -> Optional[str]:
     return output
 
 
-def _format_cached_academic_progress(username: str) -> Optional[str]:
-    data, status = _load_cached_section(username, "学业进度")
-    if not data:
-        return None
-
+def _render_academic_progress(data: dict, cached_at: str = "") -> str:
     output = "学业进度概览\n\n"
+    study_type = str(data.get("修读类型") or "").strip()
+    if study_type:
+        output += f"修读类型: {study_type}\n"
     total_required = data.get("总学分要求") or data.get("总学分")
     earned = data.get("已获学分") or data.get("已修学分")
     remaining = data.get("还需学分") or data.get("未修学分")
@@ -141,36 +140,64 @@ def _format_cached_academic_progress(username: str) -> Optional[str]:
     if remaining not in (None, ""):
         output += f"还需学分: {remaining}\n"
 
-    course_list = list(data.get("课程列表") or [])
+    course_list = list(data.get("课程列表") or data.get("模块进度") or [])
     if course_list:
         output += "\n课程进度:\n"
         for item in course_list[:20]:
-            name = item.get("课程名称") or item.get("模块名称") or "N/A"
-            status_text = item.get("状态") or item.get("完成情况") or ""
-            credit = item.get("学分") or item.get("已修") or ""
-            details = " | ".join(part for part in [status_text, f"学分: {credit}" if credit != "" else ""] if part)
+            name = (
+                item.get("课程名称")
+                or item.get("模块名称")
+                or item.get("课程模块")
+                or item.get("课程类别")
+                or "N/A"
+            )
+            details_parts = []
+            for label, value in [
+                ("课程性质", item.get("课程性质")),
+                ("学分", item.get("学分")),
+                ("已获学分", item.get("已获学分") or item.get("已修")),
+                ("模块应修学分", item.get("模块应修学分") or item.get("要求")),
+                ("建议修读学期", item.get("建议修读学期")),
+                ("免听免修", item.get("免听免修") or item.get("免听、免修")),
+                ("状态", item.get("状态") or item.get("完成情况")),
+            ]:
+                text = str(value or "").strip()
+                if text:
+                    details_parts.append(f"{label}: {text}")
+            details = " | ".join(details_parts)
             output += f"  - {name}"
             if details:
                 output += f" ({details})"
             output += "\n"
+        if len(course_list) > 20:
+            output += f"  ... 还有 {len(course_list) - 20} 条课程进度未展开\n"
 
-    if status and status.get("cached_at"):
-        output += f"\n数据来源: 平台缓存 ({status.get('cached_at')})"
+    if cached_at:
+        output += f"\n数据来源: 平台缓存 ({cached_at})"
     return output
 
 
-def _format_cached_training_plan(username: str) -> Optional[str]:
-    plan, status = _load_cached_section(username, "培养方案")
-    if not plan:
-        return None
-
+def _render_training_plan(plan: dict, count: int | None = None, cached_at: str = "") -> str:
     course_list = list(plan.get("课程列表") or [])
     output = "培养方案\n"
-    output += f"共 {len(course_list)} 门课程要求\n\n"
+    basic_info = plan.get("基本信息") or {}
+    stats = plan.get("学分统计") or {}
+    plan_name = str(basic_info.get("方案名称") or basic_info.get("页面标题") or "").strip()
+    total_required = stats.get("总学分要求") or plan.get("总学分要求")
+    if plan_name:
+        output += f"方案名称: {plan_name}\n"
+    if total_required not in (None, ""):
+        output += f"总学分要求: {total_required}\n"
+    output += f"共 {count if count is not None else len(course_list)} 门课程要求\n\n"
 
     by_type = {}
     for course in course_list:
-        course_type = course.get("课程类型", "其他")
+        course_type = (
+            course.get("课程类型")
+            or course.get("课程性质")
+            or course.get("课程类别")
+            or "其他"
+        )
         by_type.setdefault(course_type, []).append(course)
 
     for course_type, courses in by_type.items():
@@ -178,14 +205,41 @@ def _format_cached_training_plan(username: str) -> Optional[str]:
         output += f"【{course_type}】\n"
         output += f"  课程数: {len(courses)} | 总学分: {total_credits}\n\n"
         for course in courses[:10]:
-            output += f"  - {course.get('课程名称', 'N/A')} ({course.get('学分', 0)}学分)\n"
+            details_parts = []
+            for label, value in [
+                ("学分", course.get("学分")),
+                ("建议修读学期", course.get("建议修读学期")),
+                ("考核方式", course.get("建议考核方式") or course.get("考核方式")),
+                ("课程模块", course.get("课程模块")),
+            ]:
+                text = str(value or "").strip()
+                if text:
+                    details_parts.append(f"{label}: {text}")
+            output += f"  - {course.get('课程名称', 'N/A')}"
+            if details_parts:
+                output += f" ({' | '.join(details_parts)})"
+            output += "\n"
         if len(courses) > 10:
             output += f"  ... 还有 {len(courses) - 10} 门课程\n"
         output += "\n"
 
-    if status and status.get("cached_at"):
-        output += f"数据来源: 平台缓存 ({status.get('cached_at')})\n"
+    if cached_at:
+        output += f"数据来源: 平台缓存 ({cached_at})\n"
     return output
+
+
+def _format_cached_academic_progress(username: str) -> Optional[str]:
+    data, status = _load_cached_section(username, "学业进度")
+    if not data:
+        return None
+    return _render_academic_progress(data, str((status or {}).get("cached_at") or ""))
+
+
+def _format_cached_training_plan(username: str) -> Optional[str]:
+    plan, status = _load_cached_section(username, "培养方案")
+    if not plan:
+        return None
+    return _render_training_plan(plan, cached_at=str((status or {}).get("cached_at") or ""))
 
 
 def _format_cached_exam_schedule(username: str, semester: str = "") -> Optional[str]:
@@ -352,28 +406,7 @@ async def query_academic_progress(username: str) -> str:
         result = scraper.get_academic_progress()
         
         if result["success"]:
-            data = result["data"]
-            
-            output = "学业进度概览\n\n"
-            
-            # 总体统计
-            if "总学分" in data:
-                output += f"总学分要求: {data['总学分']}\n"
-            if "已修学分" in data:
-                output += f"已修学分: {data['已修学分']}\n"
-            if "未修学分" in data:
-                output += f"未修学分: {data['未修学分']}\n"
-            
-            output += "\n"
-            
-            # 各模块进度
-            if "模块进度" in data:
-                output += "各模块进度:\n"
-                for module in data["模块进度"]:
-                    output += f"  {module.get('模块名称', 'N/A')}: "
-                    output += f"已修 {module.get('已修', 0)}/{module.get('要求', 0)} 学分\n"
-            
-            return output
+            return _render_academic_progress(result["data"])
         else:
             return f"查询失败: {result.get('message', '未知错误')}"
     
@@ -402,34 +435,7 @@ async def query_training_plan(username: str) -> str:
         result = scraper.get_my_training_plan()
         
         if result["success"]:
-            plan = result["data"]
-            count = result.get("count", 0)
-            
-            output = f"培养方案\n"
-            output += f"共 {count} 门课程要求\n\n"
-            
-            # 按课程类型分组
-            by_type = {}
-            for course in plan:
-                course_type = course.get("课程类型", "其他")
-                if course_type not in by_type:
-                    by_type[course_type] = []
-                by_type[course_type].append(course)
-            
-            for course_type, courses in by_type.items():
-                output += f"【{course_type}】\n"
-                total_credits = sum(c.get("学分", 0) for c in courses)
-                output += f"  课程数: {len(courses)} | 总学分: {total_credits}\n\n"
-                
-                for course in courses[:10]:  # 每个类型最多显示10门
-                    output += f"  - {course.get('课程名称', 'N/A')} ({course.get('学分', 0)}学分)\n"
-                
-                if len(courses) > 10:
-                    output += f"  ... 还有 {len(courses) - 10} 门课程\n"
-                
-                output += "\n"
-            
-            return output
+            return _render_training_plan(result["data"], result.get("count"))
         else:
             return f"查询失败: {result.get('message', '未知错误')}"
     
