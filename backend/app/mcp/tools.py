@@ -214,13 +214,11 @@ def _format_cached_grades(username: str, semester: str = "") -> Optional[str]:
         ]
 
     output = f"共查询到 {len(grade_list)} 条成绩记录\n\n"
-    for i, grade in enumerate(grade_list[:20], 1):
+    for i, grade in enumerate(grade_list, 1):
         output += f"{i}. {grade.get('课程名称', 'N/A')}\n"
         output += f"   成绩: {grade.get('成绩', 'N/A')} | 学分: {grade.get('学分', 'N/A')}\n"
         output += f"   学期: {grade.get('开课学期', grade.get('学期', 'N/A'))} | 性质: {grade.get('课程性质', 'N/A')}\n\n"
 
-    if len(grade_list) > 20:
-        output += f"... 还有 {len(grade_list) - 20} 条记录未显示\n"
     if status and status.get("cached_at"):
         output += f"数据来源: 平台缓存 ({status.get('cached_at')})\n"
     return output
@@ -247,14 +245,11 @@ async def query_grades(username: str, semester: str = "") -> str:
             
             # 格式化输出
             output = f"共查询到 {count} 条成绩记录\n\n"
-            for i, grade in enumerate(grades[:20], 1):  # 最多显示20条
+            for i, grade in enumerate(grades, 1):
                 output += f"{i}. {grade.get('课程名称', 'N/A')}\n"
                 output += f"   成绩: {grade.get('成绩', 'N/A')} | 学分: {grade.get('学分', 'N/A')}\n"
                 output += f"   学期: {grade.get('学期', 'N/A')} | 性质: {grade.get('课程性质', 'N/A')}\n\n"
-            
-            if len(grades) > 20:
-                output += f"... 还有 {len(grades) - 20} 条记录未显示\n"
-            
+
             return output
         else:
             return f"查询失败: {result.get('message', '未知错误')}"
