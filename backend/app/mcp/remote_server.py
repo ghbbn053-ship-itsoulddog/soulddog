@@ -74,7 +74,11 @@ async def _call_bound_tool(tool_name: str, params: Dict[str, Any] | None = None)
 def _build_remote_server():
     from mcp.server.fastmcp import FastMCP
 
-    remote_mcp_server = FastMCP("soulddog-platform-remote")
+    remote_mcp_server = FastMCP(
+        "soulddog-platform-remote",
+        streamable_http_path="/",
+        sse_path="/",
+    )
 
     @remote_mcp_server.tool()
     async def query_grades(semester: str = "") -> str:
