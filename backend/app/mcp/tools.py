@@ -10,6 +10,7 @@ import logging
 import requests
 from sqlalchemy.orm import Session
 
+from education_options import EducationOptions
 from app.models.base import SessionLocal
 from app.services.education_cache import get_education_cache_service
 from app.services.session_store import get_session_store
@@ -61,6 +62,18 @@ def _load_cached_section(username: str, key: str):
     return payload.get(key), status
 
 
+def _current_semester() -> str:
+    try:
+        return str(EducationOptions.get_current_semester() or "").strip()
+    except Exception:
+        return ""
+
+
+def _resolve_semester(semester: str = "") -> str:
+    normalized = str(semester or "").strip()
+    return normalized or _current_semester()
+
+
 def _format_cached_personal_info(username: str) -> Optional[str]:
     info, status = _load_cached_section(username, "个人信息")
     if not info:
@@ -81,13 +94,14 @@ def _format_cached_schedule(username: str, semester: str = "") -> Optional[str]:
     if not schedule:
         return None
 
-    actual_semester = str(schedule.get("学期") or semester or "当前学期")
+    target_semester = _resolve_semester(semester)
+    actual_semester = str(schedule.get("学期") or target_semester or "当前学期")
     courses = list(schedule.get("课程列表") or [])
-    if semester:
-        filtered = [course for course in courses if str(course.get("学期") or "") == semester]
+    if target_semester:
+        filtered = [course for course in courses if str(course.get("学期") or "") == target_semester]
         if filtered:
             courses = filtered
-            actual_semester = semester
+            actual_semester = target_semester
 
     output = f"{actual_semester} 学期课表\n"
     output += f"共 {len(courses)} 门课程\n\n"
@@ -179,13 +193,14 @@ def _format_cached_exam_schedule(username: str, semester: str = "") -> Optional[
     if not exam_data:
         return None
 
-    actual_semester = str(exam_data.get("学期") or semester or "当前学期")
+    target_semester = _resolve_semester(semester)
+    actual_semester = str(exam_data.get("学期") or target_semester or "当前学期")
     exams = list(exam_data.get("考试列表") or [])
-    if semester:
-        filtered = [exam for exam in exams if str(exam.get("学期") or "") == semester]
+    if target_semester:
+        filtered = [exam for exam in exams if str(exam.get("学期") or "") == target_semester]
         if filtered:
             exams = filtered
-            actual_semester = semester
+            actual_semester = target_semester
 
     output = f"{actual_semester} 学期考试安排\n"
     output += f"共 {len(exams)} 门考试\n\n"
@@ -206,11 +221,12 @@ def _format_cached_grades(username: str, semester: str = "") -> Optional[str]:
     if not grades_data:
         return None
 
+    target_semester = _resolve_semester(semester)
     grade_list = list(grades_data.get("成绩列表") or [])
-    if semester:
+    if target_semester:
         grade_list = [
             grade for grade in grade_list
-            if str(grade.get("开课学期") or grade.get("学期") or "") == semester
+            if str(grade.get("开课学期") or grade.get("学期") or "") == target_semester
         ]
 
     output = f"共查询到 {len(grade_list)} 条成绩记录\n\n"
@@ -230,21 +246,22 @@ async def query_grades(username: str, semester: str = "") -> str:
     
     Args:
         username: 学号
-        semester: 学期，如"2024-2025-1"，空则查询所有成绩
+        semester: 学期，如"2024-2025-1"，空则默认查询当前学期
     
     Returns:
         成绩列表的JSON字符串，包含课程名称、成绩、学分等信息
     """
     try:
+        target_semester = _resolve_semester(semester)
         scraper = _get_scraper(username)
-        result = scraper.get_grades(kksj=semester)
+        result = scraper.get_grades(kksj=target_semester)
         
         if result["success"]:
             grades = result["data"]
             count = result.get("count", len(grades))
             
             # 格式化输出
-            output = f"共查询到 {count} 条成绩记录\n\n"
+            output = f"{target_semester or '当前学期'} 共查询到 {count} 条成绩记录\n\n"
             for i, grade in enumerate(grades, 1):
                 output += f"{i}. {grade.get('课程名称', 'N/A')}\n"
                 output += f"   成绩: {grade.get('成绩', 'N/A')} | 学分: {grade.get('学分', 'N/A')}\n"
@@ -255,7 +272,7 @@ async def query_grades(username: str, semester: str = "") -> str:
             return f"查询失败: {result.get('message', '未知错误')}"
     
     except ValueError as e:
-        cached = _format_cached_grades(username, semester)
+        cached = _format_cached_grades(username, target_semester)
         if cached:
             return cached
         return str(e)
@@ -276,13 +293,14 @@ async def query_schedule(username: str, semester: str = "") -> str:
         课表信息，包含课程名称、时间、地点、教师等
     """
     try:
+        target_semester = _resolve_semester(semester)
         scraper = _get_scraper(username)
-        result = scraper.get_schedule(semester=semester)
+        result = scraper.get_schedule(semester=target_semester)
         
         if result["success"]:
             courses = result["data"]
             count = result.get("count", len(courses))
-            actual_semester = result.get("semester", semester)
+            actual_semester = result.get("semester", target_semester)
             
             output = f"{actual_semester} 学期课表\n"
             output += f"共 {count} 门课程\n\n"
@@ -310,7 +328,7 @@ async def query_schedule(username: str, semester: str = "") -> str:
             return f"查询失败: {result.get('message', '未知错误')}"
     
     except ValueError as e:
-        cached = _format_cached_schedule(username, semester)
+        cached = _format_cached_schedule(username, target_semester)
         if cached:
             return cached
         return str(e)
@@ -437,13 +455,14 @@ async def query_exam_schedule(username: str, semester: str = "") -> str:
         考试安排信息，包含考试时间、地点、课程等
     """
     try:
+        target_semester = _resolve_semester(semester)
         scraper = _get_scraper(username)
-        result = scraper.get_exam_schedule(semester=semester)
+        result = scraper.get_exam_schedule(semester=target_semester)
         
         if result["success"]:
             exams = result["data"]
             count = result.get("count", len(exams))
-            actual_semester = result.get("semester", semester)
+            actual_semester = result.get("semester", target_semester)
             
             output = f"{actual_semester} 学期考试安排\n"
             output += f"共 {count} 门考试\n\n"
@@ -462,7 +481,7 @@ async def query_exam_schedule(username: str, semester: str = "") -> str:
             return f"查询失败: {result.get('message', '未知错误')}"
     
     except ValueError as e:
-        cached = _format_cached_exam_schedule(username, semester)
+        cached = _format_cached_exam_schedule(username, target_semester)
         if cached:
             return cached
         return str(e)
