@@ -47,6 +47,11 @@ def _get_current_username() -> str:
     return owner_username
 
 
+def _needs_education_binding(tool_meta: dict) -> bool:
+    capabilities = tool_meta.get("capabilities") or []
+    return any(str(capability).startswith(EDUCATION_CAPABILITY_PREFIXES) for capability in capabilities)
+
+
 async def _call_bound_tool(tool_name: str, params: Dict[str, Any] | None = None) -> str:
     registry = get_mcp_registry()
     if not registry.has_tool(tool_name):
@@ -54,17 +59,12 @@ async def _call_bound_tool(tool_name: str, params: Dict[str, Any] | None = None)
 
     username = _get_current_username()
     tool_meta = registry.get_tool_meta(tool_name) or {}
-    capabilities = tool_meta.get("capabilities") or []
-    service_scope = _tool_scope(tool_meta)
-
-    needs_education_binding = service_scope == "web_internal_service" or any(
-        str(capability).startswith(EDUCATION_CAPABILITY_PREFIXES) for capability in capabilities
-    )
+    needs_education_binding = _needs_education_binding(tool_meta)
     if needs_education_binding:
         db = SessionLocal()
         try:
             if not get_agent_access_service().has_active_binding(db, username, "education"):
-                raise ValueError("教务服务绑定未激活，请先在 Web 端重新完成教务系统登录")
+                raise ValueError("教务能力当前不可用：既没有有效缓存，也没有可用登录会话，请先在 Web 端同步一次教务数据")
         finally:
             db.close()
 

@@ -8,7 +8,9 @@ from typing import Any, Dict, List, Optional
 from scraper import JwxtScraper
 from sqlalchemy.orm import Session
 
+from app.models import EducationData, User
 from app.models.platform import AgentAccessToken, ExternalServiceBinding
+from app.services.education_cache import get_education_cache_service
 from app.services.session_store import get_session_store
 
 
@@ -138,17 +140,71 @@ class AgentAccessService:
         db.add(binding)
         db.commit()
 
-    def has_active_binding(self, db: Session, owner_username: str, service_name: str) -> bool:
-        binding = self.get_binding(db, owner_username, service_name)
-        if not binding or binding.status != "active":
+    def _has_education_cache(self, db: Session, owner_username: str) -> bool:
+        bundle = get_education_cache_service().get_bundle(db, owner_username)
+        if bundle and bundle.education_data:
+            return True
+
+        user = db.query(User).filter(User.username == owner_username).first()
+        if not user:
             return False
+        return bool(db.query(EducationData).filter(EducationData.user_id == user.id).first())
 
+    def _get_or_create_binding(self, db: Session, owner_username: str, service_name: str) -> ExternalServiceBinding:
+        binding = self.get_binding(db, owner_username, service_name)
+        if binding:
+            return binding
+
+        binding = ExternalServiceBinding(
+            owner_username=owner_username,
+            service_name=service_name,
+            auth_type="web_session",
+            status="pending",
+        )
+        db.add(binding)
+        db.flush()
+        return binding
+
+    def _refresh_education_binding(self, db: Session, owner_username: str) -> ExternalServiceBinding:
+        session_store = get_session_store()
+        current_session = session_store.get_user_session(owner_username)
+        has_active_session = bool(current_session)
+        has_live_session = self._is_education_session_alive(owner_username) if current_session else False
+        has_cache = self._has_education_cache(db, owner_username)
+
+        education = self._get_or_create_binding(db, owner_username, "education")
+        education.display_name = owner_username
+        education.status = "active" if (has_live_session or has_cache) else "pending"
+
+        metadata = dict(education.metadata_json or {})
+        metadata.update(
+            {
+                "login_source": "web_login",
+                "has_active_session": has_active_session,
+                "has_live_session": has_live_session,
+                "has_cache": has_cache,
+                "binding_mode": "cache_or_live_session",
+            }
+        )
+        education.metadata_json = metadata
+
+        if has_live_session:
+            education.last_verified_at = datetime.now(timezone.utc)
+        elif not has_cache:
+            education.last_verified_at = None
+
+        db.add(education)
+        db.commit()
+        db.refresh(education)
+        return education
+
+    def has_active_binding(self, db: Session, owner_username: str, service_name: str) -> bool:
         if service_name == "education":
-            if not self._is_education_session_alive(owner_username):
-                self._deactivate_binding(db, binding)
-                return False
+            binding = self._refresh_education_binding(db, owner_username)
+            return binding.status == "active"
 
-        return True
+        binding = self.get_binding(db, owner_username, service_name)
+        return bool(binding and binding.status == "active")
 
     def _is_education_session_alive(self, owner_username: str) -> bool:
         session_store = get_session_store()
@@ -172,38 +228,7 @@ class AgentAccessService:
             return False
 
     def sync_default_bindings(self, db: Session, owner_username: str) -> List[Dict[str, Any]]:
-        session_store = get_session_store()
-        current_session = session_store.get_user_session(owner_username)
-        rows = []
-
-        education = (
-            db.query(ExternalServiceBinding)
-            .filter(
-                ExternalServiceBinding.owner_username == owner_username,
-                ExternalServiceBinding.service_name == "education",
-            )
-            .first()
-        )
-        if not education:
-            education = ExternalServiceBinding(
-                owner_username=owner_username,
-                service_name="education",
-                auth_type="web_session",
-                status="pending",
-            )
-            db.add(education)
-
-        has_live_session = self._is_education_session_alive(owner_username) if current_session else False
-        education.status = "active" if has_live_session else "pending"
-        education.display_name = owner_username
-        education.metadata_json = {
-            "login_source": "web_login",
-            "has_active_session": bool(current_session),
-            "has_live_session": has_live_session,
-        }
-        education.last_verified_at = datetime.now(timezone.utc) if has_live_session else None
-        db.add(education)
-        db.commit()
+        self._refresh_education_binding(db, owner_username)
 
         rows = (
             db.query(ExternalServiceBinding)

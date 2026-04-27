@@ -8,6 +8,10 @@ from typing import Optional
 import json
 import logging
 import requests
+from sqlalchemy.orm import Session
+
+from app.models.base import SessionLocal
+from app.services.education_cache import get_education_cache_service
 from app.services.session_store import get_session_store
 
 logger = logging.getLogger(__name__)
@@ -36,6 +40,190 @@ def _get_scraper(username: str):
     
     from scraper import JwxtScraper
     return JwxtScraper(session, server_url)
+
+
+def _load_cached_bundle(username: str):
+    db: Session = SessionLocal()
+    try:
+        return get_education_cache_service().get_bundle(db, username)
+    finally:
+        db.close()
+
+
+def _load_cached_section(username: str, key: str):
+    bundle = _load_cached_bundle(username)
+    if not bundle or not bundle.education_data:
+        return None, None
+
+    svc = get_education_cache_service()
+    payload = svc.build_payload(bundle)
+    status = svc.build_status(bundle, username)
+    return payload.get(key), status
+
+
+def _format_cached_personal_info(username: str) -> Optional[str]:
+    info, status = _load_cached_section(username, "个人信息")
+    if not info:
+        return None
+
+    lines = ["个人信息", ""]
+    for key, value in info.items():
+        if value and value != "N/A":
+            lines.append(f"{key}: {value}")
+    if status and status.get("cached_at"):
+        lines.append("")
+        lines.append(f"数据来源: 平台缓存 ({status.get('cached_at')})")
+    return "\n".join(lines)
+
+
+def _format_cached_schedule(username: str, semester: str = "") -> Optional[str]:
+    schedule, status = _load_cached_section(username, "课表信息")
+    if not schedule:
+        return None
+
+    actual_semester = str(schedule.get("学期") or semester or "当前学期")
+    courses = list(schedule.get("课程列表") or [])
+    if semester:
+        filtered = [course for course in courses if str(course.get("学期") or "") == semester]
+        if filtered:
+            courses = filtered
+            actual_semester = semester
+
+    output = f"{actual_semester} 学期课表\n"
+    output += f"共 {len(courses)} 门课程\n\n"
+
+    schedule_by_day = {}
+    for course in courses:
+        day = course.get("星期", "")
+        schedule_by_day.setdefault(day, []).append(course)
+
+    day_order = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+    for day in day_order:
+        if day in schedule_by_day:
+            output += f"【{day}】\n"
+            for course in schedule_by_day[day]:
+                output += f"  {course.get('节次', '')} - {course.get('课程名称', '')}\n"
+                output += f"    教师: {course.get('教师', '')} | 地点: {course.get('地点', '')}\n"
+                output += f"    周次: {course.get('周次', '')}\n\n"
+
+    if status and status.get("cached_at"):
+        output += f"数据来源: 平台缓存 ({status.get('cached_at')})\n"
+    return output
+
+
+def _format_cached_academic_progress(username: str) -> Optional[str]:
+    data, status = _load_cached_section(username, "学业进度")
+    if not data:
+        return None
+
+    output = "学业进度概览\n\n"
+    total_required = data.get("总学分要求") or data.get("总学分")
+    earned = data.get("已获学分") or data.get("已修学分")
+    remaining = data.get("还需学分") or data.get("未修学分")
+    if total_required not in (None, ""):
+        output += f"总学分要求: {total_required}\n"
+    if earned not in (None, ""):
+        output += f"已获学分: {earned}\n"
+    if remaining not in (None, ""):
+        output += f"还需学分: {remaining}\n"
+
+    course_list = list(data.get("课程列表") or [])
+    if course_list:
+        output += "\n课程进度:\n"
+        for item in course_list[:20]:
+            name = item.get("课程名称") or item.get("模块名称") or "N/A"
+            status_text = item.get("状态") or item.get("完成情况") or ""
+            credit = item.get("学分") or item.get("已修") or ""
+            details = " | ".join(part for part in [status_text, f"学分: {credit}" if credit != "" else ""] if part)
+            output += f"  - {name}"
+            if details:
+                output += f" ({details})"
+            output += "\n"
+
+    if status and status.get("cached_at"):
+        output += f"\n数据来源: 平台缓存 ({status.get('cached_at')})"
+    return output
+
+
+def _format_cached_training_plan(username: str) -> Optional[str]:
+    plan, status = _load_cached_section(username, "培养方案")
+    if not plan:
+        return None
+
+    course_list = list(plan.get("课程列表") or [])
+    output = "培养方案\n"
+    output += f"共 {len(course_list)} 门课程要求\n\n"
+
+    by_type = {}
+    for course in course_list:
+        course_type = course.get("课程类型", "其他")
+        by_type.setdefault(course_type, []).append(course)
+
+    for course_type, courses in by_type.items():
+        total_credits = sum(float(c.get("学分", 0) or 0) for c in courses)
+        output += f"【{course_type}】\n"
+        output += f"  课程数: {len(courses)} | 总学分: {total_credits}\n\n"
+        for course in courses[:10]:
+            output += f"  - {course.get('课程名称', 'N/A')} ({course.get('学分', 0)}学分)\n"
+        if len(courses) > 10:
+            output += f"  ... 还有 {len(courses) - 10} 门课程\n"
+        output += "\n"
+
+    if status and status.get("cached_at"):
+        output += f"数据来源: 平台缓存 ({status.get('cached_at')})\n"
+    return output
+
+
+def _format_cached_exam_schedule(username: str, semester: str = "") -> Optional[str]:
+    exam_data, status = _load_cached_section(username, "考试安排")
+    if not exam_data:
+        return None
+
+    actual_semester = str(exam_data.get("学期") or semester or "当前学期")
+    exams = list(exam_data.get("考试列表") or [])
+    if semester:
+        filtered = [exam for exam in exams if str(exam.get("学期") or "") == semester]
+        if filtered:
+            exams = filtered
+            actual_semester = semester
+
+    output = f"{actual_semester} 学期考试安排\n"
+    output += f"共 {len(exams)} 门考试\n\n"
+    exams_sorted = sorted(exams, key=lambda x: x.get("考试时间", ""))
+    for exam in exams_sorted:
+        output += f"📅 {exam.get('考试时间', 'N/A')}\n"
+        output += f"   课程: {exam.get('课程名称', 'N/A')}\n"
+        output += f"   地点: {exam.get('考试地点', 'N/A')}\n"
+        output += f"   方式: {exam.get('考试方式', 'N/A')}\n\n"
+
+    if status and status.get("cached_at"):
+        output += f"数据来源: 平台缓存 ({status.get('cached_at')})\n"
+    return output
+
+
+def _format_cached_grades(username: str, semester: str = "") -> Optional[str]:
+    grades_data, status = _load_cached_section(username, "成绩信息")
+    if not grades_data:
+        return None
+
+    grade_list = list(grades_data.get("成绩列表") or [])
+    if semester:
+        grade_list = [
+            grade for grade in grade_list
+            if str(grade.get("开课学期") or grade.get("学期") or "") == semester
+        ]
+
+    output = f"共查询到 {len(grade_list)} 条成绩记录\n\n"
+    for i, grade in enumerate(grade_list[:20], 1):
+        output += f"{i}. {grade.get('课程名称', 'N/A')}\n"
+        output += f"   成绩: {grade.get('成绩', 'N/A')} | 学分: {grade.get('学分', 'N/A')}\n"
+        output += f"   学期: {grade.get('开课学期', grade.get('学期', 'N/A'))} | 性质: {grade.get('课程性质', 'N/A')}\n\n"
+
+    if len(grade_list) > 20:
+        output += f"... 还有 {len(grade_list) - 20} 条记录未显示\n"
+    if status and status.get("cached_at"):
+        output += f"数据来源: 平台缓存 ({status.get('cached_at')})\n"
+    return output
 
 
 @mcp.tool()
@@ -72,6 +260,9 @@ async def query_grades(username: str, semester: str = "") -> str:
             return f"查询失败: {result.get('message', '未知错误')}"
     
     except ValueError as e:
+        cached = _format_cached_grades(username, semester)
+        if cached:
+            return cached
         return str(e)
     except Exception as e:
         logger.error(f"查询成绩失败: {e}")
@@ -124,6 +315,9 @@ async def query_schedule(username: str, semester: str = "") -> str:
             return f"查询失败: {result.get('message', '未知错误')}"
     
     except ValueError as e:
+        cached = _format_cached_schedule(username, semester)
+        if cached:
+            return cached
         return str(e)
     except Exception as e:
         logger.error(f"查询课表失败: {e}")
@@ -171,6 +365,9 @@ async def query_academic_progress(username: str) -> str:
             return f"查询失败: {result.get('message', '未知错误')}"
     
     except ValueError as e:
+        cached = _format_cached_academic_progress(username)
+        if cached:
+            return cached
         return str(e)
     except Exception as e:
         logger.error(f"查询学业进度失败: {e}")
@@ -224,6 +421,9 @@ async def query_training_plan(username: str) -> str:
             return f"查询失败: {result.get('message', '未知错误')}"
     
     except ValueError as e:
+        cached = _format_cached_training_plan(username)
+        if cached:
+            return cached
         return str(e)
     except Exception as e:
         logger.error(f"查询培养方案失败: {e}")
@@ -267,6 +467,9 @@ async def query_exam_schedule(username: str, semester: str = "") -> str:
             return f"查询失败: {result.get('message', '未知错误')}"
     
     except ValueError as e:
+        cached = _format_cached_exam_schedule(username, semester)
+        if cached:
+            return cached
         return str(e)
     except Exception as e:
         logger.error(f"查询考试安排失败: {e}")
@@ -300,6 +503,9 @@ async def query_personal_info(username: str) -> str:
             return f"查询失败: {result.get('message', '未知错误')}"
     
     except ValueError as e:
+        cached = _format_cached_personal_info(username)
+        if cached:
+            return cached
         return str(e)
     except Exception as e:
         logger.error(f"查询个人信息失败: {e}")

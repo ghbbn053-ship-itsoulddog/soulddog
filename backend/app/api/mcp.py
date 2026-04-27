@@ -74,6 +74,14 @@ def _tool_scope(item: dict) -> str:
     )
 
 
+def _needs_education_binding(tool_meta: dict) -> bool:
+    capabilities = tool_meta.get("capabilities") or []
+    return any(
+        str(capability).startswith(EDUCATION_CAPABILITY_PREFIXES)
+        for capability in capabilities
+    )
+
+
 def _resolve_call_identity(
     http_request: Request,
     db: Session,
@@ -93,13 +101,12 @@ def _resolve_call_identity(
         if allowed_boundaries and boundary not in allowed_boundaries:
             raise HTTPException(status_code=403, detail=f"当前 Agent Token 无权调用 {boundary} 类型能力")
 
-        capabilities = tool_meta.get("capabilities") or []
-        service_scope = _tool_scope(tool_meta)
-        if service_scope == "web_internal_service" or any(
-            str(capability).startswith(EDUCATION_CAPABILITY_PREFIXES) for capability in capabilities
-        ):
+        if _needs_education_binding(tool_meta):
             if not get_agent_access_service().has_active_binding(db, owner_username, "education"):
-                raise HTTPException(status_code=403, detail="教务服务绑定未激活，请先在 Web 端重新完成教务系统登录")
+                raise HTTPException(
+                    status_code=403,
+                    detail="教务能力当前不可用：既没有有效缓存，也没有可用登录会话，请先在 Web 端同步一次教务数据",
+                )
 
         return owner_username, "agent"
 
