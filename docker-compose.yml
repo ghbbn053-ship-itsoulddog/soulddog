@@ -1,8 +1,7 @@
-name: soulddog
-
 services:
   postgres:
     image: postgres:15-alpine
+    container_name: campus-ai-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -20,6 +19,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    container_name: campus-ai-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
@@ -34,6 +34,7 @@ services:
 
   etcd:
     image: quay.io/coreos/etcd:v3.5.5
+    container_name: campus-ai-etcd
     restart: unless-stopped
     environment:
       - ETCD_AUTO_COMPACTION_MODE=revision
@@ -51,6 +52,7 @@ services:
 
   minio:
     image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    container_name: campus-ai-minio
     restart: unless-stopped
     environment:
       MINIO_ACCESS_KEY: minioadmin
@@ -69,6 +71,7 @@ services:
 
   milvus:
     image: milvusdb/milvus:v2.4.1
+    container_name: campus-ai-milvus
     restart: unless-stopped
     command: ["milvus", "run", "standalone"]
     environment:
@@ -92,6 +95,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev  # 开发模式，支持热重载
+    container_name: campus-ai-frontend
     restart: unless-stopped
     ports:
       - "5000:5000"
@@ -120,6 +124,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    container_name: campus-ai-backend
     restart: unless-stopped
     environment:
       - POSTGRES_HOST=postgres
@@ -158,3 +163,7 @@ volumes:
   etcd_data:
   minio_data:
   milvus_data:
+
+networks:
+  default:
+    name: campus-ai-network
