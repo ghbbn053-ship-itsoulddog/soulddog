@@ -3,9 +3,6 @@ from __future__ import annotations
 from contextvars import ContextVar
 from typing import Any, Dict
 
-from fastapi.responses import JSONResponse
-from starlette.datastructures import Headers
-
 from app.models.base import SessionLocal
 from app.services import get_mcp_registry
 from app.services.agent_access import get_agent_access_service
@@ -29,51 +26,12 @@ def _tool_scope(item: dict) -> str:
     )
 
 
-def _resolve_agent_identity_from_scope(scope: dict) -> Dict[str, Any] | None:
-    headers = Headers(scope=scope)
-    auth_header = (headers.get("authorization") or "").strip()
-    if not auth_header.lower().startswith("bearer "):
-        return None
-
-    raw_token = auth_header[7:].strip()
-    if not raw_token:
-        return None
-
-    db = SessionLocal()
-    try:
-        return get_agent_access_service().resolve_bearer_token(db, raw_token)
-    finally:
-        db.close()
+def set_remote_mcp_identity(identity: Dict[str, Any] | None):
+    return _current_identity.set(identity)
 
 
-class AgentTokenAuthMiddleware:
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope.get("type") != "http":
-            await self.app(scope, receive, send)
-            return
-
-        method = str(scope.get("method") or "").upper()
-        if method == "OPTIONS":
-            await self.app(scope, receive, send)
-            return
-
-        identity = _resolve_agent_identity_from_scope(scope)
-        if not identity:
-            response = JSONResponse(
-                {"success": False, "error": "缺少有效的 Agent Access Token"},
-                status_code=401,
-            )
-            await response(scope, receive, send)
-            return
-
-        token = _current_identity.set(identity)
-        try:
-            await self.app(scope, receive, send)
-        finally:
-            _current_identity.reset(token)
+def reset_remote_mcp_identity(token) -> None:
+    _current_identity.reset(token)
 
 
 def _get_current_identity() -> Dict[str, Any]:
@@ -165,11 +123,3 @@ def _build_remote_server():
 
 def create_remote_mcp_server():
     return _build_remote_server()
-
-
-def create_streamable_http_mcp_app(remote_mcp_server):
-    return AgentTokenAuthMiddleware(remote_mcp_server.streamable_http_app())
-
-
-def create_sse_mcp_app(remote_mcp_server):
-    return AgentTokenAuthMiddleware(remote_mcp_server.sse_app())

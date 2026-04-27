@@ -7,6 +7,7 @@ import contextlib
 import time
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
@@ -37,6 +38,8 @@ from app.api.agents import router as agents_router
 from app.api.intake import router as intake_router
 from app.api.composition import router as composition_router
 from app.api.agent_access import router as agent_access_router
+from app.models.base import SessionLocal
+from app.security_agent import resolve_agent_identity
 
 app = FastAPI(title="教务系统 AI 助手 API", version="1.0.0")
 app.state.session_store = session_store
@@ -68,13 +71,37 @@ async def trace_and_metrics_middleware(request, call_next):
     t0 = time.perf_counter()
     path = request.url.path
     method = request.method
+    remote_identity_token = None
+    remote_identity_db = None
     try:
+        if path == "/mcp" or path.startswith("/mcp/") or path == "/sse" or path.startswith("/sse/"):
+            remote_identity_db = SessionLocal()
+            identity = resolve_agent_identity(request, remote_identity_db)
+            if not identity:
+                return JSONResponse({"success": False, "error": "缺少有效的 Agent Access Token"}, status_code=401)
+            request.state.remote_mcp_identity = identity
+            try:
+                from app.mcp.remote_server import set_remote_mcp_identity
+
+                remote_identity_token = set_remote_mcp_identity(identity)
+            except Exception:
+                remote_identity_token = None
         response = await call_next(request)
     except Exception:
         elapsed = time.perf_counter() - t0
         HTTP_REQUEST_DURATION.labels(method=method, path=path).observe(elapsed)
         HTTP_REQUEST_TOTAL.labels(method=method, path=path, status="500").inc()
         raise
+    finally:
+        if remote_identity_token is not None:
+            try:
+                from app.mcp.remote_server import reset_remote_mcp_identity
+
+                reset_remote_mcp_identity(remote_identity_token)
+            except Exception:
+                pass
+        if remote_identity_db is not None:
+            remote_identity_db.close()
     elapsed = time.perf_counter() - t0
     status = str(getattr(response, "status_code", 200))
     response.headers["x-trace-id"] = trace_id
@@ -104,15 +131,11 @@ app.include_router(chat.router)
 app.include_router(mcp_router.router)
 
 try:
-    from app.mcp.remote_server import (
-        create_remote_mcp_server,
-        create_streamable_http_mcp_app,
-        create_sse_mcp_app,
-    )
+    from app.mcp.remote_server import create_remote_mcp_server
 
     remote_mcp_server = create_remote_mcp_server()
-    app.mount("/mcp", create_streamable_http_mcp_app(remote_mcp_server))
-    app.mount("/sse", create_sse_mcp_app(remote_mcp_server))
+    app.mount("/mcp", remote_mcp_server.streamable_http_app())
+    app.mount("/sse", remote_mcp_server.sse_app())
     app.state.remote_mcp_server = remote_mcp_server
     app.state.remote_mcp_enabled = True
 except Exception as e:
