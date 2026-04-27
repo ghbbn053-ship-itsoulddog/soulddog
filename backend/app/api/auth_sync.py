@@ -250,6 +250,7 @@ async def login(request: Request, background_tasks: BackgroundTasks):
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("【登录】处理失败")
         raise HTTPException(status_code=500, detail=f"登录失败: {str(e)}")
 
 

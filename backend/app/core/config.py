@@ -31,6 +31,17 @@ PUBLIC_SERVERS = [
 ]
 
 
+def normalize_jwxt_base_url(raw_url: str) -> str:
+    normalized = (raw_url or "").strip()
+    if not normalized:
+        return ""
+    if not normalized.endswith("/"):
+        normalized = f"{normalized}/"
+    if "/jsxsd/" not in normalized:
+        normalized = f"{normalized}jsxsd/"
+    return normalized
+
+
 def get_server_candidates(preferred_index: int | None = None) -> list[str]:
     """
     返回教务入口候选列表。
@@ -41,10 +52,9 @@ def get_server_candidates(preferred_index: int | None = None) -> list[str]:
     4. 公网 JWXT_BASE_URL
     """
     candidates: list[str] = []
-    configured = (os.getenv("EDUCATION_SYSTEM_URL", "") or "").strip()
+    configured = normalize_jwxt_base_url(os.getenv("EDUCATION_SYSTEM_URL", "") or "")
     if configured:
-        normalized = configured if configured.endswith("/") else f"{configured}/"
-        candidates.append(normalized)
+        candidates.append(configured)
 
     ordered_servers = list(SERVERS)
     if preferred_index is not None and 0 <= preferred_index < len(SERVERS):
