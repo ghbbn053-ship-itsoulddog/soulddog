@@ -104,11 +104,15 @@ app.include_router(chat.router)
 app.include_router(mcp_router.router)
 
 try:
-    from app.mcp.remote_server import create_remote_mcp_server
+    from app.mcp.remote_server import (
+        create_remote_mcp_server,
+        create_streamable_http_mcp_app,
+        create_sse_mcp_app,
+    )
 
     remote_mcp_server = create_remote_mcp_server()
-    app.mount("/mcp", remote_mcp_server.streamable_http_app())
-    app.mount("/sse", remote_mcp_server.sse_app())
+    app.mount("/mcp", create_streamable_http_mcp_app(remote_mcp_server))
+    app.mount("/sse", create_sse_mcp_app(remote_mcp_server))
     app.state.remote_mcp_server = remote_mcp_server
     app.state.remote_mcp_enabled = True
 except Exception as e:

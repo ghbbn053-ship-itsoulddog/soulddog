@@ -121,6 +121,7 @@ def _build_remote_server():
     remote_mcp_server = FastMCP(
         "soulddog-platform-remote",
         instructions="Remote MCP server for Souldog platform tools using Agent Access Token authorization.",
+        json_response=True,
         streamable_http_path="/",
         sse_path="/",
     )
@@ -170,3 +171,11 @@ def _build_remote_server():
 
 def create_remote_mcp_server():
     return _build_remote_server()
+
+
+def create_streamable_http_mcp_app(remote_mcp_server):
+    return AgentTokenAuthMiddleware(remote_mcp_server.streamable_http_app())
+
+
+def create_sse_mcp_app(remote_mcp_server):
+    return AgentTokenAuthMiddleware(remote_mcp_server.sse_app())
