@@ -113,6 +113,7 @@ export default function LoginPage() {
       if (data.success) {
         localStorage.setItem("username", username);
         setSyncStatus("syncing");
+        setError("");
         router.replace("/chat");
         return;
       }

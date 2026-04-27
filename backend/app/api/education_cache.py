@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models import get_db
 from app.security import enforce_username_isolation
+from app.services.agent_access import get_agent_access_service
 from app.services.education_cache import get_education_cache_service
 
 router = APIRouter(tags=["教务缓存"])
@@ -24,7 +25,27 @@ def _get_bundle(db: Session, username: str):
 async def education_cache_status(username: str, http_request: Request, db: Session = Depends(get_db)):
     enforce_username_isolation(http_request, username)
     svc, bundle = _get_bundle(db, username)
-    return svc.build_status(bundle, username)
+    status = svc.build_status(bundle, username)
+    bindings = get_agent_access_service().sync_default_bindings(db, username)
+    education_binding = next((item for item in bindings if item.get("service_name") == "education"), None)
+    metadata = (education_binding or {}).get("metadata_json") or {}
+    status["connection"] = {
+        "binding_status": (education_binding or {}).get("status", "pending"),
+        "auth_type": (education_binding or {}).get("auth_type", "web_session"),
+        "last_verified_at": (education_binding or {}).get("last_verified_at"),
+        "has_active_session": bool(metadata.get("has_active_session")),
+        "has_live_session": bool(metadata.get("has_live_session")),
+        "has_cache": bool(status.get("has_cache")),
+        "mode": metadata.get("binding_mode", "unknown"),
+        "label": (
+            "教务实时连接正常"
+            if metadata.get("has_live_session")
+            else "仅缓存可用"
+            if status.get("has_cache")
+            else "未连接"
+        ),
+    }
+    return status
 
 
 @router.get("/api/user/info/db")

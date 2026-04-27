@@ -61,18 +61,18 @@ class MCPRegistry:
         self.register(
             MCPToolSpec(
                 name="query_grades",
-                description="查询学生成绩",
+                description="查询学生成绩；可指定学期，不传则默认当前学期",
                 module_path="app.mcp.tools",
                 func_name="query_grades",
                 parameters={
                     "username": {"type": "string", "required": True, "description": "学号"},
-                    "semester": {"type": "string", "required": False, "description": "学期，如2024-2025-1"},
+                    "semester": {"type": "string", "required": False, "description": "学期，如2024-2025-1；不传默认当前学期"},
                 },
                 input_schema={
                     "type": "object",
                     "properties": {
                         "username": {"type": "string", "description": "学号"},
-                        "semester": {"type": "string", "description": "学期，如2024-2025-1"},
+                        "semester": {"type": "string", "description": "学期，如2024-2025-1；不传默认当前学期"},
                     },
                     "required": ["username"],
                 },
@@ -82,18 +82,18 @@ class MCPRegistry:
         self.register(
             MCPToolSpec(
                 name="query_schedule",
-                description="查询课程表",
+                description="查询课程表；可指定学期，不传则默认当前学期",
                 module_path="app.mcp.tools",
                 func_name="query_schedule",
                 parameters={
                     "username": {"type": "string", "required": True, "description": "学号"},
-                    "semester": {"type": "string", "required": False, "description": "学期"},
+                    "semester": {"type": "string", "required": False, "description": "学期；不传默认当前学期"},
                 },
                 input_schema={
                     "type": "object",
                     "properties": {
                         "username": {"type": "string", "description": "学号"},
-                        "semester": {"type": "string", "description": "学期"},
+                        "semester": {"type": "string", "description": "学期；不传默认当前学期"},
                     },
                     "required": ["username"],
                 },
@@ -103,7 +103,7 @@ class MCPRegistry:
         self.register(
             MCPToolSpec(
                 name="query_academic_progress",
-                description="查询学业进度和学分情况",
+                description="查询学业进度和学分情况，默认返回当前账号最近同步的进度数据",
                 module_path="app.mcp.tools",
                 func_name="query_academic_progress",
                 parameters={"username": {"type": "string", "required": True, "description": "学号"}},
@@ -113,7 +113,7 @@ class MCPRegistry:
         self.register(
             MCPToolSpec(
                 name="query_training_plan",
-                description="查询培养方案",
+                description="查询培养方案，默认返回当前账号最近同步的培养方案",
                 module_path="app.mcp.tools",
                 func_name="query_training_plan",
                 parameters={"username": {"type": "string", "required": True, "description": "学号"}},
@@ -123,12 +123,12 @@ class MCPRegistry:
         self.register(
             MCPToolSpec(
                 name="query_exam_schedule",
-                description="查询考试安排",
+                description="查询考试安排；可指定学期，不传则默认当前学期",
                 module_path="app.mcp.tools",
                 func_name="query_exam_schedule",
                 parameters={
                     "username": {"type": "string", "required": True, "description": "学号"},
-                    "semester": {"type": "string", "required": False, "description": "学期"},
+                    "semester": {"type": "string", "required": False, "description": "学期；不传默认当前学期"},
                 },
                 capabilities=["exam.query"],
             )

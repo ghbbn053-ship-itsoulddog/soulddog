@@ -14,6 +14,7 @@ import os
 import re
 from typing import Any, Dict, List
 
+from education_options import EducationOptions
 from app.services import get_model_provider_for_user
 from app.core.runtime import get_db
 from app.services.composition_manager import get_composition_manager
@@ -180,11 +181,22 @@ class AgentRuntimeService:
         semester_match = re.search(r"(20\d{2}-20\d{2}-[12])", message or "")
         week_match = re.search(r"(第?\s*\d{1,2}\s*周)", message or "")
         numeric_match = re.findall(r"\d{4,}", message or "")
+        current_semester = ""
+        try:
+            current_semester = str(EducationOptions.get_current_semester() or "").strip()
+        except Exception:
+            current_semester = ""
+
+        lowered = (message or "").lower()
         values: Dict[str, str] = {}
         if semester_match:
             values["semester"] = semester_match.group(1)
+        elif current_semester and any(token in lowered for token in ["当前学期", "这学期", "本学期", "最近学期"]):
+            values["semester"] = current_semester
         if week_match:
             values["week"] = re.sub(r"\s+", "", week_match.group(1))
+        elif any(token in lowered for token in ["本周", "这周", "当前周"]):
+            values["week"] = "本周"
         if numeric_match:
             values["numeric"] = numeric_match[0]
         return values

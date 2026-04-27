@@ -35,6 +35,16 @@ type EducationStatus = {
   has_cache?: boolean;
   freshness?: string;
   cached_at?: string | null;
+  connection?: {
+    binding_status?: string;
+    auth_type?: string;
+    last_verified_at?: string | null;
+    has_active_session?: boolean;
+    has_live_session?: boolean;
+    has_cache?: boolean;
+    mode?: string;
+    label?: string;
+  };
   sync?: {
     status?: string;
     message?: string;
@@ -149,6 +159,7 @@ export default function HomePage() {
   }, [API_BASE, router]);
 
   const freshness = useMemo(() => getFreshnessMeta(educationStatus), [educationStatus]);
+  const connection = educationStatus?.connection;
   const featuredWorkspace = useMemo(() => workspaces[0] || null, [workspaces]);
   const todayCourses = useMemo(() => schedule.slice(0, 3), [schedule]);
   const recentConversations = useMemo(() => conversations.slice(0, 6), [conversations]);
@@ -317,6 +328,62 @@ export default function HomePage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="bg-white/90">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <GraduationCap className="h-4 w-4 text-slate-500" />
+              <div>
+                <CardTitle className="text-base">教务连接状态</CardTitle>
+                <CardDescription>这里直接显示前端当前登录是否真的还连着教务系统，而不是只看有没有缓存。</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-3">
+            <Card className="bg-[hsl(var(--muted))] shadow-none">
+              <CardContent className="p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">当前状态</div>
+                <div className="mt-2 flex items-center gap-2">
+                  <Badge variant={connection?.has_live_session ? "success" : connection?.has_cache ? "warning" : "destructive"}>
+                    {connection?.label || "未连接"}
+                  </Badge>
+                  <span className="text-sm text-slate-600">{connection?.binding_status || "pending"}</span>
+                </div>
+                <div className="mt-2 text-xs text-slate-500">
+                  {connection?.has_live_session
+                    ? "当前前端登录态仍可直连教务系统。"
+                    : connection?.has_cache
+                      ? "当前主要依赖已同步缓存，实时教务会话可能已失效。"
+                      : "当前既没有可用缓存，也没有可用教务会话。"}
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-[hsl(var(--muted))] shadow-none">
+              <CardContent className="p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">登录会话</div>
+                <div className="mt-2 text-2xl font-semibold text-slate-950">
+                  {connection?.has_live_session ? "在线" : connection?.has_active_session ? "待校验" : "离线"}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {connection?.last_verified_at ? `最近校验 ${new Date(connection.last_verified_at).toLocaleString("zh-CN")}` : "最近没有可验证的教务会话"}
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-[hsl(var(--muted))] shadow-none">
+              <CardContent className="p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">缓存状态</div>
+                <div className="mt-2 text-2xl font-semibold text-slate-950">
+                  {educationStatus?.has_cache ? "可用" : "暂无"}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {educationStatus?.cached_at
+                    ? `缓存时间 ${new Date(educationStatus.cached_at).toLocaleString("zh-CN")}`
+                    : "尚未完成一次可用的教务同步"}
+                </div>
+              </CardContent>
+            </Card>
+          </CardContent>
+        </Card>
 
         <Card className="bg-white/90">
           <CardHeader>
