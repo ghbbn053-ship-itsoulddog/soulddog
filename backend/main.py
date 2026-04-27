@@ -3,11 +3,13 @@
 职责：应用装配、路由注册、基础健康检查。
 """
 
+import contextlib
+import time
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
-import time
 
 from app.core.runtime import DB_AVAILABLE, create_tables, logger, session_store
 from app.core.observability import (
@@ -35,6 +37,11 @@ from app.api.agents import router as agents_router
 from app.api.intake import router as intake_router
 from app.api.composition import router as composition_router
 from app.api.agent_access import router as agent_access_router
+from app.mcp.remote_server import (
+    create_sse_mcp_app,
+    create_streamable_http_mcp_app,
+    remote_mcp_server,
+)
 
 app = FastAPI(title="教务系统 AI 助手 API", version="1.0.0")
 app.state.session_store = session_store
@@ -98,10 +105,17 @@ app.include_router(suggestions_router.router)
 app.include_router(chat.router)
 app.include_router(mcp_router.router)
 
+# 原生远程 MCP transport
+app.mount("/mcp", create_streamable_http_mcp_app())
+app.mount("/sse", create_sse_mcp_app())
+
 
 @app.on_event("startup")
 async def startup_event():
     """App 启动时自动创建数据库表"""
+    app.state.remote_mcp_exit_stack = contextlib.AsyncExitStack()
+    await app.state.remote_mcp_exit_stack.enter_async_context(remote_mcp_server.session_manager.run())
+
     if DB_AVAILABLE:
         try:
             create_tables()
@@ -121,6 +135,13 @@ async def startup_event():
         logger.error(f"❌ Intake 初始化失败: {e}")
 
 
+@app.on_event("shutdown")
+async def shutdown_event():
+    exit_stack = getattr(app.state, "remote_mcp_exit_stack", None)
+    if exit_stack is not None:
+        await exit_stack.aclose()
+
+
 @app.get("/")
 async def root():
     return {
@@ -132,6 +153,8 @@ async def root():
             "login": "/api/login - 登录",
             "chat": "/api/chat/send - AI对话",
             "mcp": "/api/mcp/tools - MCP工具",
+            "remote_mcp_http": "/mcp - 原生远程 MCP streamable_http",
+            "remote_mcp_sse": "/sse - 原生远程 MCP SSE",
             "health": "/api/health - 健康检查",
         },
     }
