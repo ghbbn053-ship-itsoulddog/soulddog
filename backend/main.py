@@ -37,14 +37,12 @@ from app.api.agents import router as agents_router
 from app.api.intake import router as intake_router
 from app.api.composition import router as composition_router
 from app.api.agent_access import router as agent_access_router
-from app.mcp.remote_server import (
-    create_sse_mcp_app,
-    create_streamable_http_mcp_app,
-    remote_mcp_server,
-)
 
 app = FastAPI(title="教务系统 AI 助手 API", version="1.0.0")
 app.state.session_store = session_store
+app.state.remote_mcp_enabled = False
+app.state.remote_mcp_error = None
+app.state.remote_mcp_exit_stack = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -105,16 +103,32 @@ app.include_router(suggestions_router.router)
 app.include_router(chat.router)
 app.include_router(mcp_router.router)
 
-# 原生远程 MCP transport
-app.mount("/mcp", create_streamable_http_mcp_app())
-app.mount("/sse", create_sse_mcp_app())
+try:
+    from app.mcp.remote_server import create_remote_mcp_server
+
+    remote_mcp_server = create_remote_mcp_server()
+    app.mount("/mcp", remote_mcp_server.streamable_http_app())
+    app.mount("/sse", remote_mcp_server.sse_app())
+    app.state.remote_mcp_server = remote_mcp_server
+    app.state.remote_mcp_enabled = True
+except Exception as e:
+    logger.error(f"❌ 原生远程 MCP transport 初始化失败，已降级禁用: {e}")
+    app.state.remote_mcp_server = None
+    app.state.remote_mcp_error = str(e)
 
 
 @app.on_event("startup")
 async def startup_event():
     """App 启动时自动创建数据库表"""
-    app.state.remote_mcp_exit_stack = contextlib.AsyncExitStack()
-    await app.state.remote_mcp_exit_stack.enter_async_context(remote_mcp_server.session_manager.run())
+    if app.state.remote_mcp_enabled and app.state.remote_mcp_server is not None:
+        try:
+            app.state.remote_mcp_exit_stack = contextlib.AsyncExitStack()
+            await app.state.remote_mcp_exit_stack.enter_async_context(app.state.remote_mcp_server.session_manager.run())
+        except Exception as e:
+            logger.error(f"❌ 原生远程 MCP transport 启动失败，已降级禁用: {e}")
+            app.state.remote_mcp_enabled = False
+            app.state.remote_mcp_error = str(e)
+            app.state.remote_mcp_exit_stack = None
 
     if DB_AVAILABLE:
         try:
@@ -153,8 +167,8 @@ async def root():
             "login": "/api/login - 登录",
             "chat": "/api/chat/send - AI对话",
             "mcp": "/api/mcp/tools - MCP工具",
-            "remote_mcp_http": "/mcp - 原生远程 MCP streamable_http",
-            "remote_mcp_sse": "/sse - 原生远程 MCP SSE",
+            "remote_mcp_http": "/mcp - 原生远程 MCP streamable_http" if app.state.remote_mcp_enabled else "disabled",
+            "remote_mcp_sse": "/sse - 原生远程 MCP SSE" if app.state.remote_mcp_enabled else "disabled",
             "health": "/api/health - 健康检查",
         },
     }
@@ -162,7 +176,13 @@ async def root():
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "remote_mcp": {
+            "enabled": bool(app.state.remote_mcp_enabled),
+            "error": app.state.remote_mcp_error,
+        },
+    }
 
 
 @app.get("/api/metrics")

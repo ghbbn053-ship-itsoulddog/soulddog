@@ -6,8 +6,6 @@ from typing import Any, Dict
 from fastapi.responses import JSONResponse
 from starlette.datastructures import Headers
 
-from mcp.server.fastmcp import FastMCP
-
 from app.models.base import SessionLocal
 from app.services import get_mcp_registry
 from app.services.agent_access import get_agent_access_service
@@ -117,64 +115,58 @@ async def _call_bound_tool(tool_name: str, params: Dict[str, Any] | None = None)
     return await registry.call_tool(tool_name, username, params or {})
 
 
-remote_mcp_server = FastMCP(
-    "soulddog-platform-remote",
-    instructions="Remote MCP server for Souldog platform tools using Agent Access Token authorization.",
-    streamable_http_path="/",
-    sse_path="/",
-)
+def _build_remote_server():
+    from mcp.server.fastmcp import FastMCP
+
+    remote_mcp_server = FastMCP(
+        "soulddog-platform-remote",
+        instructions="Remote MCP server for Souldog platform tools using Agent Access Token authorization.",
+        streamable_http_path="/",
+        sse_path="/",
+    )
+
+    @remote_mcp_server.tool()
+    async def query_grades(semester: str = "") -> str:
+        params: Dict[str, Any] = {}
+        if semester:
+            params["semester"] = semester
+        return await _call_bound_tool("query_grades", params)
+
+    @remote_mcp_server.tool()
+    async def query_schedule(semester: str = "") -> str:
+        params: Dict[str, Any] = {}
+        if semester:
+            params["semester"] = semester
+        return await _call_bound_tool("query_schedule", params)
+
+    @remote_mcp_server.tool()
+    async def query_academic_progress() -> str:
+        return await _call_bound_tool("query_academic_progress")
+
+    @remote_mcp_server.tool()
+    async def query_training_plan() -> str:
+        return await _call_bound_tool("query_training_plan")
+
+    @remote_mcp_server.tool()
+    async def query_exam_schedule(semester: str = "") -> str:
+        params: Dict[str, Any] = {}
+        if semester:
+            params["semester"] = semester
+        return await _call_bound_tool("query_exam_schedule", params)
+
+    @remote_mcp_server.tool()
+    async def query_personal_info() -> str:
+        return await _call_bound_tool("query_personal_info")
+
+    @remote_mcp_server.tool()
+    async def query_weather(location: str = "") -> str:
+        params: Dict[str, Any] = {}
+        if location:
+            params["location"] = location
+        return await _call_bound_tool("query_weather", params)
+
+    return remote_mcp_server
 
 
-@remote_mcp_server.tool()
-async def query_grades(semester: str = "") -> str:
-    params: Dict[str, Any] = {}
-    if semester:
-        params["semester"] = semester
-    return await _call_bound_tool("query_grades", params)
-
-
-@remote_mcp_server.tool()
-async def query_schedule(semester: str = "") -> str:
-    params: Dict[str, Any] = {}
-    if semester:
-        params["semester"] = semester
-    return await _call_bound_tool("query_schedule", params)
-
-
-@remote_mcp_server.tool()
-async def query_academic_progress() -> str:
-    return await _call_bound_tool("query_academic_progress")
-
-
-@remote_mcp_server.tool()
-async def query_training_plan() -> str:
-    return await _call_bound_tool("query_training_plan")
-
-
-@remote_mcp_server.tool()
-async def query_exam_schedule(semester: str = "") -> str:
-    params: Dict[str, Any] = {}
-    if semester:
-        params["semester"] = semester
-    return await _call_bound_tool("query_exam_schedule", params)
-
-
-@remote_mcp_server.tool()
-async def query_personal_info() -> str:
-    return await _call_bound_tool("query_personal_info")
-
-
-@remote_mcp_server.tool()
-async def query_weather(location: str = "") -> str:
-    params: Dict[str, Any] = {}
-    if location:
-        params["location"] = location
-    return await _call_bound_tool("query_weather", params)
-
-
-def create_streamable_http_mcp_app():
-    return AgentTokenAuthMiddleware(remote_mcp_server.streamable_http_app())
-
-
-def create_sse_mcp_app():
-    return AgentTokenAuthMiddleware(remote_mcp_server.sse_app())
+def create_remote_mcp_server():
+    return _build_remote_server()
