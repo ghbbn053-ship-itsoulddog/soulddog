@@ -74,7 +74,9 @@ class PlatformMCPBridge:
         return await asyncio.to_thread(self._get_json, f"/api/mcp/tools/{tool_name}/schema")
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
-        payload = {"username": "", "params": arguments or {}}
+        sanitized_arguments = dict(arguments or {})
+        sanitized_arguments.pop("username", None)
+        payload = {"username": "", "params": sanitized_arguments}
         return await asyncio.to_thread(self._post_json, f"/api/mcp/tools/{tool_name}", payload)
 
 

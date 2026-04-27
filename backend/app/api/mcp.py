@@ -107,6 +107,33 @@ def _resolve_call_identity(
     return requested_username, "web"
 
 
+def _sanitize_agent_params(http_request: Request, db: Session, params: Optional[dict[str, Any]]) -> dict[str, Any]:
+    sanitized = dict(params or {})
+    if resolve_agent_identity(http_request, db):
+        sanitized.pop("username", None)
+    return sanitized
+
+
+def _sanitize_agent_schema(http_request: Request, db: Session, schema: dict[str, Any]) -> dict[str, Any]:
+    if not resolve_agent_identity(http_request, db):
+        return schema
+
+    input_schema = dict(schema.get("inputSchema") or {})
+    properties = dict(input_schema.get("properties") or {})
+    properties.pop("username", None)
+
+    required = [
+        item for item in list(input_schema.get("required") or [])
+        if item != "username"
+    ]
+
+    input_schema["properties"] = properties
+    input_schema["required"] = required
+    sanitized = dict(schema)
+    sanitized["inputSchema"] = input_schema
+    return sanitized
+
+
 @router.get("/service-catalog")
 async def service_catalog():
     """
@@ -293,7 +320,8 @@ async def call_tool(tool_name: str, request: MCPToolRequest, http_request: Reque
         if not tool_meta:
             raise HTTPException(status_code=404, detail="工具元数据不存在")
         effective_username, _identity_type = _resolve_call_identity(http_request, db, request.username, tool_meta)
-        result = await registry.call_tool(tool_name, effective_username, request.params)
+        effective_params = _sanitize_agent_params(http_request, db, request.params)
+        result = await registry.call_tool(tool_name, effective_username, effective_params)
         
         return MCPToolResponse(
             success=True,
@@ -319,7 +347,7 @@ async def call_tool(tool_name: str, request: MCPToolRequest, http_request: Reque
 
 
 @router.get("/tools/{tool_name}/schema")
-async def get_tool_schema(tool_name: str):
+async def get_tool_schema(tool_name: str, http_request: Request, db: Session = Depends(get_db)):
     """获取工具的JSON Schema"""
     registry = get_mcp_registry()
     if registry is None:
@@ -329,7 +357,9 @@ async def get_tool_schema(tool_name: str):
         raise HTTPException(status_code=404, detail="工具不存在")
 
     schema = registry.get_tool_schema(tool_name)
-    return schema or {"error": "Schema not found"}
+    if not schema:
+        return {"error": "Schema not found"}
+    return _sanitize_agent_schema(http_request, db, schema)
 
 
 @router.post("/tools/reload")

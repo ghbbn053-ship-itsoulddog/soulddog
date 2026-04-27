@@ -365,6 +365,17 @@ class MCPRegistry:
             },
         }
 
+    @staticmethod
+    def _merge_call_params(username: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        merged: Dict[str, Any] = {"username": username}
+        if not params:
+            return merged
+
+        sanitized = dict(params)
+        sanitized.pop("username", None)
+        merged.update(sanitized)
+        return merged
+
     async def call_tool(self, name: str, username: str, params: Optional[Dict[str, Any]] = None) -> str:
         if not self.has_tool(name):
             raise ValueError(f"工具 '{name}' 不存在")
@@ -374,9 +385,7 @@ class MCPRegistry:
         if not comp.is_mcp_tool_enabled(username, name):
             raise ValueError(f"工具 '{name}' 在当前组合中已禁用")
         spec = self._tools[name]
-        merged = {"username": username}
-        if params:
-            merged.update(params)
+        merged = self._merge_call_params(username, params)
         if spec.kind in {"stdio", "sse", "streamable_http", "command"}:
             return await get_mcp_runtime().call_tool(spec, merged)
         if spec.kind not in {"python", "http"}:

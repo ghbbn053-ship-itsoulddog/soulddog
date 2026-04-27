@@ -129,9 +129,26 @@ class AgentAccessService:
             .first()
         )
 
+    def _deactivate_binding(self, db: Session, binding: ExternalServiceBinding) -> None:
+        binding.status = "pending"
+        metadata = dict(binding.metadata_json or {})
+        metadata["has_live_session"] = False
+        binding.metadata_json = metadata
+        binding.last_verified_at = None
+        db.add(binding)
+        db.commit()
+
     def has_active_binding(self, db: Session, owner_username: str, service_name: str) -> bool:
         binding = self.get_binding(db, owner_username, service_name)
-        return bool(binding and binding.status == "active")
+        if not binding or binding.status != "active":
+            return False
+
+        if service_name == "education":
+            if not self._is_education_session_alive(owner_username):
+                self._deactivate_binding(db, binding)
+                return False
+
+        return True
 
     def _is_education_session_alive(self, owner_username: str) -> bool:
         session_store = get_session_store()
