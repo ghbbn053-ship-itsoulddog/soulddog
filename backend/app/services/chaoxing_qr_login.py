@@ -8,7 +8,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
-from urllib.parse import urljoin
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -29,6 +29,8 @@ DEFAULT_HEADERS = {
     ),
     "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
 }
+
+COURSE_METRICS_FETCH_TIMEOUT = 8
 
 
 def _now_utc() -> datetime:
@@ -209,6 +211,397 @@ class ChaoxingQrLoginService:
         resp.raise_for_status()
         return resp
 
+    def _fetch_optional_html(self, session: requests.Session, url: str, referer: str = "") -> Dict[str, str]:
+        if not url:
+            return {"url": "", "html": "", "error": ""}
+        headers = {}
+        if referer:
+            headers["Referer"] = referer
+        try:
+            resp = session.get(url, headers=headers, timeout=COURSE_METRICS_FETCH_TIMEOUT, allow_redirects=True)
+            resp.raise_for_status()
+            return {"url": resp.url, "html": resp.text, "error": ""}
+        except Exception as exc:
+            return {"url": url, "html": "", "error": str(exc)}
+
+    def _append_query_params(self, url: str, extra_params: Dict[str, Any]) -> str:
+        if not url:
+            return ""
+        parsed = urlparse(url)
+        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        for key, value in extra_params.items():
+            text = str(value or "").strip()
+            if text and key not in query:
+                query[key] = text
+        return urlunparse(parsed._replace(query=urlencode(query)))
+
+    def _build_course_metric_key(self, course: Dict[str, Any]) -> str:
+        course_id = str(course.get("course_id") or "").strip()
+        class_id = str(course.get("class_id") or "").strip()
+        title = str(course.get("title") or "").strip()
+        return f"{course_id}::{class_id}::{title}"
+
+    def _extract_course_page_meta(self, html_text: str, base_url: str) -> Dict[str, Any]:
+        soup = BeautifulSoup(html_text, "lxml")
+
+        def hidden_value(*keys: str) -> str:
+            for key in keys:
+                node = soup.find("input", {"id": key}) or soup.find("input", {"name": key})
+                if node and str(node.get("value") or "").strip():
+                    return str(node.get("value") or "").strip()
+            return ""
+
+        nav_urls: Dict[str, str] = {}
+        for anchor in soup.select("a[title][data-url]"):
+            title = str(anchor.get("title") or "").strip()
+            data_url = str(anchor.get("data-url") or "").strip()
+            if title and data_url:
+                nav_urls[title] = urljoin(base_url, html.unescape(data_url))
+
+        iframe = soup.select_one("#frame_content-zj")
+        iframe_src = ""
+        if iframe:
+            iframe_src = urljoin(base_url, html.unescape(str(iframe.get("src") or "").strip()))
+
+        title_node = soup.select_one(".classDl dd, .classDl .textHidden, title")
+        course_title = title_node.get_text(" ", strip=True) if title_node else ""
+
+        score_url = ""
+        score_match = re.search(
+            r"(https://stat2-ans\.chaoxing\.com/stat2/overall-score/stu-score\?[^\"']+)",
+            html_text,
+            flags=re.I,
+        )
+        if score_match:
+            score_url = html.unescape(score_match.group(1))
+
+        return {
+            "course_title": course_title,
+            "courseid": hidden_value("courseid", "courseId"),
+            "clazzid": hidden_value("clazzid", "clazzId"),
+            "cpi": hidden_value("cpi"),
+            "enc": hidden_value("enc"),
+            "oldenc": hidden_value("oldenc"),
+            "workEnc": hidden_value("workEnc"),
+            "examEnc": hidden_value("examEnc"),
+            "ut": hidden_value("heardUt", "ut") or "s",
+            "v": hidden_value("v") or "2",
+            "t": hidden_value("t"),
+            "mooc_domain": hidden_value("moocDomainName") or "https://mooc1.chaoxing.com",
+            "iframe_src": iframe_src,
+            "score_url": score_url,
+            "nav_urls": nav_urls,
+        }
+
+    def _build_course_detail_urls(self, course: Dict[str, Any], page_meta: Dict[str, Any], base_url: str) -> Dict[str, str]:
+        course_id = str(page_meta.get("courseid") or course.get("course_id") or "").strip()
+        clazz_id = str(page_meta.get("clazzid") or course.get("class_id") or "").strip()
+        cpi = str(page_meta.get("cpi") or course.get("cpi") or "").strip()
+        ut = str(page_meta.get("ut") or "s").strip() or "s"
+        t = str(page_meta.get("t") or int(time.time() * 1000)).strip()
+        common_params = {
+            "courseid": course_id,
+            "courseId": course_id,
+            "clazzid": clazz_id,
+            "clazzId": clazz_id,
+            "classId": clazz_id,
+            "cpi": cpi,
+            "ut": ut,
+            "enc": page_meta.get("enc", ""),
+            "oldenc": page_meta.get("oldenc", ""),
+            "workEnc": page_meta.get("workEnc", ""),
+            "examEnc": page_meta.get("examEnc", ""),
+            "v": page_meta.get("v", "2"),
+            "t": t,
+        }
+
+        chapter_url = str(page_meta.get("iframe_src") or "").strip()
+        if not chapter_url:
+            chapter_base = str(page_meta.get("nav_urls", {}).get("章节") or "").strip()
+            chapter_url = self._append_query_params(chapter_base, common_params)
+
+        work_base = str(page_meta.get("nav_urls", {}).get("作业") or "").strip()
+        exam_base = str(page_meta.get("nav_urls", {}).get("考试") or "").strip()
+        score_base = str(page_meta.get("score_url") or "").strip()
+        mooc_domain = str(page_meta.get("mooc_domain") or "").strip() or "https://mooc1.chaoxing.com"
+
+        if work_base and work_base.startswith("/"):
+            work_base = urljoin(mooc_domain, work_base)
+        if exam_base and exam_base.startswith("/"):
+            exam_base = urljoin(mooc_domain, exam_base)
+
+        return {
+            "chapter_url": chapter_url,
+            "work_url": self._append_query_params(work_base, common_params),
+            "exam_url": self._append_query_params(exam_base, common_params),
+            "score_url": self._append_query_params(score_base, common_params),
+            "base_url": base_url,
+        }
+
+    def _pick_best_count(self, values: List[int]) -> Optional[int]:
+        candidates = [value for value in values if isinstance(value, int) and value > 0]
+        if not candidates:
+            return None
+        return max(candidates)
+
+    def _extract_number_near_labels(self, text: str, labels: List[str]) -> Optional[int]:
+        compact = re.sub(r"\s+", "", text or "")
+        for label in labels:
+            match = re.search(rf"{re.escape(label)}[:：]?(?:共)?(\d+)", compact, flags=re.I)
+            if match:
+                return int(match.group(1))
+            match = re.search(rf"(\d+)(?:项|个|门|次)?{re.escape(label)}", compact, flags=re.I)
+            if match:
+                return int(match.group(1))
+        return None
+
+    def _extract_progress_percent(self, text: str) -> Optional[float]:
+        compact = re.sub(r"\s+", "", text or "")
+        labelled_patterns = [
+            r"(?:学习进度|课程进度|当前进度|完成率|平均完成率)[:：]?(\d{1,3}(?:\.\d+)?)%",
+            r"(?:已完成|完成)[:：]?(\d{1,3}(?:\.\d+)?)%",
+        ]
+        for pattern in labelled_patterns:
+            match = re.search(pattern, compact, flags=re.I)
+            if match:
+                return float(match.group(1))
+        standalone = [float(value) for value in re.findall(r"(\d{1,3}(?:\.\d+)?)%", compact)]
+        standalone = [value for value in standalone if 0 <= value <= 100]
+        if standalone:
+            return max(standalone)
+        return None
+
+    def _parse_chapter_metrics(self, html_text: str) -> Dict[str, Any]:
+        if not html_text:
+            return {
+                "chapter_count": None,
+                "completed_chapter_count": None,
+                "chapter_completion_percent": None,
+            }
+
+        soup = BeautifulSoup(html_text, "lxml")
+        text_content = soup.get_text(" ", strip=True)
+
+        chapter_nodes: List[str] = []
+        for selector in [
+            ".catalog_level",
+            ".chapter_unit",
+            ".chapter_item",
+            ".chapter",
+            ".posCatalog_level",
+            ".catalog_points li",
+            ".chapterList li",
+            "li[data-chapterid]",
+            "[id^=cur]",
+        ]:
+            for node in soup.select(selector):
+                item_text = node.get_text(" ", strip=True)
+                if item_text:
+                    chapter_nodes.append(item_text)
+        unique_chapters = list(dict.fromkeys(chapter_nodes))
+
+        completed_by_text = sum(1 for item in unique_chapters if re.search(r"(已完成|已学完|100%)", item))
+        chapter_count = self._pick_best_count(
+            [
+                self._extract_number_near_labels(text_content, ["章节", "章", "节"]) or 0,
+                len(unique_chapters),
+            ]
+        )
+        completed_chapter_count = self._pick_best_count(
+            [
+                self._extract_number_near_labels(text_content, ["已完成", "完成章节", "已学完"]) or 0,
+                completed_by_text,
+            ]
+        )
+        chapter_completion_percent = self._extract_progress_percent(text_content)
+        if chapter_completion_percent is None and chapter_count and completed_chapter_count is not None and chapter_count > 0:
+            chapter_completion_percent = round((completed_chapter_count / chapter_count) * 100, 1)
+
+        return {
+            "chapter_count": chapter_count,
+            "completed_chapter_count": completed_chapter_count,
+            "chapter_completion_percent": chapter_completion_percent,
+        }
+
+    def _parse_list_count(self, html_text: str, kind: str) -> Dict[str, Any]:
+        if not html_text:
+            return {"count": None, "completed_count": None}
+
+        soup = BeautifulSoup(html_text, "lxml")
+        text_content = soup.get_text(" ", strip=True)
+        selectors = {
+            "work": [
+                ".ulDiv li",
+                ".work-list li",
+                ".operation .list li",
+                "tr[role='row']",
+                "tbody tr",
+                "li[data-id]",
+            ],
+            "exam": [
+                ".ulDiv li",
+                ".exam-list li",
+                ".test-list li",
+                "tr[role='row']",
+                "tbody tr",
+                "li[data-id]",
+            ],
+        }
+
+        items: List[str] = []
+        for selector in selectors.get(kind, []):
+            for node in soup.select(selector):
+                row_text = node.get_text(" ", strip=True)
+                if row_text and len(row_text) > 1:
+                    items.append(row_text)
+        unique_items = list(dict.fromkeys(items))
+
+        label_map = {
+            "work": ["作业", "测验", "任务"],
+            "exam": ["考试", "测验"],
+        }
+        total_from_text = self._extract_number_near_labels(text_content, label_map.get(kind, []))
+        completed_count = sum(1 for item in unique_items if re.search(r"(已完成|已提交|已结束|已批阅|已交)", item))
+
+        count = self._pick_best_count([total_from_text or 0, len(unique_items)])
+        return {
+            "count": count,
+            "completed_count": completed_count or None,
+        }
+
+    def _parse_score_metrics(self, html_text: str) -> Dict[str, Any]:
+        if not html_text:
+            return {"progress_percent": None, "score_text": "", "status_text": ""}
+        soup = BeautifulSoup(html_text, "lxml")
+        text_content = soup.get_text(" ", strip=True)
+        progress_percent = self._extract_progress_percent(text_content)
+
+        score_text = ""
+        score_match = re.search(r"(?:总成绩|综合成绩|成绩)[:：]?\s*([A-Za-z0-9.\-]+)", text_content)
+        if score_match:
+            score_text = score_match.group(1).strip()
+
+        status_text = ""
+        for token in ["已完成", "进行中", "未开始", "待完成"]:
+            if token in text_content:
+                status_text = token
+                break
+
+        return {
+            "progress_percent": progress_percent,
+            "score_text": score_text,
+            "status_text": status_text,
+        }
+
+    def _build_course_status(self, metrics: Dict[str, Any]) -> str:
+        progress_percent = metrics.get("progress_percent")
+        chapter_count = metrics.get("chapter_count")
+        completed_chapter_count = metrics.get("completed_chapter_count")
+        status_text = str(metrics.get("status_text") or "").strip()
+
+        if isinstance(progress_percent, (int, float)) and progress_percent >= 100:
+            return "completed"
+        if chapter_count and completed_chapter_count is not None and chapter_count > 0 and completed_chapter_count >= chapter_count:
+            return "completed"
+        if status_text == "已完成":
+            return "completed"
+        if isinstance(progress_percent, (int, float)) and progress_percent > 0:
+            return "in_progress"
+        if completed_chapter_count:
+            return "in_progress"
+        return "unknown"
+
+    def _fetch_course_metrics(
+        self,
+        session: requests.Session,
+        course: Dict[str, Any],
+        course_home_url: str = "",
+    ) -> Dict[str, Any]:
+        course_url = str(course.get("url") or "").strip()
+        if not course_url:
+            return {
+                "metric_key": self._build_course_metric_key(course),
+                "title": str(course.get("title") or "").strip(),
+                "status": "unknown",
+                "error": "missing course url",
+            }
+
+        main_resp = self._fetch_optional_html(session, course_url, referer=course_home_url)
+        page_meta = self._extract_course_page_meta(main_resp.get("html", ""), main_resp.get("url", course_url))
+        detail_urls = self._build_course_detail_urls(course, page_meta, main_resp.get("url", course_url))
+
+        chapter_resp = self._fetch_optional_html(session, detail_urls.get("chapter_url", ""), referer=main_resp.get("url", course_url))
+        work_resp = self._fetch_optional_html(session, detail_urls.get("work_url", ""), referer=main_resp.get("url", course_url))
+        exam_resp = self._fetch_optional_html(session, detail_urls.get("exam_url", ""), referer=main_resp.get("url", course_url))
+        score_resp = self._fetch_optional_html(session, detail_urls.get("score_url", ""), referer=main_resp.get("url", course_url))
+
+        chapter_metrics = self._parse_chapter_metrics(chapter_resp.get("html", ""))
+        work_metrics = self._parse_list_count(work_resp.get("html", ""), "work")
+        exam_metrics = self._parse_list_count(exam_resp.get("html", ""), "exam")
+        score_metrics = self._parse_score_metrics(score_resp.get("html", "") or main_resp.get("html", ""))
+
+        metrics = {
+            "metric_key": self._build_course_metric_key(course),
+            "title": str(course.get("title") or page_meta.get("course_title") or "").strip(),
+            "teacher": str(course.get("teacher") or "").strip(),
+            "course_id": str(page_meta.get("courseid") or course.get("course_id") or "").strip(),
+            "class_id": str(page_meta.get("clazzid") or course.get("class_id") or "").strip(),
+            "cpi": str(page_meta.get("cpi") or course.get("cpi") or "").strip(),
+            "progress_percent": score_metrics.get("progress_percent"),
+            "chapter_count": chapter_metrics.get("chapter_count"),
+            "completed_chapter_count": chapter_metrics.get("completed_chapter_count"),
+            "chapter_completion_percent": chapter_metrics.get("chapter_completion_percent"),
+            "assignment_count": work_metrics.get("count"),
+            "completed_assignment_count": work_metrics.get("completed_count"),
+            "exam_count": exam_metrics.get("count"),
+            "completed_exam_count": exam_metrics.get("completed_count"),
+            "score_text": score_metrics.get("score_text") or "",
+            "status_text": score_metrics.get("status_text") or "",
+            "source_urls": {
+                "course_url": course_url,
+                "chapter_url": chapter_resp.get("url", ""),
+                "work_url": work_resp.get("url", ""),
+                "exam_url": exam_resp.get("url", ""),
+                "score_url": score_resp.get("url", ""),
+            },
+            "fetch_errors": {
+                "course": main_resp.get("error", ""),
+                "chapter": chapter_resp.get("error", ""),
+                "work": work_resp.get("error", ""),
+                "exam": exam_resp.get("error", ""),
+                "score": score_resp.get("error", ""),
+            },
+            "fetched_at": _now_utc().isoformat(),
+        }
+        metrics["status"] = self._build_course_status(metrics)
+        return metrics
+
+    def _fetch_all_course_metrics(
+        self,
+        session: requests.Session,
+        courses: List[Dict[str, Any]],
+        course_home_url: str = "",
+    ) -> List[Dict[str, Any]]:
+        results: List[Dict[str, Any]] = []
+        for course in courses:
+            try:
+                results.append(self._fetch_course_metrics(session, course, course_home_url=course_home_url))
+            except Exception as exc:
+                results.append(
+                    {
+                        "metric_key": self._build_course_metric_key(course),
+                        "title": str(course.get("title") or "").strip(),
+                        "teacher": str(course.get("teacher") or "").strip(),
+                        "course_id": str(course.get("course_id") or "").strip(),
+                        "class_id": str(course.get("class_id") or "").strip(),
+                        "cpi": str(course.get("cpi") or "").strip(),
+                        "status": "unknown",
+                        "error": str(exc),
+                        "fetched_at": _now_utc().isoformat(),
+                    }
+                )
+        return results
+
     def _extract_course_home_url(self, html_text: str, base_url: str) -> str:
         patterns = [
             r'dataurl="([^"]*visit/interaction[^"]*)"',
@@ -329,10 +722,13 @@ class ChaoxingQrLoginService:
             login_bridge_resp.raise_for_status()
 
             catalog = self._fetch_course_catalog(session)
+            course_catalog = catalog.get("courses", [])
+            course_home_url = catalog.get("course_home_url", "")
             meta["business_landing_url"] = login_bridge_resp.url
-            meta["course_catalog"] = catalog.get("courses", [])
+            meta["course_catalog"] = course_catalog
             meta["course_base_url"] = catalog.get("base_url", "")
-            meta["course_home_url"] = catalog.get("course_home_url", "")
+            meta["course_home_url"] = course_home_url
+            meta["course_metrics"] = self._fetch_all_course_metrics(session, course_catalog, course_home_url=course_home_url)
             row.status = "confirmed"
             row.page_title = "登录成功"
             row.expires_at = _now_utc() + timedelta(days=7)

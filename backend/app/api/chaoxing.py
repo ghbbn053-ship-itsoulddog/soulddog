@@ -140,6 +140,7 @@ def _serialize_qr_session(session_row: Any) -> Dict[str, Any]:
         "created_at": data.get("created_at"),
         "browser_meta": {
             "course_catalog": meta.get("course_catalog") or [],
+            "course_metrics": meta.get("course_metrics") or [],
             "course_base_url": meta.get("course_base_url") or "",
             "course_home_url": meta.get("course_home_url") or "",
             "business_landing_url": meta.get("business_landing_url") or "",

@@ -5,10 +5,14 @@ import { useRouter } from "next/navigation";
 import {
   BookMarked,
   CheckCircle2,
+  CircleDashed,
+  ClipboardList,
+  FileCheck2,
   GraduationCap,
   QrCode,
   RefreshCcw,
   ScanLine,
+  Target,
   UserRound,
 } from "lucide-react";
 
@@ -24,28 +28,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { normalizeScheduleData, resolveDefaultSemester } from "@/lib/education-cache";
-
-type ScheduleCourse = Record<string, unknown>;
-
-type CurrentSemesterResponse = {
-  success?: boolean;
-  data?: {
-    code?: string;
-    name?: string;
-  };
-};
-
-type ScheduleResponse = {
-  success?: boolean;
-  data?:
-    | {
-        学期?: string;
-        课程列表?: ScheduleCourse[];
-        按学期?: Record<string, ScheduleCourse[]>;
-      }
-    | ScheduleCourse[];
-};
 
 type CourseCatalogItem = {
   title: string;
@@ -55,6 +37,27 @@ type CourseCatalogItem = {
   class_id?: string;
   cpi?: string;
   image?: string;
+};
+
+type CourseMetricItem = {
+  metric_key?: string;
+  title?: string;
+  teacher?: string;
+  course_id?: string;
+  class_id?: string;
+  cpi?: string;
+  progress_percent?: number | null;
+  chapter_count?: number | null;
+  completed_chapter_count?: number | null;
+  chapter_completion_percent?: number | null;
+  assignment_count?: number | null;
+  completed_assignment_count?: number | null;
+  exam_count?: number | null;
+  completed_exam_count?: number | null;
+  score_text?: string;
+  status_text?: string;
+  status?: string;
+  error?: string;
 };
 
 type QrLoginSession = {
@@ -73,6 +76,7 @@ type QrLoginSession = {
   created_at?: string | null;
   browser_meta?: {
     course_catalog?: CourseCatalogItem[];
+    course_metrics?: CourseMetricItem[];
     course_base_url?: string;
     course_home_url?: string;
     business_landing_url?: string;
@@ -83,15 +87,25 @@ type QrLoginSession = {
 type VisualCourse = {
   title: string;
   teacher: string;
-  weekday: string;
-  period: string;
-  location: string;
-  matchedFrom: "qr" | "schedule";
+  courseId: string;
+  classId: string;
+  cpi: string;
   url?: string;
+  progressPercent?: number | null;
+  chapterCount?: number | null;
+  completedChapterCount?: number | null;
+  chapterCompletionPercent?: number | null;
+  assignmentCount?: number | null;
+  completedAssignmentCount?: number | null;
+  examCount?: number | null;
+  completedExamCount?: number | null;
+  scoreText?: string;
+  statusText?: string;
+  status?: string;
+  error?: string;
 };
 
 const QR_POLL_MS = 3000;
-const WEEKDAY_ORDER = ["周一", "周二", "周三", "周四", "周五", "周六", "周日", "未知"];
 
 function text(value: unknown) {
   return String(value ?? "").trim();
@@ -101,84 +115,81 @@ function normalizeName(value: string) {
   return value.replace(/\s+/g, "").replace(/[（）()]/g, "").toLowerCase();
 }
 
-function extractCourseField(course: ScheduleCourse, keys: string[]) {
-  for (const key of keys) {
-    const value = text(course[key]);
-    if (value) return value;
+function toMetricMap(metrics: CourseMetricItem[]) {
+  const map = new Map<string, CourseMetricItem>();
+  for (const metric of metrics) {
+    const key = `${normalizeName(text(metric.title))}__${text(metric.class_id)}__${text(metric.course_id)}`;
+    if (!map.has(key)) {
+      map.set(key, metric);
+    }
   }
-  return "";
+  return map;
 }
 
-function normalizeWeekday(value: string) {
-  const raw = value.replace(/星期/g, "周").trim();
-  const map: Record<string, string> = {
-    "1": "周一",
-    "2": "周二",
-    "3": "周三",
-    "4": "周四",
-    "5": "周五",
-    "6": "周六",
-    "7": "周日",
-    周1: "周一",
-    周2: "周二",
-    周3: "周三",
-    周4: "周四",
-    周5: "周五",
-    周6: "周六",
-    周7: "周日",
-    周天: "周日",
-  };
-  return map[raw] || raw || "未知";
-}
-
-function normalizePeriod(value: string) {
-  const raw = value.replace(/\s+/g, "");
-  if (!raw) return "待定";
-  const match = raw.match(/(\d+)\D+(\d+)/);
-  if (match) return `${match[1]}-${match[2]}`;
-  return raw.replace(/第|节/g, "") || "待定";
-}
-
-function buildVisualCourses(scheduleCourses: ScheduleCourse[], catalog: CourseCatalogItem[]) {
-  const scheduleItems = scheduleCourses.map((course) => ({
-    title: extractCourseField(course, ["课程名称", "课程名", "课程"]),
-    teacher: extractCourseField(course, ["教师", "老师"]),
-    weekday: normalizeWeekday(extractCourseField(course, ["星期", "weekday"])),
-    period: normalizePeriod(extractCourseField(course, ["节次信息", "节次", "period", "上课时间"])),
-    location: extractCourseField(course, ["地点", "教室"]),
-  }));
-
-  const scheduleMap = new Map(scheduleItems.map((item) => [normalizeName(item.title), item]));
+function buildVisualCourses(catalog: CourseCatalogItem[], metrics: CourseMetricItem[]) {
+  const metricMap = toMetricMap(metrics);
+  const seen = new Set<string>();
   const merged: VisualCourse[] = [];
-
   for (const course of catalog) {
-    const key = normalizeName(course.title || "");
-    const matched = scheduleMap.get(key);
+    const key = `${normalizeName(course.title || "")}__${text(course.class_id)}__${text(course.course_id)}`;
+    if (!course.title || seen.has(key)) continue;
+    seen.add(key);
+    const metric = metricMap.get(key);
     merged.push({
       title: course.title,
-      teacher: matched?.teacher || course.teacher || "",
-      weekday: matched?.weekday || "未知",
-      period: matched?.period || "待定",
-      location: matched?.location || "",
-      matchedFrom: matched ? "qr" : "schedule",
+      teacher: course.teacher || "",
+      courseId: text(course.course_id),
+      classId: text(course.class_id),
+      cpi: text(course.cpi),
       url: course.url,
+      progressPercent: typeof metric?.progress_percent === "number" ? metric.progress_percent : null,
+      chapterCount: typeof metric?.chapter_count === "number" ? metric.chapter_count : null,
+      completedChapterCount: typeof metric?.completed_chapter_count === "number" ? metric.completed_chapter_count : null,
+      chapterCompletionPercent:
+        typeof metric?.chapter_completion_percent === "number" ? metric.chapter_completion_percent : null,
+      assignmentCount: typeof metric?.assignment_count === "number" ? metric.assignment_count : null,
+      completedAssignmentCount:
+        typeof metric?.completed_assignment_count === "number" ? metric.completed_assignment_count : null,
+      examCount: typeof metric?.exam_count === "number" ? metric.exam_count : null,
+      completedExamCount: typeof metric?.completed_exam_count === "number" ? metric.completed_exam_count : null,
+      scoreText: text(metric?.score_text),
+      statusText: text(metric?.status_text),
+      status: text(metric?.status),
+      error: text(metric?.error),
     });
   }
-
-  const existing = new Set(merged.map((item) => normalizeName(item.title)));
-  for (const item of scheduleItems) {
-    if (!item.title || existing.has(normalizeName(item.title))) continue;
-    merged.push({
-      title: item.title,
-      teacher: item.teacher,
-      weekday: item.weekday,
-      period: item.period,
-      location: item.location,
-      matchedFrom: "schedule",
-    });
-  }
-
   return merged;
+}
+
+function metricNumber(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function displayMetric(value: number | null | undefined) {
+  const num = metricNumber(value);
+  return num === null ? "-" : `${num}`;
+}
+
+function displayPercent(value: number | null | undefined) {
+  const num = metricNumber(value);
+  return num === null ? "-" : `${num}%`;
+}
+
+function courseStatusLabel(status?: string) {
+  switch (status) {
+    case "completed":
+      return "已完成";
+    case "in_progress":
+      return "学习中";
+    default:
+      return "待识别";
+  }
+}
+
+function courseStatusBadge(status?: string) {
+  if (status === "completed") return "success";
+  if (status === "in_progress") return "warning";
+  return "outline";
 }
 
 function statusBadgeVariant(status: string | undefined) {
@@ -213,37 +224,15 @@ export default function ChaoxingLearningPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
-  const [currentSemester, setCurrentSemester] = useState("");
-  const [allScheduleCourses, setAllScheduleCourses] = useState<ScheduleCourse[]>([]);
-  const [scheduleBySemester, setScheduleBySemester] = useState<Record<string, ScheduleCourse[]>>({});
   const [qrSession, setQrSession] = useState<QrLoginSession | null>(null);
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
 
-  const currentSemesterCourses = useMemo(() => {
-    if (currentSemester && scheduleBySemester[currentSemester]) return scheduleBySemester[currentSemester];
-    const fallbackSemester = resolveDefaultSemester(currentSemester, Object.keys(scheduleBySemester));
-    if (fallbackSemester && scheduleBySemester[fallbackSemester]) return scheduleBySemester[fallbackSemester];
-    return allScheduleCourses;
-  }, [allScheduleCourses, currentSemester, scheduleBySemester]);
-
   const visualCourses = useMemo(
-    () => buildVisualCourses(currentSemesterCourses, qrSession?.browser_meta?.course_catalog || []),
-    [currentSemesterCourses, qrSession]
+    () => buildVisualCourses(qrSession?.browser_meta?.course_catalog || [], qrSession?.browser_meta?.course_metrics || []),
+    [qrSession]
   );
-
-  const weekdayStats = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const item of visualCourses) {
-      const key = item.weekday || "未知";
-      counts.set(key, (counts.get(key) || 0) + 1);
-    }
-    return WEEKDAY_ORDER.map((weekday) => ({
-      weekday,
-      count: counts.get(weekday) || 0,
-    })).filter((item) => item.count > 0 || item.weekday !== "未知");
-  }, [visualCourses]);
 
   const teacherStats = useMemo(() => {
     const counts = new Map<string, number>();
@@ -257,15 +246,47 @@ export default function ChaoxingLearningPage() {
       .slice(0, 6);
   }, [visualCourses]);
 
-  const periodStats = useMemo(() => {
+  const duplicateTitleStats = useMemo(() => {
     const counts = new Map<string, number>();
     for (const item of visualCourses) {
-      const key = item.period || "待定";
+      const key = item.title || "未命名课程";
       counts.set(key, (counts.get(key) || 0) + 1);
     }
     return Array.from(counts.entries())
-      .map(([period, count]) => ({ period, count }))
-      .sort((a, b) => a.period.localeCompare(b.period, "zh-CN"));
+      .map(([title, count]) => ({ title, count }))
+      .sort((a, b) => b.count - a.count || a.title.localeCompare(b.title, "zh-CN"));
+  }, [visualCourses]);
+
+  const courseSummary = useMemo(() => {
+    let completedCourses = 0;
+    let inProgressCourses = 0;
+    let totalChapters = 0;
+    let totalAssignments = 0;
+    let totalExams = 0;
+    let totalProgress = 0;
+    let progressCount = 0;
+
+    for (const course of visualCourses) {
+      if (course.status === "completed") completedCourses += 1;
+      if (course.status === "in_progress") inProgressCourses += 1;
+      totalChapters += metricNumber(course.chapterCount) || 0;
+      totalAssignments += metricNumber(course.assignmentCount) || 0;
+      totalExams += metricNumber(course.examCount) || 0;
+      const progress = metricNumber(course.progressPercent);
+      if (progress !== null) {
+        totalProgress += progress;
+        progressCount += 1;
+      }
+    }
+
+    return {
+      completedCourses,
+      inProgressCourses,
+      totalChapters,
+      totalAssignments,
+      totalExams,
+      averageProgress: progressCount > 0 ? Math.round((totalProgress / progressCount) * 10) / 10 : null,
+    };
   }, [visualCourses]);
 
   const stopPolling = () => {
@@ -273,21 +294,6 @@ export default function ChaoxingLearningPage() {
       window.clearInterval(pollTimerRef.current);
       pollTimerRef.current = null;
     }
-  };
-
-  const refreshSchedule = async (uname: string) => {
-    const [scheduleRes, currentSemesterRes] = await Promise.all([
-      fetch(`${API_BASE}/api/schedule/db?username=${encodeURIComponent(uname)}`, { credentials: "include" }),
-      fetch(`${API_BASE}/api/options/current-semester`, { credentials: "include" }),
-    ]);
-    const scheduleJson: ScheduleResponse | null = scheduleRes.ok ? await scheduleRes.json() : null;
-    const currentSemesterJson: CurrentSemesterResponse | null = currentSemesterRes.ok ? await currentSemesterRes.json() : null;
-    const normalized = normalizeScheduleData(scheduleJson?.data || []);
-    const backendCurrentSemester = text(currentSemesterJson?.data?.code);
-    const resolved = resolveDefaultSemester(backendCurrentSemester || normalized.semester, normalized.semesters);
-    setAllScheduleCourses(normalized.courses);
-    setScheduleBySemester(normalized.bySemester);
-    setCurrentSemester(resolved);
   };
 
   const loadLatestSession = async (uname: string, sessionToken: string) => {
@@ -315,7 +321,6 @@ export default function ChaoxingLearningPage() {
     if (nextSession.status === "confirmed") {
       stopPolling();
       setMessage("扫码登录成功，课程列表已抓取。");
-      await refreshSchedule(uname);
       return;
     }
     if (nextSession.status === "expired" || nextSession.status === "failed") {
@@ -358,7 +363,6 @@ export default function ChaoxingLearningPage() {
   const refreshAll = async () => {
     if (!username) return;
     setMessage("");
-    await refreshSchedule(username);
     if (qrSession?.session_token) {
       await loadLatestSession(username, qrSession.session_token);
     }
@@ -375,7 +379,6 @@ export default function ChaoxingLearningPage() {
         }
         const uname = String(me.username);
         setUsername(uname);
-        await refreshSchedule(uname);
       } catch {
         router.replace("/chat");
       } finally {
@@ -405,7 +408,7 @@ export default function ChaoxingLearningPage() {
   }
 
   return (
-    <WorkbenchShell
+      <WorkbenchShell
       badge={
         <WorkbenchBadge>
           <GraduationCap className="h-3.5 w-3.5" />
@@ -413,7 +416,7 @@ export default function ChaoxingLearningPage() {
         </WorkbenchBadge>
       }
       title="学习通扫码课程看板"
-      description="当前页面只做后端托管扫码登录、课程抓取、当前学期筛选和轻量可视化。不暴露自动化执行入口。"
+      description="当前页面只做后端托管扫码登录、课程抓取和学习通课程统计。不暴露自动化执行入口。"
       sidebarTitle="AI 学习工作台"
       sidebarDescription="Workspace / Skill / MCP / Agent"
       sidebarHeader={<PlatformSidebarHeader />}
@@ -432,14 +435,20 @@ export default function ChaoxingLearningPage() {
       <div className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
         <div className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-4">
-            <WorkbenchStatCard label="Current Term" value={currentSemester || "-"} hint="当前只看这一学期" />
-            <WorkbenchStatCard label="Courses" value={visualCourses.length} hint="当前学期合并后的课程数" />
+            <WorkbenchStatCard label="Courses" value={visualCourses.length} hint="学习通抓到的课程总数" />
+            <WorkbenchStatCard label="Completed" value={courseSummary.completedCourses} hint="判定为已完成的课程" />
             <WorkbenchStatCard
-              label="QR Catalog"
-              value={qrSession?.browser_meta?.course_catalog?.length || 0}
-              hint="扫码后抓到的课程条目"
+              label="Avg Progress"
+              value={displayPercent(courseSummary.averageProgress)}
+              hint="有进度数据的课程平均值"
             />
-            <WorkbenchStatCard label="Teachers" value={teacherStats.length} hint="当前学期涉及教师数" />
+            <WorkbenchStatCard label="Teachers" value={teacherStats.length} hint="课程涉及教师数" />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <WorkbenchStatCard label="Chapters" value={courseSummary.totalChapters} hint="累计章节数" />
+            <WorkbenchStatCard label="Assignments" value={courseSummary.totalAssignments} hint="累计作业/测验数" />
+            <WorkbenchStatCard label="Exams" value={courseSummary.totalExams} hint="累计考试数" />
           </div>
 
           {message ? (
@@ -450,7 +459,7 @@ export default function ChaoxingLearningPage() {
 
           <WorkbenchSection
             title="扫码登录"
-            description="后端生成二维码、轮询登录状态、拿到课程页并抽取课程列表。前端只展示会话状态和结果。"
+            description="后端生成二维码、轮询登录状态、拿到课程页并继续抓章节/作业/考试统计。前端只展示结果。"
             actions={
               <Button onClick={() => void createQrSession()} disabled={submitting}>
                 <QrCode className="h-4 w-4" />
@@ -496,7 +505,7 @@ export default function ChaoxingLearningPage() {
                     <div>1. 后端打开登录页并提取二维码。</div>
                     <div>2. 用户扫码后，后端轮询确认状态。</div>
                     <div>3. 登录成功后，后端进入课程页并抽取课程列表。</div>
-                    <div>4. 页面只显示当前学期课程概览，不做自动化操作。</div>
+                    <div>4. 页面只显示学习通课程与统计，不做自动化操作。</div>
                   </div>
                 </div>
 
@@ -506,39 +515,87 @@ export default function ChaoxingLearningPage() {
                       <CheckCircle2 className="h-4 w-4" />
                       已完成课程抓取
                     </div>
-                    <div className="mt-2 leading-6">
-                      当前会话已经登录成功，并已从课程页提取课程入口。下面的课程列表和统计已可直接使用。
-                    </div>
+                  <div className="mt-2 leading-6">
+                      当前会话已经登录成功，并已从课程页提取课程入口与课程统计。下面的数据都以学习通课程页为准。
                   </div>
-                ) : null}
+                </div>
+              ) : null}
               </div>
             </div>
           </WorkbenchSection>
 
-          <WorkbenchSection title="当前学期课程列表" description="优先用教务课表提供时序信息，再合并扫码抓到的课程标题和入口。">
+          <WorkbenchSection title="学习通课程明细" description="每门课都展示抓到的真实学习口径，不再混入教务课表。">
             <ScrollArea className="h-[500px] pr-3">
               <div className="space-y-3">
                 {visualCourses.length === 0 ? (
-                  <WorkbenchEmpty title="还没有当前学期课程" description="先完成扫码登录，或者确认课表缓存里已有当前学期课程。" />
+                  <WorkbenchEmpty title="还没有抓到学习通课程" description="先完成扫码登录，等待后端进入课程页并提取课程列表。" />
                 ) : null}
                 {visualCourses.map((course) => (
-                  <Card key={`${course.title}-${course.weekday}-${course.period}`} className="border-slate-200 shadow-none">
+                  <Card key={`${course.title}-${course.courseId}-${course.classId}`} className="border-slate-200 shadow-none">
                     <CardContent className="space-y-2 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="text-sm font-medium text-slate-900">{course.title}</div>
-                        <Badge variant={course.matchedFrom === "qr" ? "success" : "outline"}>
-                          {course.matchedFrom === "qr" ? "已匹配扫码课程" : "仅课表缓存"}
-                        </Badge>
+                        <Badge variant={courseStatusBadge(course.status)}>{courseStatusLabel(course.status)}</Badge>
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs text-slate-500">
-                        <span>{course.weekday}</span>
-                        <span>{course.period}</span>
-                        <span>{course.location || "地点待定"}</span>
+                        <span>courseId: {course.courseId || "-"}</span>
+                        <span>clazzId: {course.classId || "-"}</span>
+                        <span>cpi: {course.cpi || "-"}</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-slate-500">
                         <UserRound className="h-3.5 w-3.5" />
                         {course.teacher || "教师待定"}
                       </div>
+                      <div className="grid gap-2 pt-1 sm:grid-cols-2">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                          <div className="flex items-center gap-2 font-medium text-slate-900">
+                            <Target className="h-3.5 w-3.5" />
+                            学习进度
+                          </div>
+                          <div className="mt-1 text-sm">{displayPercent(course.progressPercent)}</div>
+                          <div className="mt-1 text-[11px] text-slate-500">
+                            状态文本: {course.statusText || "-"}
+                            {course.scoreText ? ` · 成绩: ${course.scoreText}` : ""}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                          <div className="flex items-center gap-2 font-medium text-slate-900">
+                            <BookMarked className="h-3.5 w-3.5" />
+                            章节完成
+                          </div>
+                          <div className="mt-1 text-sm">
+                            {displayMetric(course.completedChapterCount)} / {displayMetric(course.chapterCount)}
+                          </div>
+                          <div className="mt-1 text-[11px] text-slate-500">
+                            完成率: {displayPercent(course.chapterCompletionPercent)}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                          <div className="flex items-center gap-2 font-medium text-slate-900">
+                            <ClipboardList className="h-3.5 w-3.5" />
+                            作业统计
+                          </div>
+                          <div className="mt-1 text-sm">
+                            {displayMetric(course.completedAssignmentCount)} / {displayMetric(course.assignmentCount)}
+                          </div>
+                          <div className="mt-1 text-[11px] text-slate-500">已完成 / 总数</div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                          <div className="flex items-center gap-2 font-medium text-slate-900">
+                            <FileCheck2 className="h-3.5 w-3.5" />
+                            考试统计
+                          </div>
+                          <div className="mt-1 text-sm">
+                            {displayMetric(course.completedExamCount)} / {displayMetric(course.examCount)}
+                          </div>
+                          <div className="mt-1 text-[11px] text-slate-500">已完成 / 总数</div>
+                        </div>
+                      </div>
+                      {course.error ? (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                          课程统计抓取告警: {course.error}
+                        </div>
+                      ) : null}
                       {course.url ? (
                         <div className="break-all text-xs text-slate-400">{course.url}</div>
                       ) : null}
@@ -551,47 +608,21 @@ export default function ChaoxingLearningPage() {
         </div>
 
         <div className="grid gap-4">
-          <WorkbenchSection title="课程情况概览" description="只展示当前学期，不展开成独立详情页。">
+          <WorkbenchSection title="课程情况概览" description="只围绕学习通课程自身的数据做统计。">
             <div className="grid gap-4 md:grid-cols-2">
-              <Card className="border-slate-200 bg-slate-50 shadow-none">
-                <CardContent className="p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">按星期分布</div>
-                  <div className="mt-4 space-y-3">
-                    {weekdayStats.length === 0 ? (
-                      <div className="text-sm text-slate-400">暂无数据</div>
-                    ) : (
-                      weekdayStats.map((item) => {
-                        const width = Math.max(10, Math.round((item.count / Math.max(...weekdayStats.map((x) => x.count), 1)) * 100));
-                        return (
-                          <div key={item.weekday} className="space-y-1">
-                            <div className="flex items-center justify-between text-sm text-slate-700">
-                              <span>{item.weekday}</span>
-                              <span>{item.count}</span>
-                            </div>
-                            <div className="h-2 rounded-full bg-slate-200">
-                              <div className="h-2 rounded-full bg-slate-900" style={{ width: `${width}%` }} />
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
               <Card className="border-slate-200 bg-white shadow-none">
                 <CardContent className="p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">按节次分布</div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">课程重复情况</div>
                   <div className="mt-4 space-y-3">
-                    {periodStats.length === 0 ? (
+                    {duplicateTitleStats.length === 0 ? (
                       <div className="text-sm text-slate-400">暂无数据</div>
                     ) : (
-                      periodStats.map((item) => {
-                        const width = Math.max(10, Math.round((item.count / Math.max(...periodStats.map((x) => x.count), 1)) * 100));
+                      duplicateTitleStats.map((item) => {
+                        const width = Math.max(10, Math.round((item.count / Math.max(...duplicateTitleStats.map((x) => x.count), 1)) * 100));
                         return (
-                          <div key={item.period} className="space-y-1">
+                          <div key={item.title} className="space-y-1">
                             <div className="flex items-center justify-between text-sm text-slate-700">
-                              <span>{item.period}</span>
+                              <span>{item.title}</span>
                               <span>{item.count}</span>
                             </div>
                             <div className="h-2 rounded-full bg-slate-200">
@@ -604,13 +635,38 @@ export default function ChaoxingLearningPage() {
                   </div>
                 </CardContent>
               </Card>
+              <Card className="border-slate-200 bg-white shadow-none">
+                <CardContent className="p-4">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">课程状态分布</div>
+                  <div className="mt-4 space-y-3">
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                      <div className="flex items-center justify-between text-sm text-emerald-900">
+                        <span>已完成课程</span>
+                        <span>{courseSummary.completedCourses}</span>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                      <div className="flex items-center justify-between text-sm text-amber-900">
+                        <span>学习中课程</span>
+                        <span>{courseSummary.inProgressCourses}</span>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="flex items-center justify-between text-sm text-slate-700">
+                        <span>待识别课程</span>
+                        <span>{Math.max(0, visualCourses.length - courseSummary.completedCourses - courseSummary.inProgressCourses)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </WorkbenchSection>
 
           <WorkbenchSection title="教师分布" description="只保留高频教师，减少噪音。">
             <div className="space-y-3">
               {teacherStats.length === 0 ? (
-                <WorkbenchEmpty title="暂无教师统计" description="等课程抓取和当前学期匹配完成后，这里会自动生成。" />
+                <WorkbenchEmpty title="暂无教师统计" description="等课程抓取完成后，这里会自动生成。" />
               ) : (
                 teacherStats.map((item) => {
                   const width = Math.max(12, Math.round((item.count / Math.max(...teacherStats.map((x) => x.count), 1)) * 100));
@@ -641,11 +697,20 @@ export default function ChaoxingLearningPage() {
                   <BookMarked className="h-4 w-4" />
                   当前启用
                 </div>
-                <div className="mt-2 leading-6">二维码登录、状态轮询、课程页抓取、当前学期筛选、课程列表与轻量统计。</div>
+                <div className="mt-2 leading-6">二维码登录、状态轮询、课程页抓取，以及章节/作业/考试/课程进度统计。</div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <div className="font-medium text-slate-900">当前不启用</div>
                 <div className="mt-2 leading-6">自动跳课、runner 注入、刷课执行面板。相关代码保留，但本页面不开放入口。</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-center gap-2 font-medium text-slate-900">
+                  <CircleDashed className="h-4 w-4" />
+                  当前统计口径
+                </div>
+                <div className="mt-2 leading-6">
+                  后端会在登录成功后逐门课抓课程主页、章节页、作业页、考试页，并汇总成统一课程指标。
+                </div>
               </div>
             </div>
           </WorkbenchSection>

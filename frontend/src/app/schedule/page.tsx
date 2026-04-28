@@ -156,15 +156,15 @@ function parseWeekTokens(value: string) {
   const normalized = text
     .replace(/第/g, "")
     .replace(/周次?/g, "")
+    .replace(/实验课/g, "")
+    .replace(/交替/g, "")
+    .replace(/单周/g, "(odd)")
+    .replace(/双周/g, "(even)")
     .replace(/\(周\)/g, "")
-    .replace(/单周/g, "|odd")
-    .replace(/双周/g, "|even")
-    .replace(/\((odd|even)\)/g, "|$1")
-    .replace(/[()]/g, "")
     .replace(/周/g, "");
 
   return normalized
-    .split(/[，,；;]/)
+    .split(/[，,；;或]/)
     .map((item) => item.trim())
     .filter(Boolean);
 }
@@ -174,20 +174,26 @@ function matchesWeek(value: string, weekIndex: number) {
   if (tokens.length === 0) return true;
 
   for (const token of tokens) {
-    const odd = token.includes("|odd");
-    const even = token.includes("|even");
-    const cleaned = token.replace(/\|odd|\|even/g, "");
+    const odd = /\((?:odd)\)/.test(token);
+    const even = /\((?:even)\)/.test(token);
+    const cleaned = token.replace(/\((?:odd|even)\)/g, "");
 
     let matched = false;
-    const range = cleaned.match(/^(\d+)-(\d+)$/);
-    if (range) {
-      const start = Number(range[1]);
-      const end = Number(range[2]);
-      matched = weekIndex >= start && weekIndex <= end;
-    } else {
-      const single = cleaned.match(/^(\d+)$/);
-      if (single) {
-        matched = weekIndex === Number(single[1]);
+    for (const part of cleaned.split(/[、/]/).filter(Boolean)) {
+      const range = part.match(/^(\d+)-(\d+)$/);
+      if (range) {
+        const start = Number(range[1]);
+        const end = Number(range[2]);
+        if (weekIndex >= start && weekIndex <= end) {
+          matched = true;
+          break;
+        }
+        continue;
+      }
+      const single = part.match(/^(\d+)$/);
+      if (single && weekIndex === Number(single[1])) {
+        matched = true;
+        break;
       }
     }
 
