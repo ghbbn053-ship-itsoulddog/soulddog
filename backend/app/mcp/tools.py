@@ -77,6 +77,22 @@ def _resolve_semester(semester: str = "") -> str:
     return resolved or normalized
 
 
+def _normalize_weekday_label(value: object) -> str:
+    raw_day = str(value or "").strip()
+    weekday_alias = {
+        "周一": "星期一",
+        "周二": "星期二",
+        "周三": "星期三",
+        "周四": "星期四",
+        "周五": "星期五",
+        "周六": "星期六",
+        "周日": "星期日",
+        "星期天": "星期日",
+        "周天": "星期日",
+    }
+    return weekday_alias.get(raw_day, raw_day)
+
+
 def _format_cached_personal_info(username: str) -> Optional[str]:
     info, status = _load_cached_section(username, "个人信息")
     if not info:
@@ -115,7 +131,7 @@ def _format_cached_schedule(username: str, semester: str = "") -> Optional[str]:
 
     schedule_by_day = {}
     for course in courses:
-        day = course.get("星期", "")
+        day = _normalize_weekday_label(course.get("星期") or course.get("weekday"))
         schedule_by_day.setdefault(day, []).append(course)
 
     day_order = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
@@ -123,7 +139,8 @@ def _format_cached_schedule(username: str, semester: str = "") -> Optional[str]:
         if day in schedule_by_day:
             output += f"【{day}】\n"
             for course in schedule_by_day[day]:
-                output += f"  {course.get('节次', '')} - {course.get('课程名称', '')}\n"
+                period = course.get("节次") or course.get("节次信息") or course.get("上课时间") or ""
+                output += f"  {period} - {course.get('课程名称', '')}\n"
                 output += f"    教师: {course.get('教师', '')} | 地点: {course.get('地点', '')}\n"
                 output += f"    周次: {course.get('周次', '')}\n\n"
 
@@ -385,7 +402,7 @@ async def query_schedule(username: str, semester: str = "") -> str:
             # 按星期分组
             schedule_by_day = {}
             for course in courses:
-                day = course.get("星期", "")
+                day = _normalize_weekday_label(course.get("星期") or course.get("weekday"))
                 if day not in schedule_by_day:
                     schedule_by_day[day] = []
                 schedule_by_day[day].append(course)
@@ -396,7 +413,8 @@ async def query_schedule(username: str, semester: str = "") -> str:
                 if day in schedule_by_day:
                     output += f"【{day}】\n"
                     for course in schedule_by_day[day]:
-                        output += f"  {course.get('节次', '')} - {course.get('课程名称', '')}\n"
+                        period = course.get("节次") or course.get("节次信息") or course.get("上课时间") or ""
+                        output += f"  {period} - {course.get('课程名称', '')}\n"
                         output += f"    教师: {course.get('教师', '')} | 地点: {course.get('地点', '')}\n"
                         output += f"    周次: {course.get('周次', '')}\n\n"
             
