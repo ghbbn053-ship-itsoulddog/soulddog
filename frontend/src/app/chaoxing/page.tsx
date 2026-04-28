@@ -116,12 +116,14 @@ function normalizeName(value: string) {
 }
 
 function toMetricMap(metrics: CourseMetricItem[]) {
-  const map = new Map<string, CourseMetricItem>();
+  const map = new Map<string, CourseMetricItem[]>();
   for (const metric of metrics) {
-    const key = `${normalizeName(text(metric.title))}__${text(metric.class_id)}__${text(metric.course_id)}`;
-    if (!map.has(key)) {
-      map.set(key, metric);
-    }
+    const primaryKey = [text(metric.course_id), text(metric.class_id), text(metric.cpi)].filter(Boolean).join("__");
+    const fallbackKey = `${normalizeName(text(metric.title))}__${text(metric.class_id)}__${text(metric.course_id)}`;
+    const key = primaryKey || fallbackKey;
+    const current = map.get(key) || [];
+    current.push(metric);
+    map.set(key, current);
   }
   return map;
 }
@@ -130,14 +132,18 @@ function buildVisualCourses(catalog: CourseCatalogItem[], metrics: CourseMetricI
   const metricMap = toMetricMap(metrics);
   const seen = new Set<string>();
   const merged: VisualCourse[] = [];
-  for (const course of catalog) {
-    const key = `${normalizeName(course.title || "")}__${text(course.class_id)}__${text(course.course_id)}`;
-    if (!course.title || seen.has(key)) continue;
-    seen.add(key);
-    const metric = metricMap.get(key);
+  for (const [index, course] of catalog.entries()) {
+    const metricKey = [text(course.course_id), text(course.class_id), text(course.cpi)].filter(Boolean).join("__");
+    const fallbackMetricKey = `${normalizeName(course.title || "")}__${text(course.class_id)}__${text(course.course_id)}`;
+    const matchedMetrics = metricMap.get(metricKey || fallbackMetricKey) || [];
+    const metric = matchedMetrics[0];
+    const title = text(course.title) || text(metric?.title) || `课程 ${text(course.course_id) || index + 1}`;
+    const dedupeKey = text(course.url) || `${text(course.course_id)}__${text(course.class_id)}__${text(course.cpi)}__${index}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
     merged.push({
-      title: course.title,
-      teacher: course.teacher || "",
+      title,
+      teacher: course.teacher || text(metric?.teacher),
       courseId: text(course.course_id),
       classId: text(course.class_id),
       cpi: text(course.cpi),
@@ -475,11 +481,15 @@ export default function ChaoxingLearningPage() {
                 </div>
                 {qrSession?.qr_image_data ? (
                   <div className="space-y-3">
-                    <div className="flex justify-center rounded-2xl bg-white p-4">
-                      <img src={qrSession.qr_image_data} alt="学习通登录二维码" className="h-56 w-56 rounded-xl object-contain" />
+                    <div className="flex justify-center rounded-2xl bg-white p-3 md:p-5">
+                      <img
+                        src={qrSession.qr_image_data}
+                        alt="学习通登录二维码"
+                        className="h-[320px] w-[320px] rounded-xl object-contain md:h-[380px] md:w-[380px]"
+                      />
                     </div>
                     <div className="text-center text-xs text-slate-500">
-                      二维码有效期通常较短。若扫码无响应，直接重新生成。
+                      二维码有效期通常较短。若扫码无响应，直接重新生成。电脑端显示已放大，手机贴近屏幕即可扫。
                     </div>
                   </div>
                 ) : (
