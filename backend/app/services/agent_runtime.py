@@ -12,6 +12,7 @@ import importlib.util
 import logging
 import os
 import re
+from datetime import datetime
 from typing import Any, Dict, List
 
 from education_options import EducationOptions
@@ -109,6 +110,10 @@ class AgentRuntimeService:
                 "mcp_tools": [],
                 "composition": composition,
                 "tool_results": [],
+                "time_context": {
+                    **EducationOptions.get_time_context(),
+                    "now_label": datetime.now().strftime("%Y-%m-%d"),
+                },
             }
             selected_id = workspace_id
             if selected_id is None and session_store:
@@ -181,18 +186,18 @@ class AgentRuntimeService:
         semester_match = re.search(r"(20\d{2}-20\d{2}-[12])", message or "")
         week_match = re.search(r"(第?\s*\d{1,2}\s*周)", message or "")
         numeric_match = re.findall(r"\d{4,}", message or "")
-        current_semester = ""
+        resolved_semester = ""
         try:
-            current_semester = str(EducationOptions.get_current_semester() or "").strip()
+            resolved_semester = str(EducationOptions.resolve_semester_reference(message or "") or "").strip()
         except Exception:
-            current_semester = ""
+            resolved_semester = ""
 
         lowered = (message or "").lower()
         values: Dict[str, str] = {}
         if semester_match:
             values["semester"] = semester_match.group(1)
-        elif current_semester and any(token in lowered for token in ["当前学期", "这学期", "本学期", "最近学期"]):
-            values["semester"] = current_semester
+        elif resolved_semester:
+            values["semester"] = resolved_semester
         if week_match:
             values["week"] = re.sub(r"\s+", "", week_match.group(1))
         elif any(token in lowered for token in ["本周", "这周", "当前周"]):
@@ -345,7 +350,17 @@ class AgentRuntimeService:
         skills = runtime_context.get("skills") or []
         mcp_tools = runtime_context.get("mcp_tools") or []
         tool_results = runtime_context.get("tool_results") or []
+        time_context = runtime_context.get("time_context") or {}
         sections: List[str] = []
+
+        if time_context:
+            sections.append(
+                "当前时间上下文："
+                f"今天={time_context.get('today', '')}；"
+                f"当前学期={time_context.get('current_semester', '')}；"
+                f"上学期={time_context.get('previous_semester', '')}；"
+                f"下学期={time_context.get('next_semester', '')}"
+            )
 
         if workspace:
             sections.append(

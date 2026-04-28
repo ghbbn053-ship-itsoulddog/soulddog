@@ -24,6 +24,22 @@ def _group_grades_by_semester(grades: List[Dict]) -> Dict[str, List[Dict]]:
     return grouped
 
 
+def _group_items_by_semester(items: List[Dict], keys: tuple[str, ...] = ("学期", "开课学期")) -> Dict[str, List[Dict]]:
+    grouped: Dict[str, List[Dict]] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        semester = ""
+        for key in keys:
+            value = str(item.get(key, "") or "").strip()
+            if value:
+                semester = value
+                break
+        if semester:
+            grouped.setdefault(semester, []).append(item)
+    return grouped
+
+
 def normalize_education_payload(raw_data: Dict) -> Dict:
     """
     标准化后的结构：
@@ -70,6 +86,7 @@ def normalize_education_payload(raw_data: Dict) -> Dict:
     raw_schedule = raw_data.get("课表信息", [])
     schedule_semester = ""
     schedule_courses: List[Dict] = []
+    schedule_by_semester: Dict[str, List[Dict]] = {}
     if isinstance(raw_schedule, list):
         schedule_courses = [c for c in raw_schedule if isinstance(c, dict)]
         if schedule_courses:
@@ -77,6 +94,15 @@ def normalize_education_payload(raw_data: Dict) -> Dict:
     elif isinstance(raw_schedule, dict):
         schedule_semester = str(raw_schedule.get("学期", ""))
         schedule_courses = [c for c in _as_list(raw_schedule.get("课程列表", [])) if isinstance(c, dict)]
+        raw_schedule_by_semester = _as_dict(raw_schedule.get("按学期", {}))
+        if raw_schedule_by_semester:
+            for sem, courses in raw_schedule_by_semester.items():
+                clean_courses = [c for c in _as_list(courses) if isinstance(c, dict)]
+                if clean_courses:
+                    schedule_by_semester[sem] = clean_courses
+
+    if not schedule_by_semester:
+        schedule_by_semester = _group_items_by_semester(schedule_courses)
 
     # 培养方案 / 学业进度
     training_plan = _as_dict(raw_data.get("培养方案", {}))
@@ -86,11 +112,21 @@ def normalize_education_payload(raw_data: Dict) -> Dict:
     raw_exam = raw_data.get("考试安排", [])
     exam_semester = ""
     exam_list: List[Dict] = []
+    exams_by_semester: Dict[str, List[Dict]] = {}
     if isinstance(raw_exam, list):
         exam_list = [e for e in raw_exam if isinstance(e, dict)]
     elif isinstance(raw_exam, dict):
         exam_semester = str(raw_exam.get("学期", ""))
         exam_list = [e for e in _as_list(raw_exam.get("考试列表", [])) if isinstance(e, dict)]
+        raw_exam_by_semester = _as_dict(raw_exam.get("按学期", {}))
+        if raw_exam_by_semester:
+            for sem, exams in raw_exam_by_semester.items():
+                clean_exams = [e for e in _as_list(exams) if isinstance(e, dict)]
+                if clean_exams:
+                    exams_by_semester[sem] = clean_exams
+
+    if not exams_by_semester:
+        exams_by_semester = _group_items_by_semester(exam_list)
 
     return {
         "个人信息": personal_info,
@@ -102,12 +138,14 @@ def normalize_education_payload(raw_data: Dict) -> Dict:
         "课表信息": {
             "学期": schedule_semester,
             "课程列表": schedule_courses,
+            "按学期": schedule_by_semester,
         },
         "培养方案": training_plan,
         "学业进度": academic_progress,
         "考试安排": {
             "学期": exam_semester,
             "考试列表": exam_list,
+            "按学期": exams_by_semester,
         },
     }
 
@@ -138,4 +176,3 @@ def build_payload_from_education_data_record(edu_data) -> Dict:
         "考试安排": getattr(edu_data, "exam_schedule", []) or [],
     }
     return normalize_education_payload(raw)
-

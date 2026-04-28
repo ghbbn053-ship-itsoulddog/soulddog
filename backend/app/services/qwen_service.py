@@ -11,6 +11,8 @@ import json
 import asyncio
 from app.services.education_normalizer import summarize_education_payload
 from app.mcp.tools import query_weather as mcp_query_weather
+from app.models.base import SessionLocal
+from app.services.education_cache import get_education_cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -422,15 +424,20 @@ class QwenService:
     
     def _execute_tool(self, func_name: str, args: Dict, context: Dict = None) -> Dict:
         """执行具体的工具函数"""
+        username = (context or {}).get("username", "")
+
+        cached_result = self._load_cached_tool_result(username, func_name, args) if username else None
+        if cached_result is not None:
+            return cached_result
+
         if not context:
-            return {"error": "未登录教务系统，无法查询数据"}
-        
+            return {"error": "未登录教务系统，且暂无可用缓存数据"}
+
         session = context.get("session")
         server_url = context.get("server_url")
-        username = context.get("username")
         
         if not session or not server_url:
-            return {"error": "用户未登录教务系统，请先登录"}
+            return {"error": "用户未登录教务系统，且暂无可用缓存数据"}
         
         try:
             from scraper import JwxtScraper
@@ -538,6 +545,123 @@ class QwenService:
         except Exception as e:
             logger.error(f"【工具执行】{func_name} 失败: {e}")
             return {"error": f"工具执行失败: {str(e)}"}
+
+    def _load_cached_tool_result(self, username: str, func_name: str, args: Dict) -> Optional[Dict]:
+        db = SessionLocal()
+        try:
+            svc = get_education_cache_service()
+            bundle = svc.get_bundle(db, username)
+            if not bundle or not bundle.education_data:
+                return None
+
+            payload = svc.build_payload(bundle)
+            status = svc.build_status(bundle, username)
+            cached_at = status.get("cached_at")
+
+            if func_name == "query_personal_info":
+                info = dict(payload.get("个人信息", {}) or {})
+                if not info:
+                    return None
+                if cached_at:
+                    info["数据来源"] = f"平台缓存 ({cached_at})"
+                return info
+
+            if func_name == "query_grades":
+                grades_info = dict(payload.get("成绩信息", {}) or {})
+                grade_list = list(grades_info.get("成绩列表", []) or [])
+                semester = str(args.get("semester", "") or "").strip()
+                course_name = str(args.get("course_name", "") or "").strip().lower()
+                if semester:
+                    grade_list = [
+                        g for g in grade_list
+                        if str(g.get("开课学期") or g.get("学期") or "").strip() == semester
+                    ]
+                if course_name:
+                    grade_list = [
+                        g for g in grade_list
+                        if course_name in str(g.get("课程名称", "") or "").lower()
+                    ]
+                grouped = {}
+                for grade in grade_list:
+                    sem = str(grade.get("开课学期") or grade.get("学期") or "未知学期").strip()
+                    grouped.setdefault(sem, []).append(grade)
+                return {
+                    "成绩（按学期）": grouped,
+                    "总数": len(grade_list),
+                    "统计": grades_info.get("统计信息", {}) or {},
+                    "数据来源": f"平台缓存 ({cached_at})" if cached_at else "平台缓存",
+                }
+
+            if func_name == "query_schedule":
+                schedule_info = dict(payload.get("课表信息", {}) or {})
+                courses = list(schedule_info.get("课程列表", []) or [])
+                schedule_by_semester = dict(schedule_info.get("按学期", {}) or {})
+                semester = str(args.get("semester", "") or "").strip()
+                actual_semester = str(schedule_info.get("学期", "") or semester).strip()
+                if semester and schedule_by_semester.get(semester):
+                    courses = list(schedule_by_semester.get(semester) or [])
+                    actual_semester = semester
+                elif semester:
+                    filtered = [c for c in courses if str(c.get("学期", "") or "").strip() == semester]
+                    if filtered:
+                        courses = filtered
+                        actual_semester = semester
+                return {
+                    "学期": actual_semester,
+                    "课表": courses,
+                    "总数": len(courses),
+                    "数据来源": f"平台缓存 ({cached_at})" if cached_at else "平台缓存",
+                }
+
+            if func_name == "query_exam_schedule":
+                exam_info = dict(payload.get("考试安排", {}) or {})
+                exams = list(exam_info.get("考试列表", []) or [])
+                exam_by_semester = dict(exam_info.get("按学期", {}) or {})
+                semester = str(args.get("semester", "") or "").strip()
+                actual_semester = str(exam_info.get("学期", "") or semester).strip()
+                if semester and exam_by_semester.get(semester):
+                    exams = list(exam_by_semester.get(semester) or [])
+                    actual_semester = semester
+                elif semester:
+                    filtered = [e for e in exams if str(e.get("学期", "") or "").strip() == semester]
+                    if filtered:
+                        exams = filtered
+                        actual_semester = semester
+                return {
+                    "学期": actual_semester,
+                    "考试安排": exams,
+                    "总数": len(exams),
+                    "数据来源": f"平台缓存 ({cached_at})" if cached_at else "平台缓存",
+                }
+
+            if func_name == "query_academic_progress":
+                progress = dict(payload.get("学业进度", {}) or {})
+                if not progress:
+                    return None
+                if cached_at:
+                    progress["数据来源"] = f"平台缓存 ({cached_at})"
+                return progress
+
+            if func_name == "query_training_plan":
+                plan = dict(payload.get("培养方案", {}) or {})
+                if not plan:
+                    return None
+                courses = list(plan.get("课程列表", []) or [])
+                semester_filter = str(args.get("semester", "") or "").strip()
+                if semester_filter:
+                    courses = [c for c in courses if str(c.get("学期", "") or "").strip() == semester_filter]
+                return {
+                    "培养方案": courses,
+                    "总课程数": len(courses),
+                    "学期分布": sorted({str(c.get("学期", "") or "").strip() for c in courses if str(c.get("学期", "") or "").strip()}),
+                    "数据来源": f"平台缓存 ({cached_at})" if cached_at else "平台缓存",
+                }
+            return None
+        except Exception as e:
+            logger.warning(f"【缓存工具】{func_name} 读取失败: {e}")
+            return None
+        finally:
+            db.close()
     
     def _update_stored_data(self, username: str, raw_data: Dict):
         """刷新数据后更新数据库和向量库"""

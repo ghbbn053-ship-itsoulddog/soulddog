@@ -3,6 +3,7 @@
 包含所有下拉选项数据，供AI调用工具使用
 """
 
+from datetime import datetime
 from typing import List, Dict, Optional
 
 
@@ -131,6 +132,25 @@ class EducationOptions:
     """教务系统选项查询工具类，供AI调用"""
 
     @staticmethod
+    def _format_semester(start_year: int, term: int) -> str:
+        return f"{start_year}-{start_year + 1}-{term}"
+
+    @staticmethod
+    def _shift_semester(semester_code: str, offset: int) -> str:
+        try:
+            start_year, _, term = semester_code.split("-")
+            start_year_int = int(start_year)
+            term_int = int(term)
+        except Exception:
+            return semester_code
+
+        current_index = start_year_int * 2 + (term_int - 1)
+        shifted_index = current_index + offset
+        shifted_start_year = shifted_index // 2
+        shifted_term = 1 if shifted_index % 2 == 0 else 2
+        return EducationOptions._format_semester(shifted_start_year, shifted_term)
+
+    @staticmethod
     def get_departments(include_admin: bool = False, include_vocational: bool = False) -> List[Dict]:
         """
         获取院系列表
@@ -190,13 +210,22 @@ class EducationOptions:
 
     @staticmethod
     def get_semesters() -> List[Dict]:
-        """获取学期列表"""
-        return SEMESTERS
+        """获取学期列表（动态生成，避免年份写死失效）"""
+        current = EducationOptions.get_current_semester()
+        result = []
+        for offset in range(1, -7, -1):
+            code = EducationOptions._shift_semester(current, offset)
+            try:
+                _, _, term = code.split("-")
+            except Exception:
+                term = "1"
+            name = code.replace("-", "-").rsplit("-", 1)[0] + ("学年第一学期" if term == "1" else "学年第二学期")
+            result.append({"code": code, "name": name})
+        return result
 
     @staticmethod
     def get_current_semester() -> str:
         """获取当前学期（根据当前时间推断）"""
-        from datetime import datetime
         now = datetime.now()
         year = now.year
         month = now.month
@@ -206,6 +235,58 @@ class EducationOptions:
             return f"{year-1}-{year}-2"
         else:
             return f"{year}-{year+1}-1"
+
+    @staticmethod
+    def get_relative_semester(offset: int = 0) -> str:
+        current = EducationOptions.get_current_semester()
+        return EducationOptions._shift_semester(current, offset)
+
+    @staticmethod
+    def resolve_semester_reference(text: str) -> str:
+        raw = str(text or "").strip()
+        if not raw:
+            return ""
+
+        import re
+
+        explicit = re.search(r"(20\d{2}-20\d{2}-[12])", raw)
+        if explicit:
+            return explicit.group(1)
+
+        current = EducationOptions.get_current_semester()
+        lowered = raw.lower()
+        if any(token in lowered for token in ["本学期", "这学期", "当前学期", "最近学期"]):
+            return current
+        if any(token in lowered for token in ["上学期", "上一学期"]):
+            return EducationOptions.get_relative_semester(-1)
+        if any(token in lowered for token in ["下学期", "下一学期"]):
+            return EducationOptions.get_relative_semester(1)
+        if "第一学期" in raw:
+            try:
+                start_year = int(current.split("-")[0])
+            except Exception:
+                return ""
+            if current.endswith("-1"):
+                return current
+            return EducationOptions._format_semester(start_year, 1)
+        if "第二学期" in raw:
+            try:
+                start_year = int(current.split("-")[0])
+            except Exception:
+                return ""
+            return EducationOptions._format_semester(start_year, 2)
+        return ""
+
+    @staticmethod
+    def get_time_context() -> Dict[str, str]:
+        today = datetime.now()
+        current = EducationOptions.get_current_semester()
+        return {
+            "today": today.strftime("%Y-%m-%d"),
+            "current_semester": current,
+            "previous_semester": EducationOptions.get_relative_semester(-1),
+            "next_semester": EducationOptions.get_relative_semester(1),
+        }
 
     @staticmethod
     def get_course_natures() -> List[Dict]:
@@ -393,7 +474,7 @@ def get_option_description(option_type: str, code: str) -> str:
         return dept["name"] if dept else "未知院系"
     
     elif option_type == "semester":
-        for sem in SEMESTERS:
+        for sem in EducationOptions.get_semesters():
             if sem["code"] == code:
                 return sem["name"]
         return code

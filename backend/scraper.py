@@ -6,6 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 from typing import Dict, List, Optional
 import logging
+from education_options import EducationOptions
 
 logger = logging.getLogger(__name__)
 
@@ -1708,12 +1709,47 @@ class JwxtScraper:
                     "统计信息": grades.get("stats", {})
                 }
 
-            # 获取课表（附带学期信息）
-            schedule = self.get_schedule()
-            if schedule.get("success"):
+            # 获取课表（缓存固定数据时需要尽量覆盖最近学期，不只抓一个默认学期）
+            schedule_by_semester = {}
+            merged_schedule_courses = []
+            schedule_target_semesters = []
+            try:
+                current_semester = EducationOptions.get_current_semester()
+                previous_semester = EducationOptions.get_relative_semester(-1)
+                for sem in [current_semester, previous_semester]:
+                    if sem and sem not in schedule_target_semesters:
+                        schedule_target_semesters.append(sem)
+            except Exception:
+                schedule_target_semesters = []
+
+            if not schedule_target_semesters:
+                schedule_target_semesters = [""]
+
+            for sem in schedule_target_semesters:
+                schedule = self.get_schedule(semester=sem)
+                if not schedule.get("success"):
+                    continue
+                actual_semester = str(schedule.get("semester", "") or sem).strip()
+                courses = list(schedule.get("data", []) or [])
+                if actual_semester and courses:
+                    schedule_by_semester[actual_semester] = courses
+                    merged_schedule_courses.extend(courses)
+
+            if not schedule_by_semester:
+                schedule = self.get_schedule()
+                if schedule.get("success"):
+                    actual_semester = str(schedule.get("semester", "") or "").strip()
+                    courses = list(schedule.get("data", []) or [])
+                    if actual_semester and courses:
+                        schedule_by_semester[actual_semester] = courses
+                        merged_schedule_courses.extend(courses)
+
+            if schedule_by_semester:
+                default_schedule_semester = schedule_target_semesters[0] if schedule_target_semesters else next(iter(schedule_by_semester.keys()), "")
                 all_data["课表信息"] = {
-                    "学期": schedule.get("semester", ""),
-                    "课程列表": schedule.get("data", [])
+                    "学期": default_schedule_semester,
+                    "课程列表": merged_schedule_courses,
+                    "按学期": schedule_by_semester,
                 }
 
             # 获取我的培养方案
@@ -1726,12 +1762,41 @@ class JwxtScraper:
             if progress.get("success"):
                 all_data["学业进度"] = progress.get("data", {})
 
-            # 获取考试安排（附带学期信息）
-            exams = self.get_exam_schedule()
-            if exams.get("success"):
+            # 获取考试安排（同样按最近学期分区缓存）
+            exam_by_semester = {}
+            merged_exams = []
+            exam_target_semesters = schedule_target_semesters or [""]
+            for sem in exam_target_semesters:
+                exams = self.get_exam_schedule(semester=sem)
+                if not exams.get("success"):
+                    continue
+                actual_semester = str(exams.get("semester", "") or sem).strip()
+                exam_rows = list(exams.get("data", []) or [])
+                if actual_semester and exam_rows:
+                    for row in exam_rows:
+                        if isinstance(row, dict) and not str(row.get("学期", "") or "").strip():
+                            row["学期"] = actual_semester
+                    exam_by_semester[actual_semester] = exam_rows
+                    merged_exams.extend(exam_rows)
+
+            if not exam_by_semester:
+                exams = self.get_exam_schedule()
+                if exams.get("success"):
+                    actual_semester = str(exams.get("semester", "") or "").strip()
+                    exam_rows = list(exams.get("data", []) or [])
+                    if actual_semester and exam_rows:
+                        for row in exam_rows:
+                            if isinstance(row, dict) and not str(row.get("学期", "") or "").strip():
+                                row["学期"] = actual_semester
+                        exam_by_semester[actual_semester] = exam_rows
+                        merged_exams.extend(exam_rows)
+
+            if exam_by_semester:
+                default_exam_semester = exam_target_semesters[0] if exam_target_semesters else next(iter(exam_by_semester.keys()), "")
                 all_data["考试安排"] = {
-                    "学期": exams.get("semester", ""),
-                    "考试列表": exams.get("data", [])
+                    "学期": default_exam_semester,
+                    "考试列表": merged_exams,
+                    "按学期": exam_by_semester,
                 }
 
             logger.info("所有向量化数据获取完成")

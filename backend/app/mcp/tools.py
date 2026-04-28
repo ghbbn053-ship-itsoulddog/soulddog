@@ -96,8 +96,12 @@ def _format_cached_schedule(username: str, semester: str = "") -> Optional[str]:
 
     target_semester = _resolve_semester(semester)
     actual_semester = str(schedule.get("学期") or target_semester or "当前学期")
+    schedule_by_semester = dict(schedule.get("按学期") or {})
     courses = list(schedule.get("课程列表") or [])
-    if target_semester:
+    if target_semester and schedule_by_semester.get(target_semester):
+        courses = list(schedule_by_semester.get(target_semester) or [])
+        actual_semester = target_semester
+    elif target_semester:
         filtered = [course for course in courses if str(course.get("学期") or "") == target_semester]
         if filtered:
             courses = filtered
@@ -249,8 +253,12 @@ def _format_cached_exam_schedule(username: str, semester: str = "") -> Optional[
 
     target_semester = _resolve_semester(semester)
     actual_semester = str(exam_data.get("学期") or target_semester or "当前学期")
+    exam_by_semester = dict(exam_data.get("按学期") or {})
     exams = list(exam_data.get("考试列表") or [])
-    if target_semester:
+    if target_semester and exam_by_semester.get(target_semester):
+        exams = list(exam_by_semester.get(target_semester) or [])
+        actual_semester = target_semester
+    elif target_semester:
         filtered = [exam for exam in exams if str(exam.get("学期") or "") == target_semester]
         if filtered:
             exams = filtered
@@ -307,6 +315,9 @@ async def query_grades(username: str, semester: str = "") -> str:
     """
     try:
         target_semester = _resolve_semester(semester)
+        cached = _format_cached_grades(username, target_semester)
+        if cached:
+            return cached
         scraper = _get_scraper(username)
         result = scraper.get_grades(kksj=target_semester)
         
@@ -326,9 +337,6 @@ async def query_grades(username: str, semester: str = "") -> str:
             return f"查询失败: {result.get('message', '未知错误')}"
     
     except ValueError as e:
-        cached = _format_cached_grades(username, target_semester)
-        if cached:
-            return cached
         return str(e)
     except Exception as e:
         logger.error(f"查询成绩失败: {e}")
@@ -348,6 +356,9 @@ async def query_schedule(username: str, semester: str = "") -> str:
     """
     try:
         target_semester = _resolve_semester(semester)
+        cached = _format_cached_schedule(username, target_semester)
+        if cached:
+            return cached
         scraper = _get_scraper(username)
         result = scraper.get_schedule(semester=target_semester)
         
@@ -382,9 +393,6 @@ async def query_schedule(username: str, semester: str = "") -> str:
             return f"查询失败: {result.get('message', '未知错误')}"
     
     except ValueError as e:
-        cached = _format_cached_schedule(username, target_semester)
-        if cached:
-            return cached
         return str(e)
     except Exception as e:
         logger.error(f"查询课表失败: {e}")
@@ -402,6 +410,9 @@ async def query_academic_progress(username: str) -> str:
         学业进度信息，包含已修学分、未完成学分、各模块进度等
     """
     try:
+        cached = _format_cached_academic_progress(username)
+        if cached:
+            return cached
         scraper = _get_scraper(username)
         result = scraper.get_academic_progress()
         
@@ -411,9 +422,6 @@ async def query_academic_progress(username: str) -> str:
             return f"查询失败: {result.get('message', '未知错误')}"
     
     except ValueError as e:
-        cached = _format_cached_academic_progress(username)
-        if cached:
-            return cached
         return str(e)
     except Exception as e:
         logger.error(f"查询学业进度失败: {e}")
@@ -431,6 +439,9 @@ async def query_training_plan(username: str) -> str:
         培养方案信息，包含课程要求、学分分布等
     """
     try:
+        cached = _format_cached_training_plan(username)
+        if cached:
+            return cached
         scraper = _get_scraper(username)
         result = scraper.get_my_training_plan()
         
@@ -440,9 +451,6 @@ async def query_training_plan(username: str) -> str:
             return f"查询失败: {result.get('message', '未知错误')}"
     
     except ValueError as e:
-        cached = _format_cached_training_plan(username)
-        if cached:
-            return cached
         return str(e)
     except Exception as e:
         logger.error(f"查询培养方案失败: {e}")
@@ -462,6 +470,9 @@ async def query_exam_schedule(username: str, semester: str = "") -> str:
     """
     try:
         target_semester = _resolve_semester(semester)
+        cached = _format_cached_exam_schedule(username, target_semester)
+        if cached:
+            return cached
         scraper = _get_scraper(username)
         result = scraper.get_exam_schedule(semester=target_semester)
         
@@ -487,9 +498,6 @@ async def query_exam_schedule(username: str, semester: str = "") -> str:
             return f"查询失败: {result.get('message', '未知错误')}"
     
     except ValueError as e:
-        cached = _format_cached_exam_schedule(username, target_semester)
-        if cached:
-            return cached
         return str(e)
     except Exception as e:
         logger.error(f"查询考试安排失败: {e}")
@@ -507,6 +515,9 @@ async def query_personal_info(username: str) -> str:
         个人信息，包含姓名、学院、专业、班级等
     """
     try:
+        cached = _format_cached_personal_info(username)
+        if cached:
+            return cached
         scraper = _get_scraper(username)
         result = scraper.get_personal_info()
         
@@ -523,9 +534,6 @@ async def query_personal_info(username: str) -> str:
             return f"查询失败: {result.get('message', '未知错误')}"
     
     except ValueError as e:
-        cached = _format_cached_personal_info(username)
-        if cached:
-            return cached
         return str(e)
     except Exception as e:
         logger.error(f"查询个人信息失败: {e}")
