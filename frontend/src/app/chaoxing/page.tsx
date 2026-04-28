@@ -165,6 +165,38 @@ function buildVisualCourses(catalog: CourseCatalogItem[], metrics: CourseMetricI
       error: text(metric?.error),
     });
   }
+
+  // Fallback: when course catalog extraction is empty or partial, still render
+  // the learning dashboard from per-course metrics so the page does not go blank.
+  for (const [index, metric] of metrics.entries()) {
+    const dedupeKey =
+      [text(metric.course_id), text(metric.class_id), text(metric.cpi)].filter(Boolean).join("__") ||
+      `${normalizeName(text(metric.title))}__metric__${index}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    merged.push({
+      title: text(metric.title) || `课程 ${text(metric.course_id) || index + 1}`,
+      teacher: text(metric.teacher),
+      courseId: text(metric.course_id),
+      classId: text(metric.class_id),
+      cpi: text(metric.cpi),
+      progressPercent: typeof metric.progress_percent === "number" ? metric.progress_percent : null,
+      chapterCount: typeof metric.chapter_count === "number" ? metric.chapter_count : null,
+      completedChapterCount: typeof metric.completed_chapter_count === "number" ? metric.completed_chapter_count : null,
+      chapterCompletionPercent:
+        typeof metric.chapter_completion_percent === "number" ? metric.chapter_completion_percent : null,
+      assignmentCount: typeof metric.assignment_count === "number" ? metric.assignment_count : null,
+      completedAssignmentCount:
+        typeof metric.completed_assignment_count === "number" ? metric.completed_assignment_count : null,
+      examCount: typeof metric.exam_count === "number" ? metric.exam_count : null,
+      completedExamCount: typeof metric.completed_exam_count === "number" ? metric.completed_exam_count : null,
+      scoreText: text(metric.score_text),
+      statusText: text(metric.status_text),
+      status: text(metric.status),
+      error: text(metric.error),
+    });
+  }
+
   return merged;
 }
 

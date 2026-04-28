@@ -615,12 +615,26 @@ class ChaoxingQrLoginService:
         return ""
 
     def _extract_candidate_course_urls(self, raw_text: str, base_url: str) -> List[str]:
-        matches = re.findall(
-            r'(https?://[^\s"\']*mycourse/stu\?[^"\']+|/[^"\']*mycourse/stu\?[^"\']+)',
-            raw_text,
-            flags=re.I,
-        )
-        return [urljoin(base_url, html.unescape(match)) for match in matches]
+        if not raw_text:
+            return []
+
+        patterns = [
+            r'https?://[^\s"\'<>]*mycourse/stu\?[^"\'<>]+',
+            r'/[^\s"\'<>]*mycourse/stu\?[^"\'<>]+',
+            r'https?://[^\s"\'<>]*courseid=[^"\'<>&]+\&clazzid=[^"\'<>]+',
+            r'/[^\s"\'<>]*courseid=[^"\'<>&]+\&clazzid=[^"\'<>]+',
+        ]
+
+        seen: set[str] = set()
+        urls: List[str] = []
+        for pattern in patterns:
+            for match in re.findall(pattern, raw_text, flags=re.I):
+                normalized = urljoin(base_url, html.unescape(match))
+                if normalized in seen:
+                    continue
+                seen.add(normalized)
+                urls.append(normalized)
+        return urls
 
     def _extract_course_cards(self, html_text: str, base_url: str) -> List[Dict[str, Any]]:
         soup = BeautifulSoup(html_text, "lxml")
@@ -628,7 +642,8 @@ class ChaoxingQrLoginService:
         seen: set[str] = set()
 
         def add_course(url: str, title: str, teacher: str = "", image: str = "") -> None:
-            if "courseid=" not in url.lower():
+            lowered = url.lower()
+            if "courseid=" not in lowered or "clazzid=" not in lowered:
                 return
             normalized_url = urljoin(base_url, html.unescape(url))
             if normalized_url in seen:
@@ -674,6 +689,27 @@ class ChaoxingQrLoginService:
         raw_urls = self._extract_candidate_course_urls(html_text, base_url)
         for raw_url in raw_urls:
             add_course(raw_url, "")
+
+        if not courses:
+            for node in soup.select("[dataurl], [onclick], iframe[src], a[href]"):
+                values = [str(node.get(attr) or "") for attr in ("href", "dataurl", "onclick", "src")]
+                candidate_urls: List[str] = []
+                for value in values:
+                    candidate_urls.extend(self._extract_candidate_course_urls(value, base_url))
+                if not candidate_urls:
+                    continue
+                title = ""
+                teacher = ""
+                container = node.find_parent(["li", "div", "section", "article"]) if hasattr(node, "find_parent") else None
+                if container:
+                    title_node = container.select_one(
+                        "h3, h4, h5, h6, .course-name, .overHidden2, .zt_name, .catalog_name, .clazzname"
+                    )
+                    teacher_node = container.select_one(".teacher, .color3, .course-teacher, .person, .teaName")
+                    title = title_node.get_text(" ", strip=True) if title_node else ""
+                    teacher = teacher_node.get_text(" ", strip=True) if teacher_node else ""
+                for candidate_url in candidate_urls:
+                    add_course(candidate_url, title, teacher)
 
         return courses
 
