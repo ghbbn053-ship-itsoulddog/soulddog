@@ -11,6 +11,7 @@ import {
   Network,
   Settings,
   Wrench,
+  MonitorPlay,
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,6 +24,7 @@ export function createPlatformNav(active: string): WorkbenchNavItem[] {
     { label: "快速会话", href: "/chat", active: active === "chat", icon: <MessageSquare className="h-4 w-4" /> },
     { label: "工作区", href: "/workspace", active: active === "workspace", icon: <Database className="h-4 w-4" /> },
     { label: "知识库", href: "/knowledge", active: active === "knowledge", icon: <LibraryBig className="h-4 w-4" /> },
+    { label: "学习通训练", href: "/chaoxing", active: active === "chaoxing", icon: <MonitorPlay className="h-4 w-4" /> },
     { label: "Skill 管理", href: "/skills", active: active === "skills", icon: <Blocks className="h-4 w-4" /> },
     { label: "MCP 管理", href: "/mcp", active: active === "mcp", icon: <Wrench className="h-4 w-4" /> },
     { label: "组合编排", href: "/composition", active: active === "composition", icon: <Network className="h-4 w-4" /> },

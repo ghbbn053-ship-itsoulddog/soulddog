@@ -38,6 +38,8 @@ from app.api.agents import router as agents_router
 from app.api.intake import router as intake_router
 from app.api.composition import router as composition_router
 from app.api.agent_access import router as agent_access_router
+from app.api.chaoxing import router as chaoxing_router
+from app.api.question_bank import router as question_bank_router
 from app.models.base import SessionLocal
 from app.security_agent import resolve_agent_identity
 
@@ -129,6 +131,8 @@ app.include_router(learning_status_router.router)
 app.include_router(suggestions_router.router)
 app.include_router(chat.router)
 app.include_router(mcp_router.router)
+app.include_router(chaoxing_router)
+app.include_router(question_bank_router)
 
 try:
     from app.mcp.remote_server import create_remote_mcp_server

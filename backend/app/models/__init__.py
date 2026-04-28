@@ -18,6 +18,14 @@ from app.models.platform import (
     AgentAccessToken,
     ExternalServiceBinding,
 )
+from app.models.question_bank import (
+    LearningQuestion,
+    LearningQuestionAttempt,
+    LearningActivity,
+    LearningAutomationTask,
+    LearningAutomationEvent,
+)
+from app.models.chaoxing_qr_session import ChaoxingQrSession
 
 # 创建所有表
 def create_tables():
@@ -45,4 +53,10 @@ __all__ = [
     "WorkspaceSuggestion",
     "AgentAccessToken",
     "ExternalServiceBinding",
+    "LearningQuestion",
+    "LearningQuestionAttempt",
+    "LearningActivity",
+    "LearningAutomationTask",
+    "LearningAutomationEvent",
+    "ChaoxingQrSession",
 ]
