@@ -147,65 +147,6 @@ function explodeCourse(course: ScheduleCourse): ScheduleEntry[] {
   }));
 }
 
-function parseWeekTokens(value: string) {
-  const text = (value || "")
-    .replace(/\s+/g, "")
-    .replace(/（/g, "(")
-    .replace(/）/g, ")");
-  if (!text) return [];
-  const normalized = text
-    .replace(/第/g, "")
-    .replace(/周次?/g, "")
-    .replace(/实验课/g, "")
-    .replace(/交替/g, "")
-    .replace(/单周/g, "(odd)")
-    .replace(/双周/g, "(even)")
-    .replace(/\(周\)/g, "")
-    .replace(/周/g, "");
-
-  return normalized
-    .split(/[，,；;或]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function matchesWeek(value: string, weekIndex: number) {
-  const tokens = parseWeekTokens(value);
-  if (tokens.length === 0) return true;
-
-  for (const token of tokens) {
-    const odd = /\((?:odd)\)/.test(token);
-    const even = /\((?:even)\)/.test(token);
-    const cleaned = token.replace(/\((?:odd|even)\)/g, "");
-
-    let matched = false;
-    for (const part of cleaned.split(/[、/]/).filter(Boolean)) {
-      const range = part.match(/^(\d+)-(\d+)$/);
-      if (range) {
-        const start = Number(range[1]);
-        const end = Number(range[2]);
-        if (weekIndex >= start && weekIndex <= end) {
-          matched = true;
-          break;
-        }
-        continue;
-      }
-      const single = part.match(/^(\d+)$/);
-      if (single && weekIndex === Number(single[1])) {
-        matched = true;
-        break;
-      }
-    }
-
-    if (!matched) continue;
-    if (odd && weekIndex % 2 === 0) continue;
-    if (even && weekIndex % 2 !== 0) continue;
-    return true;
-  }
-
-  return false;
-}
-
 function getFreshnessMeta(status: EducationStatus | null) {
   if (!status?.cached_at) {
     return { label: "暂无缓存", badge: "outline" as const };
@@ -283,9 +224,6 @@ export default function SchedulePage() {
     const map = new Map<string, ScheduleEntry[]>();
     for (const course of courses) {
       for (const entry of explodeCourse(course)) {
-        if (entry.weeks && !matchesWeek(entry.weeks, weekIndex)) {
-          continue;
-        }
         const key = `${entry.weekday}__${entry.period}`;
         const existing = map.get(key) || [];
         existing.push(entry);
@@ -293,7 +231,7 @@ export default function SchedulePage() {
       }
     }
     return map;
-  }, [courses, weekIndex]);
+  }, [courses]);
 
   const handleRefresh = async () => {
     if (!username || refreshing) return;
@@ -366,7 +304,7 @@ export default function SchedulePage() {
       <div className="grid gap-4">
         <WorkbenchSection
           title="周视图课表"
-          description={`学期 ${semester || "未知"} · ${freshness.label} · 当前第 ${weekIndex} 周 · 共 ${visibleCourseCount} 条课程`}
+          description={`学期 ${semester || "未知"} · ${freshness.label} · 当前显示该学期全部缓存课程，共 ${visibleCourseCount} 条`}
           actions={
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => setWeekIndex((prev) => Math.max(1, prev - 1))}>

@@ -106,6 +106,7 @@ type VisualCourse = {
 };
 
 const QR_POLL_MS = 3000;
+const QR_SESSION_STORAGE_PREFIX = "chaoxing_qr_session_token:";
 
 function text(value: unknown) {
   return String(value ?? "").trim();
@@ -302,11 +303,24 @@ export default function ChaoxingLearningPage() {
     }
   };
 
+  const getStoredSessionToken = (uname: string) => {
+    if (typeof window === "undefined" || !uname) return "";
+    return window.localStorage.getItem(`${QR_SESSION_STORAGE_PREFIX}${uname}`) || "";
+  };
+
+  const storeSessionToken = (uname: string, sessionToken: string) => {
+    if (typeof window === "undefined" || !uname || !sessionToken) return;
+    window.localStorage.setItem(`${QR_SESSION_STORAGE_PREFIX}${uname}`, sessionToken);
+  };
+
   const loadLatestSession = async (uname: string, sessionToken: string) => {
     const qs = new URLSearchParams({ username: uname, session_token: sessionToken });
     const res = await fetch(`${API_BASE}/api/chaoxing/qr-login/session?${qs.toString()}`, { credentials: "include" });
     const data = res.ok ? await res.json() : null;
-    if (data?.session) setQrSession(data.session);
+    if (data?.session) {
+      setQrSession(data.session);
+      storeSessionToken(uname, sessionToken);
+    }
   };
 
   const pollSession = async (uname: string, sessionToken: string) => {
@@ -324,6 +338,7 @@ export default function ChaoxingLearningPage() {
     const nextSession = data?.session as QrLoginSession | undefined;
     if (!nextSession) return;
     setQrSession(nextSession);
+    storeSessionToken(uname, nextSession.session_token);
     if (nextSession.status === "confirmed") {
       stopPolling();
       setMessage("扫码登录成功，课程列表已抓取。");
@@ -359,6 +374,7 @@ export default function ChaoxingLearningPage() {
         return;
       }
       setQrSession(data.session);
+      storeSessionToken(username, data.session.session_token);
       ensurePolling(username, data.session.session_token);
       setMessage("二维码已生成，请使用手机扫码并在手机上确认登录。");
     } finally {
@@ -385,6 +401,10 @@ export default function ChaoxingLearningPage() {
         }
         const uname = String(me.username);
         setUsername(uname);
+        const storedSessionToken = getStoredSessionToken(uname);
+        if (storedSessionToken) {
+          await loadLatestSession(uname, storedSessionToken);
+        }
       } catch {
         router.replace("/chat");
       } finally {
