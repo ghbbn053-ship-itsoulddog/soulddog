@@ -23,6 +23,7 @@ from app.services.workspace_knowledge import get_workspace_knowledge_service
 from app.services.skill_router import build_skill_prompt_hint, explain_skill_matches
 from app.services.agent_runtime import get_agent_runtime
 from app.security import enforce_username_isolation
+from education_options import EducationOptions
 from app.core.observability import (
     CHAT_STREAM_REQUESTS_TOTAL,
     CHAT_STREAM_ABORTED_TOTAL,
@@ -57,6 +58,11 @@ def _infer_rag_filters(question: str) -> dict:
     m = re.search(r"(20\d{2}-20\d{2}-[12])", question or "")
     if m:
         semester = m.group(1)
+    else:
+        try:
+            semester = str(EducationOptions.resolve_semester_reference(question or "") or "").strip()
+        except Exception:
+            semester = ""
 
     return {"data_types": data_types, "semester": semester}
 

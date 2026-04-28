@@ -151,6 +151,31 @@ class EducationOptions:
         return EducationOptions._format_semester(shifted_start_year, shifted_term)
 
     @staticmethod
+    def _semester_year_hint(raw: str, current_semester: str) -> Optional[int]:
+        import re
+
+        explicit = re.search(r"(20\d{2})[-年]?(20\d{2})?", raw)
+        if explicit:
+            start_year = explicit.group(1)
+            end_year = explicit.group(2)
+            if start_year and end_year:
+                try:
+                    return int(start_year)
+                except Exception:
+                    return None
+            if start_year:
+                try:
+                    year = int(start_year)
+                    if year >= 2000:
+                        current_start = int(current_semester.split("-")[0])
+                        if year == current_start or year == current_start + 1:
+                            return current_start
+                        return year
+                except Exception:
+                    return None
+        return None
+
+    @staticmethod
     def get_departments(include_admin: bool = False, include_vocational: bool = False) -> List[Dict]:
         """
         获取院系列表
@@ -255,15 +280,33 @@ class EducationOptions:
 
         current = EducationOptions.get_current_semester()
         lowered = raw.lower()
+        if any(token in lowered for token in ["上上学期", "前两学期"]):
+            return EducationOptions.get_relative_semester(-2)
+        if any(token in lowered for token in ["下下学期", "后两学期"]):
+            return EducationOptions.get_relative_semester(2)
         if any(token in lowered for token in ["本学期", "这学期", "当前学期", "最近学期"]):
             return current
         if any(token in lowered for token in ["上学期", "上一学期"]):
             return EducationOptions.get_relative_semester(-1)
         if any(token in lowered for token in ["下学期", "下一学期"]):
             return EducationOptions.get_relative_semester(1)
-        if "第一学期" in raw:
+        if any(token in lowered for token in ["本学年第一学期", "这学年第一学期", "当前学年第一学期"]):
             try:
                 start_year = int(current.split("-")[0])
+            except Exception:
+                return ""
+            return EducationOptions._format_semester(start_year, 1)
+        if any(token in lowered for token in ["本学年第二学期", "这学年第二学期", "当前学年第二学期"]):
+            try:
+                start_year = int(current.split("-")[0])
+            except Exception:
+                return ""
+            return EducationOptions._format_semester(start_year, 2)
+
+        year_hint = EducationOptions._semester_year_hint(raw, current)
+        if "第一学期" in raw:
+            try:
+                start_year = year_hint if year_hint is not None else int(current.split("-")[0])
             except Exception:
                 return ""
             if current.endswith("-1"):
@@ -271,7 +314,7 @@ class EducationOptions:
             return EducationOptions._format_semester(start_year, 1)
         if "第二学期" in raw:
             try:
-                start_year = int(current.split("-")[0])
+                start_year = year_hint if year_hint is not None else int(current.split("-")[0])
             except Exception:
                 return ""
             return EducationOptions._format_semester(start_year, 2)

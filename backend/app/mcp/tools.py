@@ -71,7 +71,10 @@ def _current_semester() -> str:
 
 def _resolve_semester(semester: str = "") -> str:
     normalized = str(semester or "").strip()
-    return normalized or _current_semester()
+    if not normalized:
+        return _current_semester()
+    resolved = str(EducationOptions.resolve_semester_reference(normalized) or "").strip()
+    return resolved or normalized
 
 
 def _format_cached_personal_info(username: str) -> Optional[str]:
@@ -239,10 +242,19 @@ def _format_cached_academic_progress(username: str) -> Optional[str]:
     return _render_academic_progress(data, str((status or {}).get("cached_at") or ""))
 
 
-def _format_cached_training_plan(username: str) -> Optional[str]:
+def _format_cached_training_plan(username: str, semester: str = "") -> Optional[str]:
     plan, status = _load_cached_section(username, "培养方案")
     if not plan:
         return None
+    target_semester = _resolve_semester(semester)
+    if target_semester:
+        filtered_courses = [
+            course for course in list(plan.get("课程列表") or [])
+            if str(course.get("学期") or course.get("建议修读学期") or "").strip() == target_semester
+        ]
+        scoped_plan = dict(plan)
+        scoped_plan["课程列表"] = filtered_courses
+        return _render_training_plan(scoped_plan, count=len(filtered_courses), cached_at=str((status or {}).get("cached_at") or ""))
     return _render_training_plan(plan, cached_at=str((status or {}).get("cached_at") or ""))
 
 
@@ -429,7 +441,7 @@ async def query_academic_progress(username: str) -> str:
 
 
 @mcp.tool()
-async def query_training_plan(username: str) -> str:
+async def query_training_plan(username: str, semester: str = "") -> str:
     """查询培养方案
     
     Args:
@@ -439,14 +451,23 @@ async def query_training_plan(username: str) -> str:
         培养方案信息，包含课程要求、学分分布等
     """
     try:
-        cached = _format_cached_training_plan(username)
+        target_semester = _resolve_semester(semester)
+        cached = _format_cached_training_plan(username, target_semester)
         if cached:
             return cached
         scraper = _get_scraper(username)
         result = scraper.get_my_training_plan()
         
         if result["success"]:
-            return _render_training_plan(result["data"], result.get("count"))
+            plan = dict(result["data"] or {})
+            if target_semester:
+                filtered_courses = [
+                    course for course in list(plan.get("课程列表") or [])
+                    if str(course.get("学期") or course.get("建议修读学期") or "").strip() == target_semester
+                ]
+                plan["课程列表"] = filtered_courses
+                return _render_training_plan(plan, len(filtered_courses))
+            return _render_training_plan(plan, result.get("count"))
         else:
             return f"查询失败: {result.get('message', '未知错误')}"
     

@@ -113,10 +113,21 @@ class MCPRegistry:
         self.register(
             MCPToolSpec(
                 name="query_training_plan",
-                description="查询培养方案，默认返回当前账号最近同步的培养方案",
+                description="查询培养方案；可指定学期，不传默认当前学期",
                 module_path="app.mcp.tools",
                 func_name="query_training_plan",
-                parameters={"username": {"type": "string", "required": True, "description": "学号"}},
+                parameters={
+                    "username": {"type": "string", "required": True, "description": "学号"},
+                    "semester": {"type": "string", "required": False, "description": "学期；支持 2024-2025-2、本学期、上学期、第二学期"},
+                },
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "username": {"type": "string", "description": "学号"},
+                        "semester": {"type": "string", "description": "学期；支持 2024-2025-2、本学期、上学期、第二学期"},
+                    },
+                    "required": ["username"],
+                },
                 capabilities=["training_plan.query"],
             )
         )

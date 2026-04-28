@@ -19,6 +19,10 @@ import { WorkbenchBadge, WorkbenchShell } from "@/components/workspace/workbench
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  EducationStatus,
+  normalizeScheduleData,
+} from "@/lib/education-cache";
 
 type WorkspaceItem = {
   id: number;
@@ -29,28 +33,6 @@ type WorkspaceItem = {
 };
 
 type ScheduleCourse = Record<string, unknown>;
-
-type EducationStatus = {
-  success?: boolean;
-  has_cache?: boolean;
-  freshness?: string;
-  cached_at?: string | null;
-  connection?: {
-    binding_status?: string;
-    auth_type?: string;
-    last_verified_at?: string | null;
-    has_active_session?: boolean;
-    has_live_session?: boolean;
-    has_cache?: boolean;
-    mode?: string;
-    label?: string;
-  };
-  sync?: {
-    status?: string;
-    message?: string;
-    timestamp?: number;
-  };
-};
 
 type ConversationItem = {
   id: number;
@@ -141,8 +123,10 @@ export default function HomePage() {
         const statusJson = statusRes.ok ? await statusRes.json() : null;
         const conversationJson = conversationRes.ok ? await conversationRes.json() : null;
 
+        const normalizedSchedule = normalizeScheduleData(scheduleJson?.data || []);
+
         setWorkspaces(workspaceJson?.workspaces || []);
-        setSchedule(scheduleJson?.data?.课程列表 || scheduleJson?.data || []);
+        setSchedule(normalizedSchedule.courses);
         setEducationStatus(statusJson || null);
         setConversations(Array.isArray(conversationJson) ? conversationJson : []);
       } catch {
@@ -186,6 +170,12 @@ export default function HomePage() {
       });
       const statusJson = statusRes.ok ? await statusRes.json() : null;
       setEducationStatus(statusJson || null);
+      const scheduleRes = await fetch(`${API_BASE}/api/schedule/db?username=${encodeURIComponent(username)}`, {
+        credentials: "include",
+      });
+      const scheduleJson = scheduleRes.ok ? await scheduleRes.json() : null;
+      const normalizedSchedule = normalizeScheduleData(scheduleJson?.data || []);
+      setSchedule(normalizedSchedule.courses);
     } finally {
       setRefreshing(false);
     }

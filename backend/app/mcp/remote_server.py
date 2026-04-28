@@ -99,8 +99,11 @@ def _build_remote_server():
         return await _call_bound_tool("query_academic_progress")
 
     @remote_mcp_server.tool()
-    async def query_training_plan() -> str:
-        return await _call_bound_tool("query_training_plan")
+    async def query_training_plan(semester: str = "") -> str:
+        params: Dict[str, Any] = {}
+        if semester:
+            params["semester"] = semester
+        return await _call_bound_tool("query_training_plan", params)
 
     @remote_mcp_server.tool()
     async def query_exam_schedule(semester: str = "") -> str:

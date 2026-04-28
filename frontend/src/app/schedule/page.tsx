@@ -8,6 +8,8 @@ import { PlatformSidebarFooter, PlatformSidebarHeader, createPlatformNav } from 
 import { WorkbenchBadge, WorkbenchSection, WorkbenchShell } from "@/components/workspace/workbench-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { normalizeScheduleData, resolveDefaultSemester } from "@/lib/education-cache";
 
 type ScheduleCourse = Record<string, unknown>;
 type ScheduleEntry = {
@@ -25,6 +27,7 @@ type ScheduleResponse = {
   data?: {
     学期?: string;
     课程列表?: ScheduleCourse[];
+    按学期?: Record<string, ScheduleCourse[]>;
   } | ScheduleCourse[];
   freshness?: string;
   cached_at?: string | null;
@@ -218,8 +221,11 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [semester, setSemester] = useState("");
+  const [availableSemesters, setAvailableSemesters] = useState<string[]>([]);
   const [weekIndex, setWeekIndex] = useState(1);
   const [courses, setCourses] = useState<ScheduleCourse[]>([]);
+  const [allCourses, setAllCourses] = useState<ScheduleCourse[]>([]);
+  const [coursesBySemester, setCoursesBySemester] = useState<Record<string, ScheduleCourse[]>>({});
   const [status, setStatus] = useState<EducationStatus | null>(null);
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
@@ -244,14 +250,13 @@ export default function SchedulePage() {
 
         const scheduleJson: ScheduleResponse | null = scheduleRes.ok ? await scheduleRes.json() : null;
         const statusJson = statusRes.ok ? await statusRes.json() : null;
-        const scheduleData = scheduleJson?.data;
-
-        if (Array.isArray(scheduleData)) {
-          setCourses(scheduleData);
-        } else {
-          setCourses(scheduleData?.课程列表 || []);
-          setSemester(String(scheduleData?.学期 || ""));
-        }
+        const normalized = normalizeScheduleData(scheduleJson?.data || []);
+        const defaultSemester = resolveDefaultSemester(normalized.semester, normalized.semesters);
+        setAllCourses(normalized.courses);
+        setCoursesBySemester(normalized.bySemester);
+        setAvailableSemesters(normalized.semesters);
+        setSemester(defaultSemester);
+        setCourses(defaultSemester ? normalized.bySemester[defaultSemester] || normalized.courses : normalized.courses);
         setStatus(statusJson || null);
       } catch {
         router.replace("/");
@@ -263,6 +268,10 @@ export default function SchedulePage() {
   }, [API_BASE, router]);
 
   const freshness = useMemo(() => getFreshnessMeta(status), [status]);
+  const visibleCourseCount = useMemo(() => {
+    if (semester && coursesBySemester[semester]) return coursesBySemester[semester].length;
+    return courses.length;
+  }, [courses, coursesBySemester, semester]);
 
   const grid = useMemo(() => {
     const map = new Map<string, ScheduleEntry[]>();
@@ -294,18 +303,30 @@ export default function SchedulePage() {
       ]);
       const scheduleJson: ScheduleResponse | null = scheduleRes.ok ? await scheduleRes.json() : null;
       const statusJson = statusRes.ok ? await statusRes.json() : null;
-      const scheduleData = scheduleJson?.data;
-      if (Array.isArray(scheduleData)) {
-        setCourses(scheduleData);
-      } else {
-        setCourses(scheduleData?.课程列表 || []);
-        setSemester(String(scheduleData?.学期 || ""));
-      }
+      const normalized = normalizeScheduleData(scheduleJson?.data || []);
+      const defaultSemester = resolveDefaultSemester(semester || normalized.semester, normalized.semesters);
+      setAllCourses(normalized.courses);
+      setCoursesBySemester(normalized.bySemester);
+      setAvailableSemesters(normalized.semesters);
+      setSemester(defaultSemester);
+      setCourses(defaultSemester ? normalized.bySemester[defaultSemester] || normalized.courses : normalized.courses);
       setStatus(statusJson || null);
     } finally {
       setRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    if (!semester) {
+      setCourses(allCourses);
+      return;
+    }
+    if (coursesBySemester[semester]) {
+      setCourses(coursesBySemester[semester]);
+      return;
+    }
+    setCourses(allCourses);
+  }, [allCourses, coursesBySemester, semester]);
 
   if (loading) {
     return <div className="p-6 text-sm text-slate-500">加载中...</div>;
@@ -339,7 +360,7 @@ export default function SchedulePage() {
       <div className="grid gap-4">
         <WorkbenchSection
           title="周视图课表"
-          description={`学期 ${semester || "未知"} · ${freshness.label} · 当前第 ${weekIndex} 周`}
+          description={`学期 ${semester || "未知"} · ${freshness.label} · 当前第 ${weekIndex} 周 · 共 ${visibleCourseCount} 条课程`}
           actions={
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => setWeekIndex((prev) => Math.max(1, prev - 1))}>
@@ -354,6 +375,29 @@ export default function SchedulePage() {
             </div>
           }
         >
+          <div className="mb-4 flex flex-wrap gap-2">
+            {availableSemesters.length > 0 ? (
+              availableSemesters.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => {
+                    setSemester(item);
+                    setWeekIndex(1);
+                  }}
+                  className={
+                    item === semester
+                      ? "rounded-full border border-[hsl(var(--primary))] bg-[hsla(var(--primary),0.08)] px-3 py-1 text-xs font-medium text-slate-900"
+                      : "rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+                  }
+                >
+                  {item}
+                </button>
+              ))
+            ) : (
+              <Badge variant="outline">暂无学期缓存</Badge>
+            )}
+          </div>
           <div className="overflow-x-auto">
             <div className="min-w-[940px] rounded-2xl border border-slate-200 bg-white">
               <div className="grid grid-cols-[88px_repeat(7,minmax(0,1fr))] border-b border-slate-200 bg-slate-50/80 text-sm font-medium text-slate-700">

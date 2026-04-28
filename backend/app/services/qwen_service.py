@@ -9,12 +9,21 @@ import logging
 from typing import List, Dict, Optional
 import json
 import asyncio
+from education_options import EducationOptions
 from app.services.education_normalizer import summarize_education_payload
 from app.mcp.tools import query_weather as mcp_query_weather
 from app.models.base import SessionLocal
 from app.services.education_cache import get_education_cache_service
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_semester_text(value: str = "") -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return EducationOptions.get_current_semester()
+    resolved = str(EducationOptions.resolve_semester_reference(normalized) or "").strip()
+    return resolved or normalized
 
 
 class QwenService:
@@ -158,13 +167,13 @@ class QwenService:
                 "type": "function",
                 "function": {
                     "name": "query_training_plan",
-                    "description": "查询学生的培养方案，包括课程体系结构、各学期课程安排、学分要求、必修/选修课列表等",
+                    "description": "查询学生的培养方案，包括课程体系结构、各学期课程安排、学分要求、必修/选修课列表等；不传学期默认当前学期",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "semester": {
                                 "type": "string",
-                                "description": "学期，如 2024-2025-1（可选，不指定则返回所有学期）"
+                                "description": "学期，如 2024-2025-1、本学期、上学期、第二学期（可选，不指定默认当前学期）"
                             }
                         },
                         "required": []
@@ -448,9 +457,10 @@ class QwenService:
                 return result.get("data", {}) if result.get("success") else {"error": result.get("message", "查询失败")}
             
             elif func_name == "query_grades":
+                target_semester = _resolve_semester_text(args.get("semester", ""))
                 result = scraper.get_grades(
                     kcmc=args.get("course_name", ""),
-                    kksj=args.get("semester", "")
+                    kksj=target_semester
                 )
                 if result.get("success"):
                     grade_list = result.get("data", [])
@@ -469,24 +479,26 @@ class QwenService:
                 return {"error": result.get("message", "查询失败")}
             
             elif func_name == "query_schedule":
+                target_semester = _resolve_semester_text(args.get("semester", ""))
                 result = scraper.get_schedule(
-                    semester=args.get("semester", "")
+                    semester=target_semester
                 )
                 if result.get("success"):
                     return {
-                        "学期": result.get("semester", ""),
+                        "学期": result.get("semester", target_semester),
                         "课表": result.get("data", []),
                         "总数": result.get("count", 0)
                     }
                 return {"error": result.get("message", "查询失败")}
             
             elif func_name == "query_exam_schedule":
+                target_semester = _resolve_semester_text(args.get("semester", ""))
                 result = scraper.get_exam_schedule(
-                    semester=args.get("semester", "")
+                    semester=target_semester
                 )
                 if result.get("success"):
                     return {
-                        "学期": result.get("semester", ""),
+                        "学期": result.get("semester", target_semester),
                         "考试安排": result.get("data", []),
                         "总数": result.get("count", 0)
                     }
@@ -512,9 +524,12 @@ class QwenService:
                     courses = data.get("课程列表", [])
                     
                     # 如果指定了学期，过滤
-                    semester_filter = args.get("semester", "")
+                    semester_filter = _resolve_semester_text(args.get("semester", ""))
                     if semester_filter:
-                        courses = [c for c in courses if c.get("学期") == semester_filter]
+                        courses = [
+                            c for c in courses
+                            if str(c.get("学期") or c.get("建议修读学期") or "").strip() == semester_filter
+                        ]
                     
                     return {
                         "培养方案": courses,
@@ -569,7 +584,7 @@ class QwenService:
             if func_name == "query_grades":
                 grades_info = dict(payload.get("成绩信息", {}) or {})
                 grade_list = list(grades_info.get("成绩列表", []) or [])
-                semester = str(args.get("semester", "") or "").strip()
+                semester = _resolve_semester_text(args.get("semester", ""))
                 course_name = str(args.get("course_name", "") or "").strip().lower()
                 if semester:
                     grade_list = [
@@ -596,7 +611,7 @@ class QwenService:
                 schedule_info = dict(payload.get("课表信息", {}) or {})
                 courses = list(schedule_info.get("课程列表", []) or [])
                 schedule_by_semester = dict(schedule_info.get("按学期", {}) or {})
-                semester = str(args.get("semester", "") or "").strip()
+                semester = _resolve_semester_text(args.get("semester", ""))
                 actual_semester = str(schedule_info.get("学期", "") or semester).strip()
                 if semester and schedule_by_semester.get(semester):
                     courses = list(schedule_by_semester.get(semester) or [])
@@ -617,7 +632,7 @@ class QwenService:
                 exam_info = dict(payload.get("考试安排", {}) or {})
                 exams = list(exam_info.get("考试列表", []) or [])
                 exam_by_semester = dict(exam_info.get("按学期", {}) or {})
-                semester = str(args.get("semester", "") or "").strip()
+                semester = _resolve_semester_text(args.get("semester", ""))
                 actual_semester = str(exam_info.get("学期", "") or semester).strip()
                 if semester and exam_by_semester.get(semester):
                     exams = list(exam_by_semester.get(semester) or [])
@@ -647,13 +662,20 @@ class QwenService:
                 if not plan:
                     return None
                 courses = list(plan.get("课程列表", []) or [])
-                semester_filter = str(args.get("semester", "") or "").strip()
+                semester_filter = _resolve_semester_text(args.get("semester", ""))
                 if semester_filter:
-                    courses = [c for c in courses if str(c.get("学期", "") or "").strip() == semester_filter]
+                    courses = [
+                        c for c in courses
+                        if str(c.get("学期", "") or c.get("建议修读学期", "") or "").strip() == semester_filter
+                    ]
                 return {
                     "培养方案": courses,
                     "总课程数": len(courses),
-                    "学期分布": sorted({str(c.get("学期", "") or "").strip() for c in courses if str(c.get("学期", "") or "").strip()}),
+                    "学期分布": sorted({
+                        str(c.get("学期", "") or c.get("建议修读学期", "") or "").strip()
+                        for c in courses
+                        if str(c.get("学期", "") or c.get("建议修读学期", "") or "").strip()
+                    }),
                     "数据来源": f"平台缓存 ({cached_at})" if cached_at else "平台缓存",
                 }
             return None
