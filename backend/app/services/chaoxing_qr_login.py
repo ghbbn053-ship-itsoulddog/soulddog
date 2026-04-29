@@ -713,6 +713,28 @@ class ChaoxingQrLoginService:
 
         return courses
 
+    def _fetch_courselistdata_html(self, session: requests.Session, course_home_url: str) -> str:
+        if not course_home_url:
+            return ""
+        payload = {
+            "courseType": "1",
+            "courseFolderId": "0",
+            "baseEducation": "0",
+            "superstarClass": "",
+            "courseFolderSize": "0",
+        }
+        try:
+            resp = session.post(
+                "https://mooc1-1.chaoxing.com/mooc-ans/visit/courselistdata",
+                data=payload,
+                headers={"Referer": course_home_url},
+                timeout=20,
+            )
+            resp.raise_for_status()
+            return resp.text
+        except Exception:
+            return ""
+
     def _fetch_course_catalog(self, session: requests.Session) -> Dict[str, Any]:
         base_url = f"https://i.chaoxing.com/base?ws=1&t={int(time.time() * 1000)}"
         base_resp = self._fetch_html(session, base_url, referer="https://v1.chaoxing.com/")
@@ -725,10 +747,14 @@ class ChaoxingQrLoginService:
             final_course_home_url = course_home_resp.url
             course_home_html = course_home_resp.text
 
-        courses = self._extract_course_cards(course_home_html or base_resp.text, final_course_home_url or base_resp.url)
+        course_list_html = self._fetch_courselistdata_html(session, final_course_home_url or course_home_url)
+        primary_html = course_list_html or course_home_html or base_resp.text
+        primary_base = final_course_home_url or course_home_url or base_resp.url
+        courses = self._extract_course_cards(primary_html, primary_base)
         return {
             "base_url": base_resp.url,
             "course_home_url": final_course_home_url or "",
+            "course_list_html": course_list_html,
             "courses": courses,
         }
 
