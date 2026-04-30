@@ -118,6 +118,11 @@ class QrLoginSessionPollRequest(BaseModel):
     session_token: str
 
 
+class QrLoginSessionRefreshRequest(BaseModel):
+    username: str
+    session_token: str
+
+
 def _serialize_qr_session(session_row: Any) -> Dict[str, Any]:
     if hasattr(session_row, "to_dict"):
         data = session_row.to_dict()
@@ -209,6 +214,26 @@ async def poll_qr_login_session(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"轮询二维码登录状态失败: {e}")
+    return {"success": True, "session": _serialize_qr_session(session_data)}
+
+
+@router.post("/qr-login/refresh")
+async def refresh_qr_login_session(
+    payload: QrLoginSessionRefreshRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+):
+    enforce_username_isolation(http_request, payload.username)
+    try:
+        session_data = get_chaoxing_qr_login_service().refresh_confirmed_session(
+            db,
+            payload.username,
+            payload.session_token,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"刷新学习通课程数据失败: {e}")
     return {"success": True, "session": _serialize_qr_session(session_data)}
 
 

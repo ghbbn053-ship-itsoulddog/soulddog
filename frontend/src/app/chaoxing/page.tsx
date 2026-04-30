@@ -418,6 +418,22 @@ export default function ChaoxingLearningPage() {
     if (!username) return;
     setMessage("");
     if (qrSession?.session_token) {
+      if (qrSession.status === "confirmed") {
+        const res = await fetch(`${API_BASE}/api/chaoxing/qr-login/refresh`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, session_token: qrSession.session_token }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.session) {
+          setMessage(data?.detail || "刷新学习通课程数据失败");
+          return;
+        }
+        setQrSession(data.session);
+        setMessage("学习通课程数据已刷新。");
+        return;
+      }
       await loadLatestSession(username, qrSession.session_token);
     }
   };

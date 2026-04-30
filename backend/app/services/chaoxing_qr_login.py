@@ -274,6 +274,19 @@ class ChaoxingQrLoginService:
         )
         if score_match:
             score_url = html.unescape(score_match.group(1))
+        else:
+            score_js_match = re.search(
+                r"['\"](https://stat2-ans\.chaoxing\.com)['\"]\s*\+\s*['\"](/stat2/overall-score/stu-score\?courseid=)['\"]\s*\+\s*['\"]([^\"']+)['\"]\s*\+\s*['\"](&cpi=)['\"]\s*\+\s*['\"]([^\"']+)['\"]\s*\+\s*['\"](&clazzid=)['\"]\s*\+\s*['\"]([^\"']+)['\"]\s*\+\s*['\"](&ut=s)['\"]",
+                html_text,
+                flags=re.I,
+            )
+            if score_js_match:
+                score_url = (
+                    f"{score_js_match.group(1)}{score_js_match.group(2)}{score_js_match.group(3)}"
+                    f"{score_js_match.group(4)}{score_js_match.group(5)}"
+                    f"{score_js_match.group(6)}{score_js_match.group(7)}"
+                    f"{score_js_match.group(8)}"
+                )
 
         return {
             "course_title": course_title,
@@ -299,6 +312,9 @@ class ChaoxingQrLoginService:
         cpi = str(page_meta.get("cpi") or course.get("cpi") or "").strip()
         ut = str(page_meta.get("ut") or "s").strip() or "s"
         t = str(page_meta.get("t") or int(time.time() * 1000)).strip()
+        stuenc = str(page_meta.get("enc") or "").strip()
+        work_enc = str(page_meta.get("workEnc") or "").strip()
+        exam_enc = str(page_meta.get("examEnc") or "").strip()
         common_params = {
             "courseid": course_id,
             "courseId": course_id,
@@ -313,6 +329,7 @@ class ChaoxingQrLoginService:
             "examEnc": page_meta.get("examEnc", ""),
             "v": page_meta.get("v", "2"),
             "t": t,
+            "stuenc": stuenc,
         }
 
         chapter_url = str(page_meta.get("iframe_src") or "").strip()
@@ -330,16 +347,23 @@ class ChaoxingQrLoginService:
         if exam_base and exam_base.startswith("/"):
             exam_base = urljoin(mooc_domain, exam_base)
 
+        work_params = dict(common_params)
+        exam_params = dict(common_params)
+        if work_enc:
+            work_params["enc"] = work_enc
+        if exam_enc:
+            exam_params["enc"] = exam_enc
+
         return {
             "chapter_url": chapter_url,
-            "work_url": self._append_query_params(work_base, common_params),
-            "exam_url": self._append_query_params(exam_base, common_params),
+            "work_url": self._append_query_params(work_base, work_params),
+            "exam_url": self._append_query_params(exam_base, exam_params),
             "score_url": self._append_query_params(score_base, common_params),
             "base_url": base_url,
         }
 
     def _pick_best_count(self, values: List[int]) -> Optional[int]:
-        candidates = [value for value in values if isinstance(value, int) and value > 0]
+        candidates = [value for value in values if isinstance(value, int) and value >= 0]
         if not candidates:
             return None
         return max(candidates)
@@ -382,6 +406,10 @@ class ChaoxingQrLoginService:
         soup = BeautifulSoup(html_text, "lxml")
         text_content = soup.get_text(" ", strip=True)
 
+        ratio_match = re.search(r"已完成任务点[:：]?\s*(\d+)\s*/\s*(\d+)", text_content)
+        progress_ratio_done = int(ratio_match.group(1)) if ratio_match else None
+        progress_ratio_total = int(ratio_match.group(2)) if ratio_match else None
+
         chapter_nodes: List[str] = []
         for selector in [
             ".catalog_level",
@@ -403,12 +431,14 @@ class ChaoxingQrLoginService:
         completed_by_text = sum(1 for item in unique_chapters if re.search(r"(已完成|已学完|100%)", item))
         chapter_count = self._pick_best_count(
             [
+                progress_ratio_total if progress_ratio_total is not None else -1,
                 self._extract_number_near_labels(text_content, ["章节", "章", "节"]) or 0,
                 len(unique_chapters),
             ]
         )
         completed_chapter_count = self._pick_best_count(
             [
+                progress_ratio_done if progress_ratio_done is not None else -1,
                 self._extract_number_near_labels(text_content, ["已完成", "完成章节", "已学完"]) or 0,
                 completed_by_text,
             ]
@@ -429,6 +459,31 @@ class ChaoxingQrLoginService:
 
         soup = BeautifulSoup(html_text, "lxml")
         text_content = soup.get_text(" ", strip=True)
+        if re.search(r"无权限的操作", text_content):
+            return {"count": None, "completed_count": None}
+
+        empty_markers = {
+            "work": ["暂无作业", "暂无测验", "暂无任务"],
+            "exam": ["暂无考试"],
+        }
+        if any(marker in text_content for marker in empty_markers.get(kind, [])):
+            return {"count": 0, "completed_count": 0}
+
+        ratio_match = re.search(r"(\d+)\s*/\s*(\d+)", text_content)
+        ratio_done = int(ratio_match.group(1)) if ratio_match else None
+        ratio_total = int(ratio_match.group(2)) if ratio_match else None
+
+        status_patterns = {
+            "work": {
+                "completed": r"(已完成|已提交|已结束|已批阅|已交|待批阅)",
+                "pending": r"(未完成|未交|待完成|未提交)",
+            },
+            "exam": {
+                "completed": r"(已完成|已提交|已结束|已交卷|已查看)",
+                "pending": r"(未完成|未查看|待完成|未开始)",
+            },
+        }
+
         selectors = {
             "work": [
                 ".ulDiv li",
@@ -437,6 +492,7 @@ class ChaoxingQrLoginService:
                 "tr[role='row']",
                 "tbody tr",
                 "li[data-id]",
+                ".bottomList ul li",
             ],
             "exam": [
                 ".ulDiv li",
@@ -445,6 +501,7 @@ class ChaoxingQrLoginService:
                 "tr[role='row']",
                 "tbody tr",
                 "li[data-id]",
+                ".bottomList ul li",
             ],
         }
 
@@ -461,12 +518,31 @@ class ChaoxingQrLoginService:
             "exam": ["考试", "测验"],
         }
         total_from_text = self._extract_number_near_labels(text_content, label_map.get(kind, []))
-        completed_count = sum(1 for item in unique_items if re.search(r"(已完成|已提交|已结束|已批阅|已交)", item))
+        completed_count = sum(
+            1
+            for item in unique_items
+            if re.search(status_patterns.get(kind, {}).get("completed", r"$^"), item)
+        )
+        pending_count = sum(
+            1
+            for item in unique_items
+            if re.search(status_patterns.get(kind, {}).get("pending", r"$^"), item)
+        )
 
-        count = self._pick_best_count([total_from_text or 0, len(unique_items)])
+        count = self._pick_best_count(
+            [
+                ratio_total if ratio_total is not None else -1,
+                total_from_text if total_from_text is not None else -1,
+                len(unique_items),
+            ]
+        )
+        if completed_count == 0 and pending_count == 0 and ratio_done is not None:
+            completed_count = ratio_done
+        elif completed_count == 0 and count is not None and pending_count <= count:
+            completed_count = max(count - pending_count, 0)
         return {
             "count": count,
-            "completed_count": completed_count or None,
+            "completed_count": completed_count if completed_count >= 0 else None,
         }
 
     def _parse_score_metrics(self, html_text: str) -> Dict[str, Any]:
@@ -480,12 +556,17 @@ class ChaoxingQrLoginService:
         score_match = re.search(r"(?:总成绩|综合成绩|成绩)[:：]?\s*([A-Za-z0-9.\-]+)", text_content)
         if score_match:
             score_text = score_match.group(1).strip()
+        elif re.search(r"暂无成绩|无成绩|未出成绩", text_content):
+            score_text = ""
 
         status_text = ""
         for token in ["已完成", "进行中", "未开始", "待完成"]:
             if token in text_content:
                 status_text = token
                 break
+
+        if not status_text and re.search(r"暂无成绩|未出成绩", text_content):
+            status_text = "待完成"
 
         return {
             "progress_percent": progress_percent,
@@ -639,22 +720,32 @@ class ChaoxingQrLoginService:
     def _extract_course_cards(self, html_text: str, base_url: str) -> List[Dict[str, Any]]:
         soup = BeautifulSoup(html_text, "lxml")
         courses: List[Dict[str, Any]] = []
-        seen: set[str] = set()
+        course_by_url: Dict[str, Dict[str, Any]] = {}
+
+        def _prefer_value(current: str, incoming: str) -> str:
+            incoming = incoming.strip()
+            current = current.strip()
+            if not incoming:
+                return current
+            if not current:
+                return incoming
+            if current.startswith("课程 ") and not incoming.startswith("课程 "):
+                return incoming
+            return current
 
         def add_course(url: str, title: str, teacher: str = "", image: str = "") -> None:
             lowered = url.lower()
             if "courseid=" not in lowered or "clazzid=" not in lowered:
                 return
             normalized_url = urljoin(base_url, html.unescape(url))
-            if normalized_url in seen:
-                return
-            seen.add(normalized_url)
             course_id_match = re.search(r"courseid=([^&]+)", normalized_url, flags=re.I)
             clazz_id_match = re.search(r"clazzid=([^&]+)", normalized_url, flags=re.I)
             cpi_match = re.search(r"cpi=([^&]+)", normalized_url, flags=re.I)
-            courses.append(
-                {
-                    "title": title.strip() or f"课程 {course_id_match.group(1) if course_id_match else len(courses) + 1}",
+            fallback_title = f"课程 {course_id_match.group(1) if course_id_match else len(course_by_url) + 1}"
+            existing = course_by_url.get(normalized_url)
+            if existing is None:
+                existing = {
+                    "title": title.strip() or fallback_title,
                     "url": normalized_url,
                     "teacher": teacher.strip(),
                     "course_id": course_id_match.group(1) if course_id_match else "",
@@ -662,7 +753,33 @@ class ChaoxingQrLoginService:
                     "cpi": cpi_match.group(1) if cpi_match else "",
                     "image": image.strip(),
                 }
-            )
+                course_by_url[normalized_url] = existing
+                courses.append(existing)
+                return
+
+            existing["title"] = _prefer_value(str(existing.get("title") or ""), title or fallback_title)
+            existing["teacher"] = _prefer_value(str(existing.get("teacher") or ""), teacher)
+            if image.strip() and not str(existing.get("image") or "").strip():
+                existing["image"] = image.strip()
+
+        for card in soup.select("li.course, .course-list .course, #courseList > li"):
+            link = card.select_one("a[href*='courseid='][href*='clazzid=']")
+            if not link:
+                continue
+            candidate_url = str(link.get("href") or "").strip()
+            title_node = card.select_one(".course-name, .overHidden2")
+            title = title_node.get("title") if title_node and title_node.get("title") else ""
+            if not title and title_node:
+                title = title_node.get_text(" ", strip=True)
+            info_lines = [
+                node.get_text(" ", strip=True)
+                for node in card.select(".course-info p.line2")
+                if node.get_text(" ", strip=True)
+            ]
+            teacher = info_lines[-1] if info_lines else ""
+            image_node = card.select_one("img")
+            image = str(image_node.get("src") or "").strip() if image_node else ""
+            add_course(candidate_url, title, teacher, image)
 
         for anchor in soup.find_all("a"):
             values = [str(anchor.get(attr) or "") for attr in ("href", "data", "dataurl", "onclick")]
@@ -676,13 +793,18 @@ class ChaoxingQrLoginService:
             teacher = ""
             image = ""
             if card:
-                teacher_node = card.select_one(".teacher, .color3, .course-teacher, .person")
+                teacher_lines = [
+                    node.get_text(" ", strip=True)
+                    for node in card.select(".course-info p.line2, .teacher, .color3, .course-teacher, .person")
+                    if node.get_text(" ", strip=True)
+                ]
                 image_node = card.select_one("img")
-                teacher = teacher_node.get_text(" ", strip=True) if teacher_node else ""
+                teacher = teacher_lines[-1] if teacher_lines else ""
                 image = str(image_node.get("src") or "").strip() if image_node else ""
                 if not title:
                     title_node = card.select_one("h3, h4, h5, h6, .course-name, .overHidden2")
-                    title = title_node.get_text(" ", strip=True) if title_node else ""
+                    if title_node:
+                        title = str(title_node.get("title") or "").strip() or title_node.get_text(" ", strip=True)
             for candidate_url in candidate_urls:
                 add_course(candidate_url, title, teacher, image)
 
@@ -705,9 +827,14 @@ class ChaoxingQrLoginService:
                     title_node = container.select_one(
                         "h3, h4, h5, h6, .course-name, .overHidden2, .zt_name, .catalog_name, .clazzname"
                     )
-                    teacher_node = container.select_one(".teacher, .color3, .course-teacher, .person, .teaName")
-                    title = title_node.get_text(" ", strip=True) if title_node else ""
-                    teacher = teacher_node.get_text(" ", strip=True) if teacher_node else ""
+                    teacher_lines = [
+                        node.get_text(" ", strip=True)
+                        for node in container.select(".course-info p.line2, .teacher, .color3, .course-teacher, .person, .teaName")
+                        if node.get_text(" ", strip=True)
+                    ]
+                    if title_node:
+                        title = str(title_node.get("title") or "").strip() or title_node.get_text(" ", strip=True)
+                    teacher = teacher_lines[-1] if teacher_lines else ""
                 for candidate_url in candidate_urls:
                     add_course(candidate_url, title, teacher)
 
@@ -804,6 +931,49 @@ class ChaoxingQrLoginService:
             row.status = "scannable"
 
         row.browser_meta_json = meta
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return row.to_dict()
+
+    def refresh_confirmed_session(self, db: Session, owner_username: str, session_token: str) -> Dict[str, Any]:
+        row = self.get_row(db, owner_username, session_token)
+        if not row:
+            raise ValueError("二维码登录会话不存在")
+        if row.status != "confirmed":
+            raise ValueError("当前二维码会话尚未登录成功，无法刷新课程数据")
+
+        session = self._get_http_session(row)
+        meta = dict(row.browser_meta_json or {})
+        pcrefer = str(meta.get("pcrefer") or "https://v1.chaoxing.com/backSchool/toLogin?source=num8").strip()
+        login_bridge_resp = session.get(
+            pcrefer,
+            headers={"Referer": "https://passport2.chaoxing.com/"},
+            timeout=20,
+            allow_redirects=True,
+        )
+        login_bridge_resp.raise_for_status()
+
+        catalog = self._fetch_course_catalog(session)
+        course_catalog = catalog.get("courses", [])
+        course_home_url = catalog.get("course_home_url", "")
+        meta["business_landing_url"] = login_bridge_resp.url
+        meta["course_catalog"] = course_catalog
+        meta["course_base_url"] = catalog.get("base_url", "")
+        meta["course_home_url"] = course_home_url
+        meta["course_metrics"] = self._fetch_all_course_metrics(session, course_catalog, course_home_url=course_home_url)
+        meta["last_auth_status"] = {
+            "status": True,
+            "type": "refresh_confirmed_session",
+            "refreshed_at": _now_utc().isoformat(),
+        }
+
+        row.browser_meta_json = meta
+        row.last_seen_at = _now_utc()
+        row.cookies_json = _cookie_dict_list(session)
+        row.last_error = None
+        row.page_title = "登录成功"
+        row.expires_at = _now_utc() + timedelta(days=7)
         db.add(row)
         db.commit()
         db.refresh(row)
