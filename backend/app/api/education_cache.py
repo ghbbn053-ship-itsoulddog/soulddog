@@ -102,3 +102,28 @@ async def get_course_selection_cached(username: str, http_request: Request, db: 
     enforce_username_isolation(http_request, username)
     svc, bundle = _get_bundle(db, username)
     return svc.response_for_key(bundle, username, "选课信息")
+
+
+@router.get("/api/general-electives/db")
+async def get_general_electives_cached(
+    username: str,
+    http_request: Request,
+    elective_type: str = "tsk",
+    db: Session = Depends(get_db),
+):
+    enforce_username_isolation(http_request, username)
+    svc, bundle = _get_bundle(db, username)
+    base = svc.response_for_key(bundle, username, "选课信息")
+    if not base.get("success"):
+        return base
+
+    data = base.get("data") or {}
+    tables = data.get("通识选修课程") or {}
+    target = str(elective_type or "tsk").strip().lower() or "tsk"
+    selected = tables.get(target) or {}
+
+    return {
+        **base,
+        "data": selected,
+        "elective_type": target,
+    }

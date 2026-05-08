@@ -59,6 +59,7 @@ EDUCATION_CAPABILITY_PREFIXES = (
     "training_plan.",
     "exam.",
     "personal_info.",
+    "course_selection.",
 )
 
 

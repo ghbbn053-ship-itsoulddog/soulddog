@@ -13,6 +13,7 @@ EDUCATION_CAPABILITY_PREFIXES = (
     "training_plan.",
     "exam.",
     "personal_info.",
+    "course_selection.",
 )
 
 _current_identity: ContextVar[Dict[str, Any] | None] = ContextVar("remote_mcp_identity", default=None)
@@ -122,6 +123,13 @@ def _build_remote_server():
         if location:
             params["location"] = location
         return await _call_bound_tool("query_weather", params)
+
+    @remote_mcp_server.tool()
+    async def query_general_electives(elective_type: str = "tsk") -> str:
+        params: Dict[str, Any] = {}
+        if elective_type:
+            params["elective_type"] = elective_type
+        return await _call_bound_tool("query_general_electives", params)
 
     return remote_mcp_server
 
