@@ -6,6 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 from typing import Dict, List, Optional
 import logging
+import re
 from education_options import EducationOptions
 
 logger = logging.getLogger(__name__)
@@ -293,46 +294,115 @@ class JwxtScraper:
     def _parse_general_electives_html(self, html_text: str, elective_type: str = "tsk") -> Dict:
         soup = BeautifulSoup(html_text, 'html.parser')
         table = soup.find('table')
+        title_node = soup.find("div", class_="Nsb_r_title")
         result = {
             "类型": elective_type,
-            "标题": soup.title.get_text(strip=True) if soup.title else "一览表",
+            "标题": (
+                title_node.get_text(" ", strip=True)
+                if title_node
+                else soup.title.get_text(strip=True)
+                if soup.title
+                else "一览表"
+            ),
             "课程列表": [],
             "课程模块列表": [],
         }
         if not table:
             return result
 
-        rows = self._expand_table_rows(table)
-        if not rows:
+        td_nodes = table.find_all("td")
+        if not td_nodes:
             return result
 
-        header = [str(value).replace(" ", "").strip() for value in rows[0]]
-        if len(header) < 7:
-            return result
+        code_pattern = re.compile(r"^[A-Za-z0-9.]{6,}$")
+        active_modules: List[Dict[str, int | str]] = []
 
-        module_chain: List[str] = []
-        for row in rows[1:]:
-            clean = [str(value).strip() for value in row]
-            if len(clean) < 7:
+        def _consume_row(start_index: int):
+            if start_index + 5 >= len(td_nodes):
+                return None
+            row_values = [
+                td_nodes[start_index + offset].get_text(" ", strip=True).replace("\xa0", " ").strip()
+                for offset in range(6)
+            ]
+            if not row_values[0].isdigit():
+                return None
+            if not code_pattern.fullmatch(row_values[1]):
+                return None
+            return row_values
+
+        index = 0
+        while index < len(td_nodes):
+            node = td_nodes[index]
+            text = node.get_text(" ", strip=True).replace("\xa0", " ").strip()
+            if not text:
+                index += 1
                 continue
 
-            if not clean[-2].isdigit():
+            if node.get("rowspan"):
+                try:
+                    remaining = int(str(node.get("rowspan") or "0").strip() or "0")
+                except ValueError:
+                    remaining = 0
+                if remaining > 0:
+                    active_modules.append({"name": text, "remaining": remaining})
+                    index += 1
+                    row_values = _consume_row(index)
+                    if row_values:
+                        module_name = " / ".join(
+                            str(item.get("name") or "").strip()
+                            for item in active_modules
+                            if str(item.get("name") or "").strip()
+                        )
+                        result["课程列表"].append(
+                            {
+                                "课程模块": module_name,
+                                "序号": row_values[0],
+                                "课程代码": row_values[1],
+                                "课程名称": row_values[2],
+                                "学分": row_values[3],
+                                "总学时": row_values[4],
+                                "课程归属单位": row_values[5],
+                            }
+                        )
+                        index += 6
+                        updated_modules: List[Dict[str, int | str]] = []
+                        for item in active_modules:
+                            rest = int(item["remaining"]) - 1
+                            if rest > 0:
+                                updated_modules.append({"name": item["name"], "remaining": rest})
+                        active_modules = updated_modules
+                        continue
+                index += 1
                 continue
 
-            depth = len(clean) - 7
-            modules = [value for value in clean[:depth + 1] if value]
-            module_chain = modules or module_chain
-            module_name = " / ".join(module_chain)
-            course = {
-                "课程模块": module_name,
-                "序号": clean[-6],
-                "课程代码": clean[-5],
-                "课程名称": clean[-4],
-                "学分": clean[-3],
-                "总学时": clean[-2],
-                "课程归属单位": clean[-1],
-            }
-            result["课程列表"].append(course)
+            row_values = _consume_row(index)
+            if row_values and active_modules:
+                module_name = " / ".join(
+                    str(item.get("name") or "").strip()
+                    for item in active_modules
+                    if str(item.get("name") or "").strip()
+                )
+                result["课程列表"].append(
+                    {
+                        "课程模块": module_name,
+                        "序号": row_values[0],
+                        "课程代码": row_values[1],
+                        "课程名称": row_values[2],
+                        "学分": row_values[3],
+                        "总学时": row_values[4],
+                        "课程归属单位": row_values[5],
+                    }
+                )
+                index += 6
+                updated_modules = []
+                for item in active_modules:
+                    rest = int(item["remaining"]) - 1
+                    if rest > 0:
+                        updated_modules.append({"name": item["name"], "remaining": rest})
+                active_modules = updated_modules
+                continue
+
+            index += 1
 
         seen_modules = []
         for course in result["课程列表"]:
