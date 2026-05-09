@@ -111,7 +111,7 @@ class EducationCacheService:
             "学业进度": normalized.get("学业进度", {}),
             "考试安排": normalized.get("考试安排", {}),
             "执行计划": bundle.education_data.execution_plan or {},
-            "选课信息": bundle.education_data.course_selection or {},
+            "选课信息": normalized.get("选课信息", bundle.education_data.course_selection or {}),
         }
 
     def response_for_key(self, bundle: Optional[EducationCacheBundle], username: str, key: str) -> Dict[str, Any]:

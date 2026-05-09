@@ -175,6 +175,27 @@ class MCPRegistry:
                 capabilities=["weather.query"],
             )
         )
+        self.register(
+            MCPToolSpec(
+                name="query_general_electives",
+                description="查询通识选修/体育选项课程设置一览表",
+                module_path="app.mcp.tools",
+                func_name="query_general_electives",
+                parameters={
+                    "username": {"type": "string", "required": True, "description": "学号"},
+                    "elective_type": {"type": "string", "required": False, "description": "tsk=通识选修，tyk=体育选项"},
+                },
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "username": {"type": "string", "description": "学号"},
+                        "elective_type": {"type": "string", "description": "tsk=通识选修，tyk=体育选项"},
+                    },
+                    "required": ["username"],
+                },
+                capabilities=["course_selection.query", "electives.query"],
+            )
+        )
 
     def register(self, spec: MCPToolSpec):
         self._tools[spec.name] = spec

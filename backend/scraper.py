@@ -132,6 +132,217 @@ class JwxtScraper:
         except ValueError:
             return None
 
+    def _parse_training_plan_html(self, html_text: str) -> Dict:
+        import re
+
+        soup = BeautifulSoup(html_text, 'html.parser')
+
+        plan_data = {
+            "基本信息": {},
+            "方案说明": {},
+            "学分统计": {},
+            "学分分布": [],
+            "课程列表": []
+        }
+
+        title = soup.find("title")
+        plan_title = soup.find("font", style=lambda x: x and "font-size:16px" in x)
+        tab_title = soup.find(id="tab1")
+        if title:
+            plan_data["基本信息"]["页面标题"] = title.get_text(strip=True)
+        if plan_title:
+            plan_data["基本信息"]["方案名称"] = plan_title.get_text(strip=True)
+        elif tab_title:
+            plan_data["基本信息"]["方案名称"] = tab_title.get_text(" ", strip=True)
+
+        description_container = soup.find(id="nr")
+        page_text = (
+            description_container.get_text("\n", strip=True)
+            if description_container
+            else soup.get_text("\n", strip=True)
+        )
+        page_text = page_text.replace("\xa0", " ")
+        normalized_page_text = "\n".join(
+            line.strip() for line in page_text.splitlines() if line.strip()
+        )
+        lines = normalized_page_text.splitlines()
+        if lines:
+            plan_data["方案说明"]["全文"] = normalized_page_text
+            plan_data["方案说明"]["所属学院"] = lines[0]
+            if len(lines) >= 2:
+                plan_data["方案说明"]["方案标题"] = lines[1]
+
+            heading_aliases = {
+                "一、培养目标": "培养目标",
+                "二、培养要求：": "培养要求",
+                "二、培养要求": "培养要求",
+                "三、所属专业类": "所属专业类",
+                "四、专业核心课程": "专业核心课程",
+                "五、标准修业年限": "标准修业年限",
+                "六、授予学位": "授予学位",
+                "七、修读要求": "修读要求",
+            }
+            structured_sections = {}
+            current_section = ""
+            section_lines: List[str] = []
+            for line in lines[2:]:
+                if line in heading_aliases:
+                    if current_section:
+                        structured_sections[current_section] = "\n".join(section_lines).strip()
+                    current_section = heading_aliases[line]
+                    section_lines = []
+                    continue
+                if current_section:
+                    section_lines.append(line)
+            if current_section:
+                structured_sections[current_section] = "\n".join(section_lines).strip()
+            if structured_sections:
+                plan_data["方案说明"]["章节"] = structured_sections
+
+        credit_match = re.search(r"修满\s*(\d+)\s*学分", normalized_page_text)
+        if credit_match:
+            plan_data["学分统计"]["总学分要求"] = int(credit_match.group(1))
+
+        summary_table = None
+        for table in soup.find_all("table", class_="tableCss"):
+            table_text = " ".join(table.get_text(" ", strip=True).replace("\xa0", " ").split())
+            if "课程类别" in table_text and "各学期建议修读学分" in table_text:
+                summary_table = table
+                break
+
+        if summary_table:
+            summary_rows = [
+                [cell.get_text(" ", strip=True).replace("\xa0", " ").strip() for cell in tr.find_all(["th", "td"])]
+                for tr in summary_table.find_all("tr")
+            ]
+            semester_headers: List[str] = []
+            if len(summary_rows) >= 2:
+                semester_headers = [value for value in summary_rows[1] if value]
+
+            for values in summary_rows[2:]:
+                clean_values = [value for value in values if value]
+                if not clean_values:
+                    continue
+                if clean_values[0] == "合计":
+                    totals = {}
+                    for idx, semester in enumerate(semester_headers):
+                        value_index = idx + 1
+                        if value_index < len(clean_values):
+                            totals[semester] = clean_values[value_index]
+                    if clean_values:
+                        totals["合计"] = clean_values[-1]
+                    plan_data["学分统计"]["各学期建议修读学分"] = totals
+                    continue
+
+                category = clean_values[0]
+                nature = clean_values[1] if len(clean_values) == len(semester_headers) + 3 else ""
+                start_index = 2 if nature else 1
+                term_values = {}
+                for idx, semester in enumerate(semester_headers):
+                    value_index = start_index + idx
+                    if value_index < len(clean_values) - 1:
+                        term_values[semester] = clean_values[value_index]
+                plan_data["学分分布"].append({
+                    "课程类别": category,
+                    "课程性质": nature,
+                    "各学期建议修读学分": term_values,
+                    "合计": clean_values[-1],
+                })
+
+        target_table = soup.find("table", id="mxh")
+        if target_table:
+            expanded_rows = self._expand_table_rows(target_table)
+            code_pattern = re.compile(r"^[A-Za-z0-9]{8,}$")
+            header_markers = {
+                "课程类别", "课程性质", "课程模块", "课程代码", "课程名称", "学分",
+                "授课周数", "总学时", "理论讲授学时", "实验", "实习", "其他",
+                "建议修读学期", "是否适用辅修专业", "建议考核方式",
+            }
+            for values in expanded_rows:
+                clean_values = [value.strip() for value in values]
+                if len(clean_values) < 15:
+                    continue
+                compact_first = clean_values[0].replace(" ", "")
+                compact_code = clean_values[3].replace(" ", "")
+                if compact_first in header_markers or compact_code in header_markers:
+                    continue
+                course_code = compact_code
+                if not code_pattern.fullmatch(course_code):
+                    continue
+
+                plan_data["课程列表"].append({
+                    "课程类别": clean_values[0],
+                    "课程性质": clean_values[1],
+                    "课程模块": clean_values[2],
+                    "课程代码": course_code,
+                    "课程名称": clean_values[4],
+                    "学分": clean_values[5],
+                    "授课周数": clean_values[6],
+                    "总学时": clean_values[7],
+                    "理论学时": clean_values[8],
+                    "实验学时": clean_values[9],
+                    "实习学时": clean_values[10],
+                    "其他学时": clean_values[11],
+                    "建议修读学期": clean_values[12],
+                    "是否适用辅修专业": clean_values[13],
+                    "建议考核方式": clean_values[14],
+                })
+
+        return plan_data
+
+    def _parse_general_electives_html(self, html_text: str, elective_type: str = "tsk") -> Dict:
+        soup = BeautifulSoup(html_text, 'html.parser')
+        table = soup.find('table')
+        result = {
+            "类型": elective_type,
+            "标题": soup.title.get_text(strip=True) if soup.title else "一览表",
+            "课程列表": [],
+            "课程模块列表": [],
+        }
+        if not table:
+            return result
+
+        rows = self._expand_table_rows(table)
+        if not rows:
+            return result
+
+        header = [str(value).replace(" ", "").strip() for value in rows[0]]
+        if len(header) < 7:
+            return result
+
+        module_chain: List[str] = []
+        for row in rows[1:]:
+            clean = [str(value).strip() for value in row]
+            if len(clean) < 7:
+                continue
+
+            if not clean[-2].isdigit():
+                continue
+
+            depth = len(clean) - 7
+            modules = [value for value in clean[:depth + 1] if value]
+            module_chain = modules or module_chain
+            module_name = " / ".join(module_chain)
+            course = {
+                "课程模块": module_name,
+                "序号": clean[-6],
+                "课程代码": clean[-5],
+                "课程名称": clean[-4],
+                "学分": clean[-3],
+                "总学时": clean[-2],
+                "课程归属单位": clean[-1],
+            }
+            result["课程列表"].append(course)
+
+        seen_modules = []
+        for course in result["课程列表"]:
+            module_name = str(course.get("课程模块") or "").strip()
+            if module_name and module_name not in seen_modules:
+                seen_modules.append(module_name)
+        result["课程模块列表"] = seen_modules
+        result["数量"] = len(result["课程列表"])
+        return result
+
     def get_captcha(self) -> bytes:
         """获取验证码图片"""
         try:
@@ -998,8 +1209,6 @@ class JwxtScraper:
         基于教务系统导出的“指导培养方案”页面解析。
         """
         try:
-            import re
-
             url = f"{self.base_url}pyfa/pyfazd_query"
             logger.info(f"【培养方案调试】请求URL: {url}")
             response = self.session.get(url, timeout=10)
@@ -1020,62 +1229,7 @@ class JwxtScraper:
             
             # 输出HTML前500字符用于调试
             logger.info(f"【培养方案调试】HTML前500字符: {html_text[:500]}")
-
-            soup = BeautifulSoup(html_text, 'html.parser')
-
-            plan_data = {
-                "基本信息": {},
-                "学分统计": {},
-                "课程列表": []
-            }
-
-            title = soup.find("title")
-            plan_title = soup.find("font", style=lambda x: x and "font-size:16px" in x)
-            if title:
-                plan_data["基本信息"]["页面标题"] = title.get_text(strip=True)
-            if plan_title:
-                plan_data["基本信息"]["方案名称"] = plan_title.get_text(strip=True)
-
-            page_text = soup.get_text("\n", strip=True)
-            credit_match = re.search(r"修满\s*(\d+)\s*学分", page_text)
-            if credit_match:
-                plan_data["学分统计"]["总学分要求"] = int(credit_match.group(1))
-
-            target_table = soup.find("table", id="mxh")
-            if not target_table:
-                logger.warning("【培养方案调试】未找到 id='mxh' 的课程表格")
-            else:
-                logger.info("【培养方案调试】找到 id='mxh' 课程表格")
-                expanded_rows = self._expand_table_rows(target_table)
-                code_pattern = re.compile(r"[A-Za-z0-9]{8,}")
-
-                for values in expanded_rows:
-                    clean_values = [value.strip() for value in values]
-                    if len(clean_values) < 15:
-                        continue
-
-                    course_code = clean_values[3]
-                    if not code_pattern.fullmatch(course_code):
-                        continue
-
-                    course = {
-                        "课程类别": clean_values[0],
-                        "课程性质": clean_values[1],
-                        "课程模块": clean_values[2],
-                        "课程代码": course_code,
-                        "课程名称": clean_values[4],
-                        "学分": clean_values[5],
-                        "授课周数": clean_values[6],
-                        "总学时": clean_values[7],
-                        "理论学时": clean_values[8],
-                        "实验学时": clean_values[9],
-                        "实习学时": clean_values[10],
-                        "其他学时": clean_values[11],
-                        "建议修读学期": clean_values[12],
-                        "是否适用辅修专业": clean_values[13],
-                        "建议考核方式": clean_values[14],
-                    }
-                    plan_data["课程列表"].append(course)
+            plan_data = self._parse_training_plan_html(html_text)
 
             logger.info(f"成功获取我的培养方案，共 {len(plan_data['课程列表'])} 门课程")
 
@@ -1756,6 +1910,25 @@ class JwxtScraper:
             plan = self.get_my_training_plan()
             if plan.get("success"):
                 all_data["培养方案"] = plan.get("data", {})
+
+            # 获取通识选修课程设置一览表
+            elective_tables = {}
+            for elective_type in ["tsk", "tyk"]:
+                try:
+                    url = f"{self.base_url}pyfa/pyfazd_query_cktxk?type={elective_type}"
+                    response = self.session.get(url, timeout=10)
+                    html_text = self._fix_encoding(response)
+                    if not self._check_session_valid(html_text):
+                        continue
+                    parsed = self._parse_general_electives_html(html_text, elective_type=elective_type)
+                    if parsed.get("课程列表"):
+                        elective_tables[elective_type] = parsed
+                except Exception as e:
+                    logger.warning(f"【通识选修】获取 {elective_type} 失败: {e}")
+            if elective_tables:
+                all_data["选课信息"] = {
+                    "通识选修": elective_tables,
+                }
 
             # 获取学业进度
             progress = self.get_academic_progress()

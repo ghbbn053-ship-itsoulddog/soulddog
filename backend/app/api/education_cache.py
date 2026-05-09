@@ -118,7 +118,7 @@ async def get_general_electives_cached(
         return base
 
     data = base.get("data") or {}
-    tables = data.get("通识选修课程") or {}
+    tables = data.get("通识选修") or data.get("通识选修课程") or {}
     target = str(elective_type or "tsk").strip().lower() or "tsk"
     selected = tables.get(target) or {}
 

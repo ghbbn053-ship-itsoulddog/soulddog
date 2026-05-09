@@ -77,6 +77,17 @@ def _resolve_semester(semester: str = "") -> str:
     return resolved or normalized
 
 
+def _training_plan_semester_filter(semester: str = "") -> str:
+    """
+    培养方案的“建议修读学期”通常是 1-8 这种数字，不是教务系统学期号。
+    只有传入明确的数字时才做过滤，避免把 2025-2026-2 这类学期号误拿来筛空。
+    """
+    normalized = str(semester or "").strip()
+    if not normalized:
+        return ""
+    return normalized if normalized.isdigit() else ""
+
+
 def _normalize_weekday_label(value: object) -> str:
     raw_day = str(value or "").strip()
     weekday_alias = {
@@ -263,7 +274,7 @@ def _format_cached_training_plan(username: str, semester: str = "") -> Optional[
     plan, status = _load_cached_section(username, "培养方案")
     if not plan:
         return None
-    target_semester = _resolve_semester(semester)
+    target_semester = _training_plan_semester_filter(semester)
     if target_semester:
         filtered_courses = [
             course for course in list(plan.get("课程列表") or [])
@@ -329,6 +340,45 @@ def _format_cached_grades(username: str, semester: str = "") -> Optional[str]:
     if status and status.get("cached_at"):
         output += f"数据来源: 平台缓存 ({status.get('cached_at')})\n"
     return output
+
+
+def _render_general_electives(data: dict, cached_at: str = "") -> str:
+    title = str(data.get("标题") or "通识选修课程一览表").strip()
+    elective_type = str(data.get("类型") or "tsk").strip()
+    courses = list(data.get("课程列表") or [])
+    modules = list(data.get("课程模块列表") or [])
+
+    output = f"{title}\n"
+    output += f"类型: {elective_type}\n"
+    output += f"共 {len(courses)} 门课程\n\n"
+
+    if modules:
+        output += "课程模块:\n"
+        for module in modules[:20]:
+            output += f"  - {module}\n"
+        output += "\n"
+
+    for item in courses[:30]:
+        output += f"- {item.get('课程名称', 'N/A')} ({item.get('课程代码', 'N/A')})\n"
+        output += f"  模块: {item.get('课程模块', 'N/A')} | 学分: {item.get('学分', 'N/A')} | 学时: {item.get('总学时', 'N/A')}\n"
+        output += f"  开课单位: {item.get('课程归属单位', 'N/A')}\n\n"
+    if len(courses) > 30:
+        output += f"... 还有 {len(courses) - 30} 门课程未展开\n"
+
+    if cached_at:
+        output += f"\n数据来源: 平台缓存 ({cached_at})"
+    return output
+
+
+def _format_cached_general_electives(username: str, elective_type: str = "tsk") -> Optional[str]:
+    data, status = _load_cached_section(username, "选课信息")
+    if not data:
+        return None
+    tables = dict((data or {}).get("通识选修") or {})
+    selected = tables.get(elective_type)
+    if not selected:
+        return None
+    return _render_general_electives(selected, str((status or {}).get("cached_at") or ""))
 
 
 @mcp.tool()
@@ -469,7 +519,7 @@ async def query_training_plan(username: str, semester: str = "") -> str:
         培养方案信息，包含课程要求、学分分布等
     """
     try:
-        target_semester = _resolve_semester(semester)
+        target_semester = _training_plan_semester_filter(semester)
         cached = _format_cached_training_plan(username, target_semester)
         if cached:
             return cached
@@ -632,3 +682,34 @@ async def query_weather(username: str, location: str = "") -> str:
     except Exception as e:
         logger.error(f"查询天气失败: {e}")
         return f"查询天气时发生错误: {str(e)}"
+
+
+@mcp.tool()
+async def query_general_electives(username: str, elective_type: str = "tsk") -> str:
+    """查询通识选修/体育选项课程设置一览表。
+
+    Args:
+        username: 学号
+        elective_type: tsk=通识选修，tyk=体育选项
+    """
+    try:
+        normalized_type = str(elective_type or "tsk").strip().lower() or "tsk"
+        cached = _format_cached_general_electives(username, normalized_type)
+        if cached:
+            return cached
+
+        scraper = _get_scraper(username)
+        url = f"{scraper.base_url}pyfa/pyfazd_query_cktxk?type={normalized_type}"
+        response = scraper.session.get(url, timeout=12)
+        html_text = scraper._fix_encoding(response)
+        if not scraper._check_session_valid(html_text):
+            return "会话已过期，请重新登录"
+        parsed = scraper._parse_general_electives_html(html_text, elective_type=normalized_type)
+        if not parsed.get("课程列表"):
+            return "未查询到课程设置数据"
+        return _render_general_electives(parsed)
+    except ValueError as e:
+        return str(e)
+    except Exception as e:
+        logger.error(f"查询通识选修课程失败: {e}")
+        return f"查询通识选修课程时发生错误: {str(e)}"

@@ -107,6 +107,7 @@ def normalize_education_payload(raw_data: Dict) -> Dict:
     # 培养方案 / 学业进度
     training_plan = _as_dict(raw_data.get("培养方案", {}))
     academic_progress = _as_dict(raw_data.get("学业进度", {}))
+    course_selection = _as_dict(raw_data.get("选课信息", {}))
 
     # 考试安排
     raw_exam = raw_data.get("考试安排", [])
@@ -142,6 +143,7 @@ def normalize_education_payload(raw_data: Dict) -> Dict:
         },
         "培养方案": training_plan,
         "学业进度": academic_progress,
+        "选课信息": course_selection,
         "考试安排": {
             "学期": exam_semester,
             "考试列表": exam_list,
@@ -173,6 +175,7 @@ def build_payload_from_education_data_record(edu_data) -> Dict:
         "课表信息": getattr(edu_data, "schedule", []) or [],
         "培养方案": getattr(edu_data, "training_plan", {}) or {},
         "学业进度": getattr(edu_data, "academic_progress", {}) or {},
+        "选课信息": getattr(edu_data, "course_selection", {}) or {},
         "考试安排": getattr(edu_data, "exam_schedule", []) or [],
     }
     return normalize_education_payload(raw)
