@@ -23,6 +23,7 @@ from app.api import chat
 from app.api import mcp as mcp_router
 from app.api import platform as platform_router
 from app.api import knowledge as knowledge_router
+from app.api import learning_memory as learning_memory_router
 from app.api import learning_status as learning_status_router
 from app.api import suggestions as suggestions_router
 from app.api import workspace as workspace_router
@@ -39,6 +40,7 @@ from app.api.intake import router as intake_router
 from app.api.composition import router as composition_router
 from app.api.agent_access import router as agent_access_router
 from app.api.chaoxing import router as chaoxing_router
+from app.api.yuketang import router as yuketang_router
 from app.api.question_bank import router as question_bank_router
 from app.models.base import SessionLocal
 from app.security_agent import resolve_agent_identity
@@ -127,11 +129,13 @@ app.include_router(workspace_router.router)
 app.include_router(workspace_pref_router.router)
 app.include_router(platform_router.router)
 app.include_router(knowledge_router.router)
+app.include_router(learning_memory_router.router)
 app.include_router(learning_status_router.router)
 app.include_router(suggestions_router.router)
 app.include_router(chat.router)
 app.include_router(mcp_router.router)
 app.include_router(chaoxing_router)
+app.include_router(yuketang_router)
 app.include_router(question_bank_router)
 
 try:

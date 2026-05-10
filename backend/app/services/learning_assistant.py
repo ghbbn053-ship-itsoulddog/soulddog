@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import secrets
 from collections import Counter
 from datetime import datetime, timezone
@@ -15,6 +17,7 @@ from app.models.question_bank import (
     LearningAutomationTask,
     LearningQuestion,
     LearningQuestionAttempt,
+    LearningStudyMemory,
 )
 from app.services.model_provider import get_model_provider_for_user
 from app.services.session_store import get_session_store
@@ -831,6 +834,445 @@ class LearningAssistantService:
         db.refresh(row)
         return row
 
+    @staticmethod
+    def _normalize_memory_text(text: str) -> str:
+        value = (text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+        return re.sub(r"\s+", " ", value)
+
+    @staticmethod
+    def _shorten_text(text: str, limit: int = 120) -> str:
+        value = LearningAssistantService._normalize_memory_text(text)
+        if len(value) <= limit:
+            return value
+        return value[: max(0, limit - 1)].rstrip() + "…"
+
+    @staticmethod
+    def _should_capture_learning_memory(question_text: str) -> bool:
+        q = LearningAssistantService._normalize_memory_text(question_text)
+        if len(q) < 6:
+            return False
+        low_value_exact = {
+            "你好",
+            "在吗",
+            "收到吗",
+            "继续",
+            "下一步",
+            "好的",
+            "可以",
+            "行",
+            "嗯",
+            "测试",
+            "1",
+            "2",
+            "3",
+        }
+        if q.lower() in low_value_exact:
+            return False
+        low_value_fragments = [
+            "谢谢",
+            "辛苦了",
+            "先这样",
+            "回头再说",
+            "晚点再说",
+            "就这样",
+            "推送代码",
+            "继续做",
+            "开始吧",
+        ]
+        if any(fragment in q for fragment in low_value_fragments):
+            return False
+        learning_signal_fragments = [
+            "为什么",
+            "怎么",
+            "如何",
+            "区别",
+            "原理",
+            "概念",
+            "定义",
+            "推导",
+            "证明",
+            "计算",
+            "步骤",
+            "公式",
+            "题",
+            "不会",
+            "不懂",
+            "记不住",
+            "复习",
+            "总结",
+            "易错",
+            "重点",
+        ]
+        return any(fragment in q for fragment in learning_signal_fragments) or len(q) >= 18
+
+    @staticmethod
+    def _infer_memory_question_type(question_text: str) -> str:
+        q = (question_text or "").strip()
+        if not q:
+            return "general"
+        if any(keyword in q for keyword in ["怎么做", "如何做", "步骤", "流程", "做题", "例题", "题目", "习题"]):
+            return "practice"
+        if any(keyword in q for keyword in ["为什么", "原理", "概念", "定义", "是什么"]):
+            return "concept"
+        if any(keyword in q for keyword in ["区别", "对比", "容易混淆", "怎么区分", "分不清"]):
+            return "confusion"
+        if any(keyword in q for keyword in ["记不住", "背", "重点", "复习", "总结"]):
+            return "review"
+        if any(keyword in q for keyword in ["推导", "证明", "公式", "计算"]):
+            return "reasoning"
+        return "general"
+
+    @staticmethod
+    def _infer_memory_importance(question_text: str, answer_text: str = "") -> int:
+        text = f"{question_text}\n{answer_text}"
+        score = 3
+        for keyword in ["不会", "不懂", "卡住", "搞不清", "分不清", "忘了", "记不住"]:
+            if keyword in text:
+                score += 1
+        for keyword in ["考试", "重点", "高频", "必考"]:
+            if keyword in text:
+                score += 1
+        return max(1, min(score, 5))
+
+    @staticmethod
+    def _extract_memory_points(question_text: str, answer_text: str = "", limit: int = 6) -> List[str]:
+        raw = f"{question_text}\n{answer_text}"
+        candidates = re.findall(r"[\u4e00-\u9fffA-Za-z0-9_+\-]{2,}", raw)
+        stop_words = {
+            "这个", "那个", "什么", "怎么", "如何", "为什么", "是不是", "然后", "一个",
+            "我们", "你们", "他们", "老师", "课件", "课程", "知识", "问题", "学习",
+        }
+        points: List[str] = []
+        for item in candidates:
+            token = item.strip()
+            if len(token) < 2 or token in stop_words:
+                continue
+            if token not in points:
+                points.append(token)
+            if len(points) >= limit:
+                break
+        return points
+
+    @staticmethod
+    def _fingerprint_memory(owner_username: str, workspace_id: int | None, question_text: str) -> str:
+        raw = f"{owner_username}:{workspace_id or 0}:{LearningAssistantService._normalize_memory_text(question_text).lower()}"
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+    def record_learning_memory(
+        self,
+        db: Session,
+        *,
+        owner_username: str,
+        workspace_id: int | None,
+        question_text: str,
+        answer_text: str = "",
+        course_name: str = "",
+        status: str = "unresolved",
+        source_refs: Optional[Dict[str, Any]] = None,
+        conversation_id: int | None = None,
+        prompt_strategy: str = "",
+    ) -> Optional[LearningStudyMemory]:
+        normalized_question = self._normalize_memory_text(question_text)
+        if len(normalized_question) < 4:
+            return None
+        if not self._should_capture_learning_memory(normalized_question):
+            return None
+        fingerprint = self._fingerprint_memory(owner_username, workspace_id, normalized_question)
+        existing = (
+            db.query(LearningStudyMemory)
+            .filter(
+                LearningStudyMemory.owner_username == owner_username,
+                LearningStudyMemory.workspace_id == workspace_id,
+                LearningStudyMemory.question_fingerprint == fingerprint,
+            )
+            .first()
+        )
+        memory_course_name = course_name.strip() or self._workspace_name(db, owner_username, workspace_id)
+        row = existing or LearningStudyMemory(
+            owner_username=owner_username,
+            workspace_id=workspace_id,
+            question_fingerprint=fingerprint,
+        )
+        row.course_name = memory_course_name or None
+        row.question_text = normalized_question
+        row.question_summary = self._shorten_text(normalized_question, 160)
+        row.question_type = self._infer_memory_question_type(normalized_question)
+        row.knowledge_points_json = self._extract_memory_points(normalized_question, answer_text, limit=6)
+        row.status = (status or "unresolved").strip() or "unresolved"
+        row.answer_summary = self._shorten_text(answer_text, 280) if answer_text else (row.answer_summary or "")
+        next_source_refs = dict(source_refs or {})
+        if prompt_strategy.strip():
+            next_source_refs["prompt_strategy"] = prompt_strategy.strip()
+        row.source_refs_json = next_source_refs
+        row.importance = self._infer_memory_importance(normalized_question, answer_text)
+        row.conversation_id = conversation_id
+        if not existing:
+            db.add(row)
+        db.commit()
+        db.refresh(row)
+        return row
+
+    def list_learning_memories(
+        self,
+        db: Session,
+        owner_username: str,
+        workspace_id: int | None = None,
+        *,
+        status: str = "",
+        query: str = "",
+        course_name: str = "",
+        question_type: str = "",
+        knowledge_point: str = "",
+        limit: int = 20,
+        apply_limit: bool = True,
+    ) -> List[LearningStudyMemory]:
+        rows = db.query(LearningStudyMemory).filter(LearningStudyMemory.owner_username == owner_username)
+        if workspace_id:
+            rows = rows.filter(LearningStudyMemory.workspace_id == workspace_id)
+        if status:
+            rows = rows.filter(LearningStudyMemory.status == status)
+        if query.strip():
+            q = f"%{query.strip()}%"
+            rows = rows.filter(
+                (LearningStudyMemory.question_text.ilike(q))
+                | (LearningStudyMemory.question_summary.ilike(q))
+                | (LearningStudyMemory.answer_summary.ilike(q))
+            )
+        rows = rows.order_by(
+            (LearningStudyMemory.status == "resolved").asc(),
+            LearningStudyMemory.importance.desc(),
+            LearningStudyMemory.updated_at.desc(),
+            LearningStudyMemory.created_at.desc(),
+        )
+        items = rows.all()
+        if course_name.strip():
+            target_course = course_name.strip()
+            items = [item for item in items if (item.course_name or "未命名课程") == target_course]
+        if question_type.strip():
+            target_type = question_type.strip()
+            items = [item for item in items if (item.question_type or "").strip() == target_type]
+        if knowledge_point.strip():
+            target_point = knowledge_point.strip()
+            filtered_items = []
+            for item in items:
+                points = [str(point).strip() for point in (item.knowledge_points_json or []) if str(point).strip()]
+                if target_point in points:
+                    filtered_items.append(item)
+            items = filtered_items
+        if apply_limit:
+            items = items[: max(1, min(limit, 100))]
+        return items
+
+    def update_learning_memory_status(
+        self,
+        db: Session,
+        owner_username: str,
+        memory_id: int,
+        status: str,
+    ) -> LearningStudyMemory:
+        row = (
+            db.query(LearningStudyMemory)
+            .filter(LearningStudyMemory.id == memory_id, LearningStudyMemory.owner_username == owner_username)
+            .first()
+        )
+        if not row:
+            raise ValueError("学习疑问不存在")
+        row.status = (status or "unresolved").strip() or "unresolved"
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return row
+
+    def get_learning_memory_overview(
+        self,
+        db: Session,
+        owner_username: str,
+        workspace_id: int | None = None,
+        *,
+        status: str = "",
+        query: str = "",
+        course_name: str = "",
+        question_type: str = "",
+        knowledge_point: str = "",
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        all_items = self.list_learning_memories(
+            db,
+            owner_username,
+            workspace_id=workspace_id,
+            status=status,
+            query=query,
+            limit=limit,
+            apply_limit=False,
+        )
+        items = self.list_learning_memories(
+            db,
+            owner_username,
+            workspace_id=workspace_id,
+            status=status,
+            query=query,
+            course_name=course_name,
+            question_type=question_type,
+            knowledge_point=knowledge_point,
+            limit=limit,
+            apply_limit=True,
+        )
+        unresolved = [item for item in all_items if (item.status or "").strip() != "resolved"]
+        by_status: Dict[str, int] = {}
+        by_type: Dict[str, int] = {}
+        by_course: Dict[str, int] = {}
+        by_course_type: Dict[str, Counter[str]] = {}
+        points_counter: Counter[str] = Counter()
+        source_material_counter: Counter[str] = Counter()
+        source_material_map: Dict[str, Dict[str, Any]] = {}
+        for item in all_items:
+            by_status[item.status] = by_status.get(item.status, 0) + 1
+            by_type[item.question_type] = by_type.get(item.question_type, 0) + 1
+            course = item.course_name or "未命名课程"
+            by_course[course] = by_course.get(course, 0) + 1
+            by_course_type.setdefault(course, Counter())
+            if item.question_type:
+                by_course_type[course][item.question_type] += 1
+            for point in item.knowledge_points_json or []:
+                text = str(point).strip()
+                if text:
+                    points_counter[text] += 1
+            refs = item.source_refs_json or {}
+            highlights = refs.get("highlights") or []
+            if isinstance(highlights, list):
+                seen_materials = set()
+                for raw in highlights:
+                    row = raw if isinstance(raw, dict) else {}
+                    source = str(row.get("source") or "").strip()
+                    title = str(row.get("title") or "").strip() or "未命名资料"
+                    document_id = row.get("document_id")
+                    chunk_index = row.get("chunk_index")
+                    material_key = f"{document_id or source or title}"
+                    if not material_key or material_key in seen_materials:
+                        continue
+                    seen_materials.add(material_key)
+                    source_material_counter[material_key] += 1
+                    source_material_map.setdefault(
+                        material_key,
+                        {
+                            "title": title,
+                            "source": source,
+                            "document_id": document_id,
+                            "chunk_index": chunk_index,
+                            "hit_count": 0,
+                        },
+                    )
+        course_rank = sorted(
+            by_course.items(),
+            key=lambda pair: (-pair[1], pair[0]),
+        )
+        review_priority = sorted(
+            [
+                {
+                    "course_name": item.course_name or "未命名课程",
+                    "question_summary": item.question_summary,
+                    "question_type": item.question_type,
+                    "importance": int(item.importance or 0),
+                    "status": item.status,
+                    "id": item.id,
+                }
+                for item in unresolved
+            ],
+            key=lambda item: (-item["importance"], item["course_name"], item["question_summary"]),
+        )[:5]
+        source_material_rank = []
+        for key, count in source_material_counter.most_common(5):
+            payload = dict(source_material_map.get(key) or {})
+            if not payload:
+                continue
+            payload["hit_count"] = count
+            source_material_rank.append(payload)
+        course_insights = []
+        for course_name, total in sorted(by_course.items(), key=lambda pair: (-pair[1], pair[0]))[:8]:
+            type_counter = by_course_type.get(course_name) or Counter()
+            dominant_type, dominant_count = ("general", 0)
+            if type_counter:
+                dominant_type, dominant_count = type_counter.most_common(1)[0]
+            unresolved_count = sum(
+                1
+                for item in unresolved
+                if (item.course_name or "未命名课程") == course_name
+            )
+            course_insights.append(
+                {
+                    "course_name": course_name,
+                    "total": total,
+                    "unresolved": unresolved_count,
+                    "dominant_type": dominant_type,
+                    "dominant_type_count": dominant_count,
+                }
+            )
+        blind_spots = []
+        prompt_strategy_counter: Counter[str] = Counter()
+        unresolved_points_by_course: Dict[str, Counter[str]] = {}
+        for item in unresolved:
+            course_name = item.course_name or "未命名课程"
+            unresolved_points_by_course.setdefault(course_name, Counter())
+            refs = item.source_refs_json or {}
+            strategy = str(refs.get("prompt_strategy") or "").strip()
+            if strategy:
+                prompt_strategy_counter[strategy] += 1
+            for point in item.knowledge_points_json or []:
+                text = str(point).strip()
+                if text:
+                    unresolved_points_by_course[course_name][text] += 1
+        for course_name, total in sorted(by_course.items(), key=lambda pair: (-pair[1], pair[0]))[:8]:
+            unresolved_count = sum(
+                1
+                for item in unresolved
+                if (item.course_name or "未命名课程") == course_name
+            )
+            if unresolved_count <= 0:
+                continue
+            type_counter = by_course_type.get(course_name) or Counter()
+            dominant_type, dominant_count = ("general", 0)
+            if type_counter:
+                dominant_type, dominant_count = type_counter.most_common(1)[0]
+            point_counter = unresolved_points_by_course.get(course_name) or Counter()
+            top_point, top_point_count = ("", 0)
+            if point_counter:
+                top_point, top_point_count = point_counter.most_common(1)[0]
+            blind_spots.append(
+                {
+                    "course_name": course_name,
+                    "unresolved": unresolved_count,
+                    "dominant_type": dominant_type,
+                    "dominant_type_count": dominant_count,
+                    "top_point": top_point,
+                    "top_point_count": top_point_count,
+                }
+            )
+        blind_spots.sort(
+            key=lambda item: (-item["unresolved"], -item["dominant_type_count"], item["course_name"])
+        )
+        prompt_strategy_rank = [
+            {"strategy": strategy, "count": count}
+            for strategy, count in prompt_strategy_counter.most_common(3)
+        ]
+        return {
+            "items": [item.to_dict() for item in items],
+            "summary": {
+                "total": len(all_items),
+                "unresolved": len(unresolved),
+                "resolved": sum(1 for item in all_items if (item.status or "").strip() == "resolved"),
+                "by_status": by_status,
+                "by_type": by_type,
+                "by_course": by_course,
+                "course_rank": [name for name, _ in course_rank[:8]],
+                "top_points": [item for item, _ in points_counter.most_common(8)],
+                "review_priority": review_priority,
+                "top_source_materials": source_material_rank,
+                "course_insights": course_insights,
+                "blind_spots": blind_spots[:6],
+                "prompt_strategy_rank": prompt_strategy_rank,
+            },
+        }
+
     def log_attempt(
         self,
         db: Session,
@@ -961,3 +1403,5 @@ def get_learning_assistant_service() -> LearningAssistantService:
     if _learning_assistant_service_singleton is None:
         _learning_assistant_service_singleton = LearningAssistantService()
     return _learning_assistant_service_singleton
+
+

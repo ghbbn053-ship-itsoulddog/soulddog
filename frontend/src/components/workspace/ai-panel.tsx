@@ -29,6 +29,15 @@ type MessageHighlight = {
   score?: number;
 };
 
+type BlindSpotItem = {
+  course_name: string;
+  unresolved: number;
+  dominant_type: string;
+  dominant_type_count?: number;
+  top_point?: string;
+  top_point_count?: number;
+};
+
 type ToolTrace = {
   skill: string;
   tool: string;
@@ -55,6 +64,7 @@ type PanelMessage = {
   content: string;
   thinking?: string;
   highlights?: MessageHighlight[];
+  blind_spots?: BlindSpotItem[];
   sources?: string[];
   tool_trace?: ToolTrace[];
   skill_matches?: SkillMatch[];
@@ -78,14 +88,28 @@ function parseKnowledgeSource(source: string) {
   };
 }
 
+function buildBlindSpotWorkspaceLink(workspaceId: number, item: BlindSpotItem) {
+  const params = new URLSearchParams();
+  if (item.course_name) params.set("course", item.course_name);
+  if (item.top_point) params.set("point", item.top_point);
+  const query = params.toString();
+  return query ? `/workspace/${workspaceId}?${query}` : `/workspace/${workspaceId}`;
+}
+
 export function AIPanel({
   username,
   workspaceId,
   workspaceName,
+  onLearningMemoryCaptured,
+  draftPrompt,
+  onDraftPromptConsumed,
 }: {
   username: string;
   workspaceId: number;
   workspaceName?: string;
+  onLearningMemoryCaptured?: () => void;
+  draftPrompt?: string;
+  onDraftPromptConsumed?: () => void;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<PanelMessage[]>([]);
@@ -98,6 +122,7 @@ export function AIPanel({
   const [showThinking, setShowThinking] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
   const STREAM_API_BASE = useMemo(() => {
@@ -141,6 +166,7 @@ export function AIPanel({
           content: m.content,
           thinking: m.meta?.thinking || "",
           highlights: m.meta?.highlights || [],
+          blind_spots: m.meta?.blind_spots || [],
           sources: m.meta?.sources || [],
           tool_trace: m.meta?.tool_trace || [],
           skill_matches: m.meta?.skill_matches || [],
@@ -156,6 +182,34 @@ export function AIPanel({
     setMessages([]);
     void fetchConversations();
   }, [fetchConversations, workspaceId]);
+
+  useEffect(() => {
+    if (!draftPrompt?.trim()) return;
+    setInput(draftPrompt);
+    onDraftPromptConsumed?.();
+  }, [draftPrompt, onDraftPromptConsumed]);
+
+  const activePromptBase = (input.trim() || draftPrompt?.trim() || "").trim();
+  const hasDraftPrompt = Boolean(draftPrompt?.trim());
+  const quickPromptTitle = hasDraftPrompt ? "基于当前资料的快捷追问" : "快速提问";
+
+  const applyPromptTemplate = useCallback(
+    (kind: "explain" | "keypoints" | "quiz" | "followup") => {
+      const base = activePromptBase;
+      const prefix = base ? `基于下面内容：\n${base}\n\n` : "";
+      const nextPrompt =
+        kind === "explain"
+          ? `${prefix}请先把这段内容讲清楚，按最容易理解的方式解释关键概念，并指出我最容易卡住的地方。`
+          : kind === "keypoints"
+            ? `${prefix}请提炼这段内容的核心考点、易错点和必须记住的结论。`
+            : kind === "quiz"
+              ? `${prefix}请基于这段内容出 1 道练习题，并给出标准答案要点和解题思路。`
+              : `${prefix}请告诉我基于这段内容，下一步最值得追问的问题是什么。`;
+      setInput(nextPrompt);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    },
+    [activePromptBase]
+  );
 
   const sendMessage = async () => {
     if (!username || !workspaceId || !input.trim() || loading) return;
@@ -203,6 +257,7 @@ export function AIPanel({
       let thinking = "";
       let sseBuffer = "";
       let nextConversationId = conversationId;
+      let streamDone = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -237,6 +292,7 @@ export function AIPanel({
                 );
               }
               if (data.done) {
+                streamDone = true;
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantMsgId
@@ -245,6 +301,7 @@ export function AIPanel({
                           content,
                           thinking,
                           highlights: data.highlights || [],
+                          blind_spots: data.blind_spots || [],
                           sources: data.sources || [],
                           tool_trace: data.tool_trace || [],
                           skill_matches: data.skill_matches || [],
@@ -263,6 +320,9 @@ export function AIPanel({
       if (nextConversationId) {
         setConversationId(nextConversationId);
         await fetchConversations();
+      }
+      if (streamDone) {
+        onLearningMemoryCaptured?.();
       }
     } catch (e) {
       const errorText = e instanceof Error ? e.message : "请求失败";
@@ -458,6 +518,31 @@ export function AIPanel({
                             ))}
                           </div>
                         ) : null}
+                        {msg.blind_spots && msg.blind_spots.length > 0 ? (
+                          <div className="mt-3 space-y-2 border-t border-amber-200 pt-3">
+                            <div className="text-xs font-medium text-amber-700">本轮参考的学习盲点</div>
+                            {msg.blind_spots.map((item, index) => (
+                              <div key={`${item.course_name}-${index}`} className="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
+                                <div className="font-medium text-slate-900">{item.course_name}</div>
+                                <div className="mt-1 leading-6">
+                                  未解决 {item.unresolved} 条
+                                  {item.top_point ? `，高频卡点 ${item.top_point}` : ""}
+                                </div>
+                                <div className="mt-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 border-amber-200 bg-white px-2 text-[11px] text-amber-800 hover:bg-amber-100"
+                                    onClick={() => router.push(buildBlindSpotWorkspaceLink(workspaceId, item))}
+                                  >
+                                    定位到学习疑问
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                         {msg.highlights && msg.highlights.length > 0 ? (
                           <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
                             <div className="text-xs font-medium text-slate-500">引用片段</div>
@@ -490,8 +575,33 @@ export function AIPanel({
               <Separator />
 
               <div className="p-4">
+                {activePromptBase ? (
+                  <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="mb-1 text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{quickPromptTitle}</div>
+                    {hasDraftPrompt ? (
+                      <div className="mb-3 text-xs leading-6 text-slate-500">
+                        已把资料片段转成问题草稿。你可以直接发送，也可以先用下面的快捷动作改写一下。
+                      </div>
+                    ) : null}
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={() => applyPromptTemplate("explain")}>
+                        {hasDraftPrompt ? "解释这段资料" : "解释这段"}
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => applyPromptTemplate("keypoints")}>
+                        {hasDraftPrompt ? "提炼这段考点" : "提炼考点"}
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => applyPromptTemplate("quiz")}>
+                        {hasDraftPrompt ? "基于它出题" : "出一道题"}
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => applyPromptTemplate("followup")}>
+                        {hasDraftPrompt ? "生成追问" : "继续追问"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="flex gap-2">
                   <Input
+                    ref={inputRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="直接在当前工作区提问..."

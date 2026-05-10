@@ -132,6 +132,52 @@ class LearningActivity(Base):
         }
 
 
+class LearningStudyMemory(Base):
+    __tablename__ = "learning_study_memories"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    owner_username = Column(String(50), nullable=False, index=True)
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True, index=True)
+    course_name = Column(String(200), nullable=True)
+    question_text = Column(Text, nullable=False)
+    question_summary = Column(String(300), nullable=False)
+    question_type = Column(String(40), nullable=False, default="general")
+    knowledge_points_json = Column(JSON, default=list)
+    status = Column(String(20), nullable=False, default="unresolved")
+    answer_summary = Column(Text, nullable=True)
+    source_refs_json = Column(JSON, default=dict)
+    importance = Column(Integer, nullable=False, default=3)
+    question_fingerprint = Column(String(64), nullable=False, index=True)
+    conversation_id = Column(Integer, nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        Index("idx_learning_memory_owner_workspace_status", "owner_username", "workspace_id", "status"),
+        Index("idx_learning_memory_owner_workspace_course", "owner_username", "workspace_id", "course_name"),
+        Index("idx_learning_memory_owner_fingerprint", "owner_username", "question_fingerprint"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "owner_username": self.owner_username,
+            "workspace_id": self.workspace_id,
+            "course_name": self.course_name or "",
+            "question_text": self.question_text,
+            "question_summary": self.question_summary,
+            "question_type": self.question_type,
+            "knowledge_points": self.knowledge_points_json or [],
+            "status": self.status,
+            "answer_summary": self.answer_summary or "",
+            "source_refs": self.source_refs_json or {},
+            "importance": self.importance,
+            "conversation_id": self.conversation_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class LearningAutomationTask(Base):
     __tablename__ = "learning_automation_tasks"
 

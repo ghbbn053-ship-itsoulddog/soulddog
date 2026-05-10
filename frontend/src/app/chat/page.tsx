@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -73,6 +73,15 @@ interface MessageHighlight {
   score?: number;
 }
 
+interface BlindSpotItem {
+  course_name: string;
+  unresolved: number;
+  dominant_type: string;
+  dominant_type_count?: number;
+  top_point?: string;
+  top_point_count?: number;
+}
+
 interface Message {
   id: number;
   role: "user" | "assistant";
@@ -80,6 +89,7 @@ interface Message {
   thinking?: string;
   sources?: string[];
   highlights?: MessageHighlight[];
+  blind_spots?: BlindSpotItem[];
   tool_calls?: ToolCall[];
   tool_trace?: ToolTrace[];
   skill_matches?: SkillMatch[];
@@ -231,6 +241,7 @@ export default function ChatPage() {
   const [saveWorkspaceDesc, setSaveWorkspaceDesc] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
   const [savePending, setSavePending] = useState(false);
+  const [selectedPromptStrategy, setSelectedPromptStrategy] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeHistoryReqRef = useRef(0);
@@ -255,18 +266,59 @@ export default function ChatPage() {
     const parsed = Number(raw || 0);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   }, [searchParams]);
+  const requestedPrompt = useMemo(() => (searchParams.get("prompt") || "").trim(), [searchParams]);
+  const requestedCourse = useMemo(() => (searchParams.get("course") || "").trim(), [searchParams]);
+  const requestedPoint = useMemo(
+    () => (searchParams.get("point") || searchParams.get("knowledge_point") || "").trim(),
+    [searchParams]
+  );
+  const requestedQuestionType = useMemo(
+    () => (searchParams.get("type") || searchParams.get("question_type") || "").trim(),
+    [searchParams]
+  );
+  const requestedStrategy = useMemo(() => (searchParams.get("strategy") || "").trim(), [searchParams]);
   const requestedConversationId = useMemo(() => {
     const raw = searchParams.get("conversation_id");
     const parsed = Number(raw || 0);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   }, [searchParams]);
-
-  useEffect(() => {
-    if (requestedWorkspaceId) {
-      router.replace(`/workspace/${requestedWorkspaceId}`);
-      return;
+  const requestedContextTags = useMemo(
+    () =>
+      [
+        requestedCourse ? `课程：${requestedCourse}` : "",
+        requestedPoint ? `知识点：${requestedPoint}` : "",
+        requestedQuestionType ? `问题类型：${requestedQuestionType}` : "",
+      ].filter(Boolean),
+    [requestedCourse, requestedPoint, requestedQuestionType]
+  );
+  const followUpSuggestions = useMemo(() => {
+    if (!requestedPrompt) return [];
+    const subject = requestedCourse || "这门课";
+    const point = requestedPoint || "这个知识点";
+    const type = requestedQuestionType || "这个问题";
+    const items = [
+      {
+        label: "先讲清卡点",
+        prompt: `请先判断我在${subject}里关于${point}的主要卡点是什么，并用最容易听懂的方式重新讲一遍。`,
+      },
+      {
+        label: "做题化拆解",
+        prompt: `请围绕${subject}里的${point}，用“概念 -> 例题 -> 易错点”的顺序带我走一遍，尤其关注${type}。`,
+      },
+      {
+        label: "复习计划",
+        prompt: `如果我要在今天解决${subject}里关于${point}的这类问题，请帮我给出一个 20 分钟的小复习计划。`,
+      },
+    ];
+    if (requestedStrategy) {
+      const idx = items.findIndex((item) => item.label === requestedStrategy);
+      if (idx > 0) {
+        const [picked] = items.splice(idx, 1);
+        items.unshift(picked);
+      }
     }
-  }, [requestedWorkspaceId, router]);
+    return items;
+  }, [requestedCourse, requestedPoint, requestedPrompt, requestedQuestionType, requestedStrategy]);
 
   useEffect(() => {
     currentConversationIdRef.current = currentConversationId;
@@ -411,6 +463,7 @@ export default function ChatPage() {
                 content: m.content,
                 sources: m.meta?.sources || [],
                 highlights: m.meta?.highlights || [],
+                blind_spots: m.meta?.blind_spots || [],
                 tool_calls: m.meta?.tool_calls || [],
                 tool_trace: m.meta?.tool_trace || [],
                 skill_matches: m.meta?.skill_matches || [],
@@ -436,6 +489,7 @@ export default function ChatPage() {
     if (!input.trim() || !username || isLoading) return;
 
     const userMessage = input.trim();
+    const promptStrategy = inferPromptStrategy(userMessage);
     const now = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
     const userMsgId = Date.now();
     const assistantMsgId = userMsgId + 1;
@@ -466,6 +520,7 @@ export default function ChatPage() {
             show_thinking: showThinking,
             execution_mode: "chat",
             agent_framework: "openai_agents",
+            prompt_strategy: promptStrategy,
           }),
         });
         if (!res.ok) {
@@ -481,7 +536,9 @@ export default function ChatPage() {
                   ...msg,
                   content: data?.message || "未获取到回答",
                   streaming: false,
+                  sources: data?.sources || [],
                   highlights: data?.highlights || [],
+                  blind_spots: data?.blind_spots || [],
                   tool_calls: data?.tool_calls || [],
                   tool_trace: data?.tool_trace || [],
                   skill_matches: data?.skill_matches || [],
@@ -531,7 +588,8 @@ export default function ChatPage() {
           show_thinking: showThinking,
           execution_mode: "chat",
           agent_framework: "openai_agents",
-        }),
+            prompt_strategy: promptStrategy,
+          }),
       });
       clearTimeout(timeoutId);
 
@@ -647,7 +705,9 @@ export default function ChatPage() {
                   const next = [...prev];
                   next[idx] = {
                     ...next[idx],
+                    sources: data.sources || next[idx].sources || [],
                     highlights: data.highlights || next[idx].highlights || [],
+                    blind_spots: data.blind_spots || next[idx].blind_spots || [],
                     tool_calls: data.tool_calls || next[idx].tool_calls || [],
                     tool_trace: data.tool_trace || next[idx].tool_trace || [],
                     skill_matches: data.skill_matches || next[idx].skill_matches || [],
@@ -696,8 +756,17 @@ export default function ChatPage() {
         clearTimeout(streamFlushTimerRef.current);
         streamFlushTimerRef.current = null;
       }
+      setSelectedPromptStrategy("");
       setIsLoading(false);
     }
+  };
+
+  const inferPromptStrategy = (message: string) => {
+    const trimmed = message.trim();
+    if (!trimmed) return "";
+    if (selectedPromptStrategy) return selectedPromptStrategy;
+    const matched = followUpSuggestions.find((item) => item.prompt === trimmed);
+    return matched?.label || "";
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -792,6 +861,7 @@ export default function ChatPage() {
                 content: m.content,
                 sources: m.meta?.sources || [],
                 highlights: m.meta?.highlights || [],
+                blind_spots: m.meta?.blind_spots || [],
                 tool_calls: m.meta?.tool_calls || [],
                 tool_trace: m.meta?.tool_trace || [],
                 skill_matches: m.meta?.skill_matches || [],
@@ -843,6 +913,23 @@ export default function ChatPage() {
     updateWorkspacePreference(requestedWorkspace.id, requestedWorkspace.name);
   }, [requestedWorkspaceId, updateWorkspacePreference, username, workspaceId, workspaces]);
 
+  useEffect(() => {
+    if (!requestedPrompt) return;
+    setInput((current) => {
+      if (current.trim()) return current;
+      if (messages.length > 0) return current;
+      return requestedCourse ? `[${requestedCourse}] ${requestedPrompt}` : requestedPrompt;
+    });
+  }, [messages.length, requestedCourse, requestedPrompt]);
+
+  useEffect(() => {
+    if (!requestedPrompt || messages.length > 0) return;
+    const timer = window.setTimeout(() => {
+      inputRef.current?.focus();
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [messages.length, requestedPrompt]);
+
   const handleLogout = async () => {
     try {
       await fetch(`${API_BASE}/api/logout`, { method: "POST", credentials: "include" });
@@ -874,6 +961,34 @@ export default function ChatPage() {
       router.push(next);
       return;
     }
+  };
+
+  const openRequestedWorkspaceContext = () => {
+    if (!requestedWorkspaceId) return;
+    const query = new URLSearchParams();
+    if (requestedCourse) query.set("course", requestedCourse);
+    if (requestedPoint) query.set("point", requestedPoint);
+    if (requestedQuestionType) query.set("type", requestedQuestionType);
+    const next = query.toString()
+      ? `/workspace/${requestedWorkspaceId}?${query.toString()}`
+      : `/workspace/${requestedWorkspaceId}`;
+    router.push(next);
+  };
+
+  const applySuggestedPrompt = (prompt: string, strategyLabel: string) => {
+    setSelectedPromptStrategy(strategyLabel);
+    setInput(prompt);
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+    }, 60);
+  };
+
+  const openBlindSpotLink = (item: BlindSpotItem) => {
+    if (!workspaceId) return;
+    const query = new URLSearchParams();
+    if (item.course_name) query.set("course", item.course_name);
+    if (item.top_point) query.set("point", item.top_point);
+    router.push(`/workspace/${workspaceId}?${query.toString()}`);
   };
 
   const openSaveDialog = () => {
@@ -1109,7 +1224,43 @@ export default function ChatPage() {
                   </Card>
                 </div>
               ) : messages.length === 0 ? (
-                <div className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-4 py-12 text-center">
+                <div className="mx-auto flex min-h-[60vh] max-w-3xl flex-col justify-center px-4 py-12 text-center">
+                  {requestedPrompt ? (
+                    <div className="mb-6 rounded-2xl border border-sky-200 bg-sky-50/80 px-4 py-3 text-left text-sm text-slate-700">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">来自学习疑问</Badge>
+                        {requestedCourse ? <Badge variant="secondary">{requestedCourse}</Badge> : null}
+                      </div>
+                      {requestedContextTags.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {requestedContextTags.map((tag) => (
+                            <Badge key={tag} variant="outline" className="bg-white/80 text-slate-600">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="mt-2 leading-6">
+                        已为你带入一条追问草稿。你可以直接发送，也可以先改写成你现在最关心的问法。
+                      </div>
+                      {requestedStrategy ? (
+                        <div className="mt-2 text-xs leading-5 text-slate-500">
+                          当前已按你最近更常使用的追问方式“{requestedStrategy}”优先排序建议。
+                        </div>
+                      ) : requestedPrompt ? (
+                        <div className="mt-2 text-xs leading-5 text-slate-500">
+                          当前使用默认建议顺序，你可以按这次实际需求自由选择追问方式。
+                        </div>
+                      ) : null}
+                      {requestedWorkspaceId ? (
+                        <div className="mt-3">
+                          <Button type="button" size="sm" variant="outline" onClick={openRequestedWorkspaceContext}>
+                            回到工作区结果
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-sm">
                     <Bot className="h-10 w-10" />
                   </div>
@@ -1117,21 +1268,49 @@ export default function ChatPage() {
                   <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
                     这里专注快问快答。模型从输入框旁边选，问完可以直接保存到工作区。
                   </p>
-                  <div className="mt-8 grid w-full max-w-2xl gap-3 sm:grid-cols-2">
-                    {quickQuestions.map((question) => (
-                      <button
-                        key={question}
-                        onClick={() => {
-                          setInput(question);
-                          inputRef.current?.focus();
-                        }}
-                        className="rounded-lg border border-[hsl(var(--border))] bg-white p-4 text-left transition hover:bg-[hsl(var(--accent))]"
-                      >
-                        <WandSparkles className="mb-3 h-4 w-4 text-[hsl(var(--primary))]" />
-                        <div className="text-sm font-medium text-slate-900">{question}</div>
-                      </button>
-                    ))}
-                  </div>
+                  {!requestedPrompt ? (
+                    <div className="mt-8 grid w-full max-w-2xl gap-3 sm:grid-cols-2">
+                      {quickQuestions.map((question) => (
+                        <button
+                          key={question}
+                          onClick={() => {
+                            setInput(question);
+                            inputRef.current?.focus();
+                          }}
+                          className="rounded-lg border border-[hsl(var(--border))] bg-white p-4 text-left transition hover:bg-[hsl(var(--accent))]"
+                        >
+                          <WandSparkles className="mb-3 h-4 w-4 text-[hsl(var(--primary))]" />
+                          <div className="text-sm font-medium text-slate-900">{question}</div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-8 max-w-2xl rounded-2xl border border-dashed border-slate-200 bg-white/80 px-4 py-4 text-left text-sm text-slate-600">
+                      <div className="leading-6">
+                        当前更适合直接围绕这条疑问继续追问。发送后如果还想发起别的话题，再新建一轮快速会话即可。
+                      </div>
+                      {followUpSuggestions.length > 0 ? (
+                        <div className="mt-4">
+                          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                            可直接使用的追问策略
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-3">
+                            {followUpSuggestions.map((item) => (
+                              <button
+                                key={item.label}
+                                type="button"
+                                onClick={() => applySuggestedPrompt(item.prompt, item.label)}
+                                className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:bg-slate-50"
+                              >
+                                <div className="text-sm font-medium text-slate-900">{item.label}</div>
+                                <div className="mt-1 text-xs leading-5 text-slate-500">{item.prompt}</div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 md:px-6">
@@ -1229,6 +1408,36 @@ export default function ChatPage() {
                               </div>
                             )}
 
+                            {msg.blind_spots && msg.blind_spots.length > 0 && (
+                              <div className="rounded-md border border-amber-200 bg-amber-50/80 p-3">
+                                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">本轮参考的学习盲点</div>
+                                <div className="space-y-2">
+                                  {msg.blind_spots.map((item, index) => (
+                                    <div key={`${item.course_name}-${index}`} className="rounded-md border border-amber-200 bg-white px-3 py-2 text-xs text-slate-700">
+                                      <div className="font-medium text-slate-900">{item.course_name}</div>
+                                      <div className="mt-1 leading-6">
+                                        未解决 {item.unresolved} 条
+                                        {item.top_point ? `，高频卡点 ${item.top_point}` : ""}
+                                      </div>
+                                      {workspaceId ? (
+                                        <div className="mt-2">
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 border-amber-200 bg-amber-50 px-2 text-[11px] text-amber-800 hover:bg-amber-100"
+                                            onClick={() => openBlindSpotLink(item)}
+                                          >
+                                            回到工作区定位
+                                          </Button>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
                             {msg.sources && msg.sources.length > 0 && (
                               <div className="border-t border-[hsl(var(--border))] pt-3">
                                 <div className="mb-2 text-xs font-medium text-slate-500">参考来源</div>
@@ -1301,12 +1510,44 @@ export default function ChatPage() {
 
           <div className="border-t border-[hsl(var(--border))] bg-white/85 p-4 backdrop-blur-xl md:px-6">
             <div className="mx-auto max-w-5xl">
+              {requestedPrompt && followUpSuggestions.length > 0 ? (
+                <div className="mb-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    追问策略建议
+                  </div>
+                  {requestedStrategy ? (
+                    <div className="mb-2 text-xs text-slate-500">
+                      已按常用策略“{requestedStrategy}”优先排序
+                    </div>
+                  ) : (
+                    <div className="mb-2 text-xs text-slate-500">
+                      当前按默认顺序展示建议
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {followUpSuggestions.map((item) => (
+                      <Button
+                        key={item.label}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => applySuggestedPrompt(item.prompt, item.label)}
+                      >
+                        {item.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <Card>
                 <CardContent className="p-4">
                   <Textarea
                     ref={inputRef}
                     value={input}
-                    onChange={(e) => setInput(e.target.value)}
+                    onChange={(e) => {
+                      setInput(e.target.value);
+                      if (selectedPromptStrategy) setSelectedPromptStrategy("");
+                    }}
                     onKeyDown={handleKeyDown}
                     placeholder={username ? "输入你的问题，Shift+Enter 换行" : "请先登录"}
                     disabled={!username || isLoading}
@@ -1416,3 +1657,6 @@ export default function ChatPage() {
     </>
   );
 }
+
+
+

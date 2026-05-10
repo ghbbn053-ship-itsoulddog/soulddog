@@ -4,11 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Blocks,
+  BookOpenCheck,
+  Brain,
   ChevronLeft,
   ChevronRight,
   Database,
   FileText,
+  FlagTriangleRight,
   Network,
+  Sparkles,
   Upload,
 } from "lucide-react";
 
@@ -27,6 +31,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -172,6 +177,70 @@ type SuggestionsResponse = {
   reminders: SuggestionItem[];
 };
 
+type LearningMemoryItem = {
+  id: number;
+  owner_username: string;
+  workspace_id?: number | null;
+  course_name?: string;
+  question_text: string;
+  question_summary: string;
+  question_type: string;
+  knowledge_points: string[];
+  status: string;
+  answer_summary: string;
+  source_refs: Record<string, unknown>;
+  importance: number;
+  conversation_id?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type LearningMemoryResponse = {
+  success: boolean;
+  items: LearningMemoryItem[];
+  summary: {
+    total: number;
+    unresolved: number;
+    resolved: number;
+    by_status: Record<string, number>;
+    by_type: Record<string, number>;
+    by_course: Record<string, number>;
+    course_rank: string[];
+    top_points: string[];
+    review_priority: Array<{
+      id: number;
+      course_name: string;
+      question_summary: string;
+      question_type: string;
+      importance: number;
+      status: string;
+    }>;
+    prompt_strategy_rank?: Array<{
+      strategy: string;
+      count: number;
+    }>;
+  };
+};
+
+const MEMORY_TYPE_LABELS: Record<string, string> = {
+  practice: "做题应用",
+  concept: "概念理解",
+  confusion: "易混区分",
+  review: "复习记忆",
+  reasoning: "推导计算",
+  general: "通用追问",
+};
+
+function formatMemoryTypeLabel(value: string) {
+  return MEMORY_TYPE_LABELS[value] || value || "未分类";
+}
+
+function formatMemoryStatusLabel(value: string) {
+  if (value === "resolved") return "已解决";
+  if (value === "unresolved") return "未解决";
+  return value || "未知状态";
+}
+
 export default function WorkspaceDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -179,6 +248,9 @@ export default function WorkspaceDetailPage() {
   const workspaceId = Number(params?.id || 0);
   const requestedDocId = Number(searchParams.get("doc") || 0);
   const requestedChunkIndex = Number(searchParams.get("chunk") || 0);
+  const requestedMemoryCourse = (searchParams.get("course") || searchParams.get("course_name") || "").trim();
+  const requestedMemoryPoint = (searchParams.get("point") || searchParams.get("knowledge_point") || "").trim();
+  const requestedMemoryType = (searchParams.get("type") || searchParams.get("question_type") || "").trim();
 
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(true);
@@ -190,6 +262,15 @@ export default function WorkspaceDetailPage() {
   const [learningStatus, setLearningStatus] = useState<LearningStatusResponse | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [reminders, setReminders] = useState<SuggestionItem[]>([]);
+  const [learningMemories, setLearningMemories] = useState<LearningMemoryItem[]>([]);
+  const [learningMemorySummary, setLearningMemorySummary] = useState<LearningMemoryResponse["summary"] | null>(null);
+  const [memoryCourseFilter, setMemoryCourseFilter] = useState("");
+  const [memoryTypeFilter, setMemoryTypeFilter] = useState("");
+  const [memoryPointFilter, setMemoryPointFilter] = useState("");
+  const [preferDefaultPromptSuggestions, setPreferDefaultPromptSuggestions] = useState(false);
+  const [selectedMemory, setSelectedMemory] = useState<LearningMemoryItem | null>(null);
+  const [memoryDetailLoading, setMemoryDetailLoading] = useState(false);
+  const [draftPrompt, setDraftPrompt] = useState("");
   const [reminderOpen, setReminderOpen] = useState(false);
   const [textFilename, setTextFilename] = useState("notes.md");
   const [textContent, setTextContent] = useState("");
@@ -239,6 +320,64 @@ export default function WorkspaceDetailPage() {
     setReminders(json.reminders || []);
   };
 
+  const refreshLearningMemories = async (
+    uname: string,
+    filters?: { course?: string; type?: string; point?: string }
+  ) => {
+    const params = new URLSearchParams({
+      workspace_id: String(workspaceId),
+      limit: "12",
+    });
+    if (filters?.course) params.set("course_name", filters.course);
+    if (filters?.type) params.set("question_type", filters.type);
+    if (filters?.point) params.set("knowledge_point", filters.point);
+    const res = await fetch(`${API_BASE}/api/learning-memory/${encodeURIComponent(uname)}?${params.toString()}`, {
+      credentials: "include",
+    });
+    const json: LearningMemoryResponse | null = res.ok ? await res.json() : null;
+    if (!json?.success) return;
+    setLearningMemories(json.items || []);
+    setLearningMemorySummary(json.summary || null);
+  };
+
+  const openMemoryDetail = async (memory: LearningMemoryItem) => {
+    setSelectedMemory(memory);
+    if (!username) return;
+    setMemoryDetailLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/learning-memory/${encodeURIComponent(username)}/${memory.id}`, {
+        credentials: "include",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json?.success && json?.memory) {
+        setSelectedMemory(json.memory as LearningMemoryItem);
+      }
+    } finally {
+      setMemoryDetailLoading(false);
+    }
+  };
+
+  const updateMemoryStatus = async (memoryId: number, status: string) => {
+    if (!username) return;
+    const res = await fetch(`${API_BASE}/api/learning-memory/${encodeURIComponent(username)}/${memoryId}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ username, status }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.success) {
+      setMsg(json?.detail || "更新学习疑问状态失败");
+      return;
+    }
+    setSelectedMemory((prev) => (prev && prev.id === memoryId ? { ...prev, status } : prev));
+    await refreshLearningMemories(username, {
+      course: memoryCourseFilter,
+      type: memoryTypeFilter,
+      point: memoryPointFilter,
+    });
+  };
+
   const refreshDocumentChunks = async (uname: string, documentId: number) => {
     const res = await fetch(`${API_BASE}/api/knowledge/${encodeURIComponent(uname)}/${workspaceId}/documents/${documentId}/chunks`, {
       credentials: "include",
@@ -263,6 +402,7 @@ export default function WorkspaceDetailPage() {
           refreshDetail(uname),
           refreshLearningStatus(uname),
           refreshSuggestions(uname),
+          refreshLearningMemories(uname),
         ]);
       } catch {
         router.replace("/workspace");
@@ -355,6 +495,178 @@ export default function WorkspaceDetailPage() {
     [documents.length, graph]
   );
 
+  const reviewPriorityItems = useMemo(
+    () => learningMemorySummary?.review_priority?.slice(0, 4) || [],
+    [learningMemorySummary]
+  );
+
+  const promptStrategyCards = useMemo(
+    () => (learningMemorySummary?.prompt_strategy_rank || []).slice(0, 3),
+    [learningMemorySummary]
+  );
+
+  const memoryCourseCards = useMemo(() => {
+    const byCourse = learningMemorySummary?.by_course || {};
+    const rank = learningMemorySummary?.course_rank || [];
+    return rank
+      .map((course) => ({ course, count: byCourse[course] || 0 }))
+      .filter((item) => item.count > 0)
+      .slice(0, 6);
+  }, [learningMemorySummary]);
+
+  const memoryTypeCards = useMemo(() => {
+    const byType = learningMemorySummary?.by_type || {};
+    return Object.entries(byType)
+      .sort((a, b) => b[1] - a[1])
+      .map(([key, count]) => ({
+        key,
+        label: formatMemoryTypeLabel(key),
+        count,
+      }))
+      .slice(0, 6);
+  }, [learningMemorySummary]);
+
+  const reviewPointCards = useMemo(
+    () => (learningMemorySummary?.top_points || []).slice(0, 6),
+    [learningMemorySummary]
+  );
+
+  const primaryPromptStrategy = promptStrategyCards[0]?.strategy || "";
+  const hasMemoryFilters = Boolean(memoryCourseFilter || memoryTypeFilter || memoryPointFilter);
+  const nextPriorityMemory = reviewPriorityItems[0] || null;
+
+  const resolvePromptStrategyForChat = () => {
+    if (preferDefaultPromptSuggestions) return "";
+    return primaryPromptStrategy;
+  };
+
+  const consumeDefaultPromptSuggestionOverride = () => {
+    if (preferDefaultPromptSuggestions) {
+      setPreferDefaultPromptSuggestions(false);
+    }
+  };
+
+  const applyMemoryFilters = (filters: { course?: string; type?: string; point?: string }) => {
+    setMemoryCourseFilter(filters.course || "");
+    setMemoryTypeFilter(filters.type || "");
+    setMemoryPointFilter(filters.point || "");
+  };
+
+  const openMemoryDraftInPanel = (memory: LearningMemoryItem) => {
+    const prompt = [
+      memory.course_name ? `当前课程：${memory.course_name}` : "",
+      `问题类型：${formatMemoryTypeLabel(memory.question_type)}`,
+      `我之前卡住的问题：${memory.question_text || memory.question_summary}`,
+      memory.answer_summary ? `已有摘要：${memory.answer_summary}` : "",
+      memory.knowledge_points.length ? `相关知识点：${memory.knowledge_points.join("、")}` : "",
+      "请先判断我现在最可能没真正弄懂的是哪一层，再给我一个最适合继续追问的切入点。",
+    ].filter(Boolean).join("\n\n");
+    setSelectedMemory(null);
+    setDraftPrompt(prompt);
+  };
+
+  const openFilteredMemoriesDraftInPanel = () => {
+    if (!learningMemories.length) return;
+    const topQuestions = learningMemories
+      .slice(0, 3)
+      .map((item, index) => `${index + 1}. ${item.question_summary}`)
+      .join("\n");
+    const focusText = [
+      memoryCourseFilter ? `课程：${memoryCourseFilter}` : "",
+      memoryTypeFilter ? `问题类型：${formatMemoryTypeLabel(memoryTypeFilter)}` : "",
+      memoryPointFilter ? `知识点：${memoryPointFilter}` : "",
+    ].filter(Boolean).join("，");
+    const prompt = [
+      focusText ? `请围绕这些筛选后的学习疑问继续辅导我，重点关注${focusText}。` : "请围绕我最近的学习疑问继续辅导我。",
+      topQuestions ? `当前优先问题有：\n${topQuestions}` : "",
+      "请先归纳这些问题背后的共性卡点，再告诉我应该先从哪一个问题切入。",
+    ].filter(Boolean).join("\n\n");
+    setDraftPrompt(prompt);
+  };
+
+  const openPriorityMemoryDraftInPanel = () => {
+    if (!nextPriorityMemory) return;
+    const prompt = [
+      `请围绕这个高优先级学习疑问继续辅导我：${nextPriorityMemory.question_summary}`,
+      nextPriorityMemory.course_name ? `课程：${nextPriorityMemory.course_name}` : "",
+      `问题类型：${formatMemoryTypeLabel(nextPriorityMemory.question_type)}`,
+      "请先帮我判断我最可能卡在哪一层，再给我当前工作区里最适合直接继续问的一句追问。",
+    ].filter(Boolean).join("\n");
+    setDraftPrompt(prompt);
+  };
+
+  const continueWithMemoryInChat = (memory: LearningMemoryItem) => {
+    const prompt = memory.question_text || memory.question_summary || "";
+    if (!prompt.trim()) return;
+    const params = new URLSearchParams({
+      workspace_id: String(workspaceId),
+      prompt,
+    });
+    if (memory.course_name) params.set("course", memory.course_name);
+    if (memory.question_type) params.set("question_type", memory.question_type);
+    const promptStrategy = resolvePromptStrategyForChat();
+    if (promptStrategy) params.set("strategy", promptStrategy);
+    setSelectedMemory(null);
+    consumeDefaultPromptSuggestionOverride();
+    router.push(`/chat?${params.toString()}`);
+  };
+
+  const continueWithFilteredMemoriesInChat = () => {
+    if (!learningMemories.length) return;
+    const topQuestions = learningMemories.slice(0, 3).map((item, index) => `${index + 1}. ${item.question_summary}`).join("\n");
+    const focusText = [
+      memoryCourseFilter ? `课程：${memoryCourseFilter}` : "",
+      memoryTypeFilter ? `问题类型：${formatMemoryTypeLabel(memoryTypeFilter)}` : "",
+      memoryPointFilter ? `知识点：${memoryPointFilter}` : "",
+    ].filter(Boolean).join("，");
+    const prompt = [
+      focusText ? `请围绕这些筛选后的学习疑问继续辅导我，重点关注${focusText}。` : "请围绕我最近的学习疑问继续辅导我。",
+      topQuestions ? `当前优先问题有：\n${topQuestions}` : "",
+      "请先帮我归纳共性卡点，再给我一个最适合下一步追问的切入点。",
+    ].filter(Boolean).join("\n\n");
+    const params = new URLSearchParams({
+      workspace_id: String(workspaceId),
+      prompt,
+    });
+    if (memoryCourseFilter) params.set("course", memoryCourseFilter);
+    if (memoryPointFilter) params.set("point", memoryPointFilter);
+    if (memoryTypeFilter) params.set("question_type", memoryTypeFilter);
+    const promptStrategy = resolvePromptStrategyForChat();
+    if (promptStrategy) params.set("strategy", promptStrategy);
+    consumeDefaultPromptSuggestionOverride();
+    router.push(`/chat?${params.toString()}`);
+  };
+
+  const continueWithPrioritySummaryInChat = () => {
+    if (!nextPriorityMemory) return;
+    const prompt = [
+      `请围绕这个高优先级学习疑问继续辅导我：${nextPriorityMemory.question_summary}`,
+      nextPriorityMemory.course_name ? `课程：${nextPriorityMemory.course_name}` : "",
+      `问题类型：${formatMemoryTypeLabel(nextPriorityMemory.question_type)}`,
+      "请先帮我说明我最可能卡在哪里，再给我下一步最有效的复习或追问方式。",
+    ].filter(Boolean).join("\n");
+    const params = new URLSearchParams({
+      workspace_id: String(workspaceId),
+      prompt,
+    });
+    if (nextPriorityMemory.course_name) params.set("course", nextPriorityMemory.course_name);
+    if (nextPriorityMemory.question_type) params.set("question_type", nextPriorityMemory.question_type);
+    const promptStrategy = resolvePromptStrategyForChat();
+    if (promptStrategy) params.set("strategy", promptStrategy);
+    consumeDefaultPromptSuggestionOverride();
+    router.push(`/chat?${params.toString()}`);
+  };
+
+  const draftPromptFromReference = (title: string, snippet: string, sourceLabel: string) => {
+    const prompt = [
+      `我正在看资料《${title}》`,
+      snippet ? `对应片段：${snippet}` : "",
+      sourceLabel ? `来源：${sourceLabel}` : "",
+      "请基于这段内容帮我提炼出我应该追问的关键问题，并直接给我最短的追问方式。",
+    ].filter(Boolean).join("\n\n");
+    setDraftPrompt(prompt);
+  };
+
   useEffect(() => {
     if (!requestedDocId || documents.length === 0) return;
     const exists = documents.some((doc) => doc.id === requestedDocId);
@@ -392,6 +704,23 @@ export default function WorkspaceDetailPage() {
     }
     setReminderOpen(true);
   }, [reminders]);
+
+  useEffect(() => {
+    if (!username || !workspaceId) return;
+    void refreshLearningMemories(username, {
+      course: memoryCourseFilter,
+      type: memoryTypeFilter,
+      point: memoryPointFilter,
+    });
+  }, [memoryCourseFilter, memoryPointFilter, memoryTypeFilter, username, workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    if (!requestedMemoryCourse && !requestedMemoryPoint && !requestedMemoryType) return;
+    setMemoryCourseFilter(requestedMemoryCourse);
+    setMemoryPointFilter(requestedMemoryPoint);
+    setMemoryTypeFilter(requestedMemoryType);
+  }, [requestedMemoryCourse, requestedMemoryPoint, requestedMemoryType, workspaceId]);
 
   useEffect(() => {
     if (!workspaceId || typeof window === "undefined") return;
@@ -622,6 +951,14 @@ export default function WorkspaceDetailPage() {
                               <div className="text-sm font-medium text-slate-900">{doc.title}</div>
                               <Badge variant="outline">{doc.doc_type}</Badge>
                               <Badge variant={statusTone(doc.status) as "success"}>{doc.status}</Badge>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => draftPromptFromReference(doc.title, doc.summary || "", `${doc.doc_type} 文档`)}
+                              >
+                                基于此提问
+                              </Button>
                             </div>
                             <div className="text-sm leading-6 text-slate-600">{doc.summary || "无摘要"}</div>
                             {documentChunks.length > 0 ? (
@@ -639,7 +976,18 @@ export default function WorkspaceDetailPage() {
                                     >
                                       <div className="mb-1 flex items-center justify-between gap-2">
                                         <span className="font-medium text-slate-900">Chunk #{chunk.chunk_index}</span>
-                                        <span className="text-[11px] text-slate-400">{chunk.char_count} chars</span>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[11px] text-slate-400">{chunk.char_count} chars</span>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-6 px-2 text-[11px]"
+                                            onClick={() => draftPromptFromReference(doc.title, chunk.content, `Chunk #${chunk.chunk_index}`)}
+                                          >
+                                            基于此提问
+                                          </Button>
+                                        </div>
                                       </div>
                                       <div className="whitespace-pre-wrap">{chunk.content}</div>
                                     </div>
@@ -660,8 +1008,8 @@ export default function WorkspaceDetailPage() {
 
           <div className="min-w-0 xl:self-stretch">
             <WorkbenchSection
-              title="AI 对话"
-              description={knowledgeCollapsed ? "知识库已收起，当前把更多宽度让给右侧对话。需要入库或看图谱时再展开左侧。" : "右侧保持主对话区，左侧负责知识可视化和入库。"}
+              title="AI 对话与学习记忆"
+              description={knowledgeCollapsed ? "知识库已收起，当前把更多宽度让给右侧。这里继续对话，同时整理最近学到哪里、卡在哪里。" : "右侧保持主对话区，下方补一层学习记忆面板，方便你继续复习和追问。"}
               className="xl:flex xl:h-[calc(100vh-6.5rem)] xl:flex-col"
               actions={
                 <div className="flex flex-wrap gap-2">
@@ -678,8 +1026,265 @@ export default function WorkspaceDetailPage() {
                 </div>
               }
             >
-              <div className="xl:flex-1">
-                <AIPanel username={username} workspaceId={workspaceId} workspaceName={workspace?.name} />
+              <div className="grid gap-4 xl:flex-1 xl:min-h-0 xl:grid-rows-[minmax(360px,1fr)_auto]">
+                <div className="xl:min-h-0">
+                  <AIPanel
+                    username={username}
+                    workspaceId={workspaceId}
+                    workspaceName={workspace?.name}
+                    draftPrompt={draftPrompt}
+                    onDraftPromptConsumed={() => setDraftPrompt("")}
+                    onLearningMemoryCaptured={() =>
+                      void refreshLearningMemories(username, {
+                        course: memoryCourseFilter,
+                        type: memoryTypeFilter,
+                        point: memoryPointFilter,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="grid gap-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+                  <div className="grid gap-3 lg:grid-cols-[1.15fr_0.85fr]">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                        <Brain className="h-4 w-4 text-sky-600" />
+                        学习记忆概览
+                      </div>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <div className="text-xs text-slate-500">总疑问</div>
+                          <div className="mt-1 text-lg font-semibold text-slate-900">{learningMemorySummary?.total || 0}</div>
+                        </div>
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+                          <div className="text-xs text-slate-500">未解决</div>
+                          <div className="mt-1 text-lg font-semibold text-slate-900">{learningMemorySummary?.unresolved || 0}</div>
+                        </div>
+                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+                          <div className="text-xs text-slate-500">已解决</div>
+                          <div className="mt-1 text-lg font-semibold text-slate-900">{learningMemorySummary?.resolved || 0}</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {reviewPointCards.map((point) => (
+                          <button
+                            key={point}
+                            type="button"
+                            onClick={() => applyMemoryFilters({
+                              course: memoryCourseFilter,
+                              type: memoryTypeFilter,
+                              point,
+                            })}
+                          >
+                            <Badge variant="secondary">{point}</Badge>
+                          </button>
+                        ))}
+                        {!reviewPointCards.length ? (
+                          <span className="text-xs text-slate-500">暂无高频知识点</span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3">
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                          <FlagTriangleRight className="h-4 w-4 text-amber-500" />
+                          下一步建议
+                        </div>
+                        <div className="mt-2 text-sm text-slate-700">
+                          {nextPriorityMemory ? nextPriorityMemory.question_summary : "继续在对话里追问关键问题，系统会逐步形成复习优先项。"}
+                        </div>
+                        <div className="mt-2 text-xs leading-6 text-slate-500">
+                          {nextPriorityMemory
+                            ? `${nextPriorityMemory.course_name || workspace?.name || "当前课程"} · ${formatMemoryTypeLabel(nextPriorityMemory.question_type)}`
+                            : "当前还没有足够的疑问沉淀。"}
+                        </div>
+                        {nextPriorityMemory ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Button size="sm" onClick={openPriorityMemoryDraftInPanel}>
+                              <Brain className="h-4 w-4" />
+                              先在右侧复习
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={continueWithPrioritySummaryInChat}>
+                              <BookOpenCheck className="h-4 w-4" />
+                              去聊天页追问
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                          <Sparkles className="h-4 w-4 text-sky-600" />
+                          建议排序
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {promptStrategyCards.length ? promptStrategyCards.map((item) => (
+                            <Badge key={item.strategy} variant="outline">
+                              {item.strategy} · {item.count}
+                            </Badge>
+                          )) : (
+                            <span className="text-xs text-slate-500">暂无偏好统计</span>
+                          )}
+                        </div>
+                        <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3">
+                          <div className="text-xs text-slate-600">本次按默认建议排序</div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={preferDefaultPromptSuggestions ? "default" : "outline"}
+                            onClick={() => setPreferDefaultPromptSuggestions((prev) => !prev)}
+                          >
+                            {preferDefaultPromptSuggestions ? "已启用" : "使用默认"}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">{hasMemoryFilters ? "筛选后的学习疑问" : "最近学习疑问"}</div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {hasMemoryFilters
+                            ? `课程：${memoryCourseFilter || "全部"} · 类型：${memoryTypeFilter ? formatMemoryTypeLabel(memoryTypeFilter) : "全部"} · 知识点：${memoryPointFilter || "全部"}`
+                            : "系统会把有价值的追问沉淀到这里，便于后续复习。"}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" onClick={openFilteredMemoriesDraftInPanel} disabled={!learningMemories.length}>
+                          先在右侧复习
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={continueWithFilteredMemoriesInChat} disabled={!learningMemories.length}>
+                          去聊天页追问
+                        </Button>
+                        {hasMemoryFilters ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => applyMemoryFilters({ course: "", type: "", point: "" })}
+                          >
+                            清空筛选
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {hasMemoryFilters ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {memoryCourseFilter ? (
+                          <button
+                            type="button"
+                            onClick={() => applyMemoryFilters({
+                              course: "",
+                              type: memoryTypeFilter,
+                              point: memoryPointFilter,
+                            })}
+                          >
+                            <Badge variant="outline">课程：{memoryCourseFilter} ×</Badge>
+                          </button>
+                        ) : null}
+                        {memoryTypeFilter ? (
+                          <button
+                            type="button"
+                            onClick={() => applyMemoryFilters({
+                              course: memoryCourseFilter,
+                              type: "",
+                              point: memoryPointFilter,
+                            })}
+                          >
+                            <Badge variant="outline">类型：{formatMemoryTypeLabel(memoryTypeFilter)} ×</Badge>
+                          </button>
+                        ) : null}
+                        {memoryPointFilter ? (
+                          <button
+                            type="button"
+                            onClick={() => applyMemoryFilters({
+                              course: memoryCourseFilter,
+                              type: memoryTypeFilter,
+                              point: "",
+                            })}
+                          >
+                            <Badge variant="outline">知识点：{memoryPointFilter} ×</Badge>
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {memoryCourseCards.length ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {memoryCourseCards.map((item) => (
+                          <button
+                            key={item.course}
+                            type="button"
+                            onClick={() => applyMemoryFilters({
+                              course: memoryCourseFilter === item.course ? "" : item.course,
+                              type: memoryTypeFilter,
+                              point: memoryPointFilter,
+                            })}
+                          >
+                            <Badge variant={memoryCourseFilter === item.course ? "default" : "secondary"}>
+                              {item.course} · {item.count}
+                            </Badge>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {memoryTypeCards.length ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {memoryTypeCards.map((item) => (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => applyMemoryFilters({
+                              course: memoryCourseFilter,
+                              type: memoryTypeFilter === item.key ? "" : item.key,
+                              point: memoryPointFilter,
+                            })}
+                          >
+                            <Badge variant={memoryTypeFilter === item.key ? "default" : "secondary"}>
+                              {item.label} · {item.count}
+                            </Badge>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <div className="mt-4 grid gap-3">
+                      {learningMemories.length ? learningMemories.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => void openMemoryDetail(item)}
+                          className={cn(
+                            "rounded-2xl border px-4 py-3 text-left transition-colors hover:bg-slate-50",
+                            item.status === "resolved" ? "border-slate-200 bg-white" : "border-amber-200 bg-amber-50/60"
+                          )}
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-medium text-slate-900">{item.question_summary}</span>
+                            <Badge variant={item.status === "resolved" ? "secondary" : "outline"}>
+                              {formatMemoryStatusLabel(item.status)}
+                            </Badge>
+                            <Badge variant="outline">{formatMemoryTypeLabel(item.question_type)}</Badge>
+                          </div>
+                          <div className="mt-1 text-xs leading-6 text-slate-500">
+                            {item.course_name || workspace?.name || "当前课程"}
+                            {item.answer_summary ? ` · ${item.answer_summary}` : ""}
+                          </div>
+                        </button>
+                      )) : (
+                        <WorkbenchEmpty
+                          title="暂无学习疑问沉淀"
+                          description="继续在上方对话区问几个关键问题，系统会把有价值的疑问整理到这里。"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </WorkbenchSection>
           </div>
@@ -706,6 +1311,104 @@ export default function WorkspaceDetailPage() {
           void handleSuggestionAction(id, "dismiss");
         }}
       />
+
+      <Dialog open={Boolean(selectedMemory)} onOpenChange={(open) => !open && setSelectedMemory(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>学习疑问详情</DialogTitle>
+            <DialogDescription>
+              {selectedMemory?.course_name || workspace?.name || "当前课程"}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedMemory ? (
+            <div className="space-y-4 text-sm text-slate-700">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">问题</div>
+                <div className="mt-2 leading-6">{selectedMemory.question_text || selectedMemory.question_summary}</div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">状态</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Badge variant={selectedMemory.status === "resolved" ? "secondary" : "outline"}>
+                      {formatMemoryStatusLabel(selectedMemory.status)}
+                    </Badge>
+                    <Badge variant="outline">{formatMemoryTypeLabel(selectedMemory.question_type)}</Badge>
+                    {selectedMemory.importance ? (
+                      <Badge variant="outline">重要度 {selectedMemory.importance}</Badge>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">知识点</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedMemory.knowledge_points.length ? selectedMemory.knowledge_points.map((point) => (
+                      <button
+                        key={point}
+                        type="button"
+                        onClick={() => {
+                          applyMemoryFilters({
+                            course: selectedMemory.course_name || "",
+                            type: selectedMemory.question_type || "",
+                            point,
+                          });
+                          setSelectedMemory(null);
+                        }}
+                      >
+                        <Badge variant="secondary">{point}</Badge>
+                      </button>
+                    )) : (
+                      <span className="text-xs text-slate-500">暂无知识点</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">AI 摘要</div>
+                <div className="mt-2 leading-6">{selectedMemory.answer_summary || "暂无摘要"}</div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => openMemoryDraftInPanel(selectedMemory)}>
+                  <Brain className="h-4 w-4" />
+                  先在右侧复习
+                </Button>
+                <Button variant="outline" onClick={() => continueWithMemoryInChat(selectedMemory)}>
+                  <BookOpenCheck className="h-4 w-4" />
+                  去聊天页追问
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => void updateMemoryStatus(selectedMemory.id, selectedMemory.status === "resolved" ? "unresolved" : "resolved")}
+                >
+                  {selectedMemory.status === "resolved" ? "改回未解决" : "标记为已解决"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    applyMemoryFilters({
+                      course: selectedMemory.course_name || "",
+                      type: selectedMemory.question_type || "",
+                      point: "",
+                    });
+                    setSelectedMemory(null);
+                  }}
+                >
+                  查看同类问题
+                </Button>
+              </div>
+
+              {memoryDetailLoading ? (
+                <div className="text-xs text-slate-500">正在刷新详情...</div>
+              ) : null}
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </WorkbenchShell>
   );
 }

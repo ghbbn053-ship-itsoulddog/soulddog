@@ -51,6 +51,23 @@ def test_normalizer_with_legacy_shape():
     assert len(normalized["考试安排"]["考试列表"]) == 1
 
 
+def test_training_plan_should_keep_course_list():
+    raw = {
+        "培养方案": {
+            "基本信息": {"方案名称": "计算机科学与技术专业本科教学计划"},
+            "学分统计": {"总学分要求": 160},
+            "课程列表": [
+                {"课程名称": "马克思主义基本原理", "学分": "3", "建议修读学期": "1"},
+                {"课程名称": "操作系统", "学分": "4", "建议修读学期": "5"},
+            ],
+        }
+    }
+
+    normalized = normalize_education_payload(raw)
+    assert len(normalized["培养方案"]["课程列表"]) == 2
+    assert normalized["培养方案"]["基本信息"]["方案名称"] == "计算机科学与技术专业本科教学计划"
+
+
 if __name__ == "__main__":
     test_normalizer_with_new_shape()
     test_normalizer_with_legacy_shape()

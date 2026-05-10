@@ -22,6 +22,7 @@ from app.models.question_bank import (
     LearningQuestion,
     LearningQuestionAttempt,
     LearningActivity,
+    LearningStudyMemory,
     LearningAutomationTask,
     LearningAutomationEvent,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "LearningQuestion",
     "LearningQuestionAttempt",
     "LearningActivity",
+    "LearningStudyMemory",
     "LearningAutomationTask",
     "LearningAutomationEvent",
     "ChaoxingQrSession",

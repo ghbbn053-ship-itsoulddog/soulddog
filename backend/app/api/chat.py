@@ -1,4 +1,4 @@
-﻿"""
+"""
 对话 API - AI 聊天接口（支持 Function Calling）
 """
 
@@ -19,6 +19,7 @@ from app.models import get_db, User, Conversation, Message, EducationData, Educa
 from app.services import get_model_provider_for_user, get_vector_store
 from app.services.model_provider import UnifiedModelProvider
 from app.services.education_normalizer import build_payload_from_education_data_record
+from app.services.learning_assistant import get_learning_assistant_service
 from app.services.workspace_knowledge import get_workspace_knowledge_service
 from app.services.skill_router import build_skill_prompt_hint, explain_skill_matches
 from app.services.agent_runtime import get_agent_runtime
@@ -179,6 +180,107 @@ def _build_workspace_context(db: Session, username: str, question: str, session_
         return []
 
 
+def _build_learning_memory_context(
+    db: Session,
+    username: str,
+    question: str,
+    workspace_id: int | None = None,
+) -> List[dict]:
+    if not workspace_id:
+        return []
+    try:
+        svc = get_learning_assistant_service()
+        memories = svc.list_learning_memories(
+            db,
+            username,
+            workspace_id=workspace_id,
+            query=question,
+            limit=6,
+        )
+        if not memories:
+            memories = svc.list_learning_memories(
+                db,
+                username,
+                workspace_id=workspace_id,
+                limit=3,
+            )
+        context: List[dict] = []
+        for item in memories:
+            points = item.knowledge_points_json or []
+            point_text = "、".join([str(point).strip() for point in points if str(point).strip()][:6])
+            parts = [
+                f"问题：{item.question_text}",
+                f"摘要：{item.question_summary}",
+                f"类型：{item.question_type}",
+                f"状态：{item.status}",
+            ]
+            if item.course_name:
+                parts.append(f"课程：{item.course_name}")
+            if point_text:
+                parts.append(f"知识点：{point_text}")
+            if item.answer_summary:
+                parts.append(f"回答摘要：{item.answer_summary}")
+            context.append(
+                {
+                    "source": f"learning-memory:{item.id}",
+                    "title": item.question_summary or "学习疑问",
+                    "content": "\n".join(parts),
+                    "document_id": item.id,
+                    "chunk_index": 0,
+                    "score": float(item.importance or 0),
+                }
+            )
+        return context
+    except Exception as e:
+        logger.warning(f"学习疑问检索失败: {e}")
+        return []
+
+
+def _get_learning_blind_spot_items(
+    db: Session,
+    username: str,
+    workspace_id: int | None = None,
+) -> List[dict]:
+    if not workspace_id:
+        return []
+    try:
+        overview = get_learning_assistant_service().get_learning_memory_overview(
+            db,
+            username,
+            workspace_id=workspace_id,
+            limit=12,
+        )
+        summary = overview.get("summary") or {}
+        blind_spots = summary.get("blind_spots") or []
+        return blind_spots[:3]
+    except Exception as e:
+        logger.warning(f"学习盲点上下文构建失败: {e}")
+        return []
+
+
+def _build_learning_blind_spot_context(
+    db: Session,
+    username: str,
+    workspace_id: int | None = None,
+) -> tuple[str, List[dict]]:
+    blind_spots = _get_learning_blind_spot_items(db, username, workspace_id=workspace_id)
+    if not blind_spots:
+        return "", []
+    parts = []
+    for idx, item in enumerate(blind_spots, start=1):
+        course_name = str(item.get("course_name") or "未命名课程").strip()
+        unresolved = int(item.get("unresolved") or 0)
+        dominant_type = str(item.get("dominant_type") or "general").strip() or "general"
+        top_point = str(item.get("top_point") or "").strip()
+        line = f"{idx}. 课程：{course_name}；未解决疑问 {unresolved} 条；主卡点类型：{dominant_type}"
+        if top_point:
+            line += f"；高频卡点：{top_point}"
+        parts.append(line)
+    if not parts:
+        return "", blind_spots
+    return "当前工作区学习盲点：\n" + "\n".join(parts), blind_spots
+
+
 def _format_context_source(item: dict) -> str:
     source = str(item.get("source", "") or "").strip()
     title = str(item.get("title", "") or "").strip()
@@ -219,6 +321,18 @@ def _render_workspace_rag_context(workspace_hits: List[dict]) -> str:
         if not content:
             continue
         parts.append(f"工作区知识[{idx}]\n标题: {title}\n来源: {source}\n内容: {content}")
+    return "\n\n".join(parts)
+
+
+def _render_learning_memory_rag_context(memory_hits: List[dict]) -> str:
+    parts = []
+    for idx, item in enumerate(memory_hits[:5], start=1):
+        title = str(item.get("title", "") or "学习疑问").strip()
+        content = str(item.get("content", "") or "").strip()
+        source = _format_context_source(item)
+        if not content:
+            continue
+        parts.append(f"学习疑问[{idx}]\n标题: {title}\n来源: {source}\n内容: {content}")
     return "\n\n".join(parts)
 
 
@@ -276,6 +390,38 @@ def _build_message_meta(base: dict | None = None, workspace_id: int | None = Non
     return meta
 
 
+def _capture_learning_memory(
+    db: Session,
+    *,
+    username: str,
+    workspace_id: int | None,
+    question_text: str,
+    answer_text: str,
+    source_refs: Optional[dict] = None,
+    conversation_id: int | None = None,
+    prompt_strategy: str = "",
+):
+    if not workspace_id:
+        return None
+    try:
+        svc = get_learning_assistant_service()
+        return svc.record_learning_memory(
+            db,
+            owner_username=username,
+            workspace_id=workspace_id,
+            question_text=question_text,
+            answer_text=answer_text,
+            course_name="",
+            status="unresolved",
+            source_refs=source_refs or {},
+            conversation_id=conversation_id,
+            prompt_strategy=prompt_strategy,
+        )
+    except Exception as e:
+        logger.warning(f"学习疑问沉淀失败: {e}")
+        return None
+
+
 async def _prepare_runtime_hint(
     username: str,
     message: str,
@@ -311,6 +457,7 @@ class ChatRequest(BaseModel):
     show_thinking: Optional[bool] = False
     execution_mode: Optional[str] = "chat"
     agent_framework: Optional[str] = "openai_agents"
+    prompt_strategy: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -320,6 +467,7 @@ class ChatResponse(BaseModel):
     conversation_id: int
     sources: List[str] = []
     highlights: List[dict] = []
+    blind_spots: List[dict] = []
     tool_calls: List[dict] = []
     tool_trace: List[dict] = []
     usage: dict = {}
@@ -425,6 +573,11 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
         system_blocks = [block for block in [skill_context, runtime_hint] if block.strip()]
         if system_blocks:
             history_for_model = [{"role": "system", "content": "\n\n".join(system_blocks)}] + history
+        learning_blind_spot_context, learning_blind_spots = _build_learning_blind_spot_context(
+            db,
+            request.username,
+            workspace_id=request.workspace_id,
+        )
         
         ai_result = None
 
@@ -452,6 +605,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
             edu_data = db.query(EducationData).filter(EducationData.user_id == user.id).first()
             context = []
             workspace_context = _build_workspace_context(db, request.username, request.message, session_store=session_store, workspace_id=request.workspace_id)
+            learning_memory_context = _build_learning_memory_context(db, request.username, request.message, workspace_id=request.workspace_id)
             normalized_payload = None
             if edu_data:
                 try:
@@ -500,11 +654,24 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
                 merged_context.extend(context)
             if workspace_context:
                 merged_context.extend(workspace_context)
-            rag_sources = _collect_context_sources(context, workspace_context)
-            rag_highlights = _collect_context_highlights(context, workspace_context)
+            if learning_memory_context:
+                merged_context.extend(learning_memory_context)
+            rag_sources = _collect_context_sources(context, workspace_context, learning_memory_context)
+            rag_highlights = _collect_context_highlights(context, workspace_context, learning_memory_context)
 
             if merged_context:
                 logger.info(f"【Chat】用户 {request.username} 使用 RAG 模式")
+                if learning_blind_spot_context:
+                    merged_context.append(
+                        {
+                            "source": f"learning-blind-spots:{request.workspace_id}",
+                            "title": "学习盲点提示",
+                            "content": learning_blind_spot_context,
+                            "document_id": request.workspace_id,
+                            "chunk_index": 0,
+                            "score": 1.0,
+                        }
+                    )
                 ai_result = model_svc.chat_with_rag(
                     question=request.message,
                     context=merged_context,
@@ -531,12 +698,28 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
                 "usage": ai_result.get("usage", {}),
                 "sources": ai_result.get("sources", []),
                 "highlights": ai_result.get("highlights", []),
+                "blind_spots": learning_blind_spots,
                 "tool_calls": ai_result.get("tool_calls", []),
                 "tool_trace": ai_result.get("tool_trace", []) or runtime_tool_trace,
             }, workspace_id=request.workspace_id),
         )
         db.add(ai_msg)
         db.commit()
+        _capture_learning_memory(
+            db,
+            username=request.username,
+            workspace_id=request.workspace_id,
+            question_text=request.message,
+            answer_text=ai_result["content"],
+            source_refs={
+                "sources": ai_result.get("sources", []),
+                "highlights": ai_result.get("highlights", []),
+                "tool_calls": ai_result.get("tool_calls", []),
+                "tool_trace": ai_result.get("tool_trace", []) or runtime_tool_trace,
+            },
+            conversation_id=conversation.id,
+            prompt_strategy=(request.prompt_strategy or "").strip(),
+        )
         
         return ChatResponse(
             success=True,
@@ -544,6 +727,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
             conversation_id=conversation.id,
             sources=ai_result.get("sources", []),
             highlights=ai_result.get("highlights", []),
+            blind_spots=learning_blind_spots,
             tool_calls=ai_result.get("tool_calls", []),
             tool_trace=ai_result.get("tool_trace", []) or runtime_tool_trace,
             usage=ai_result.get("usage", {})
@@ -775,6 +959,11 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
         system_blocks = [block for block in [skill_context, runtime_hint] if block.strip()]
         if system_blocks:
             history_for_model = [{"role": "system", "content": "\n\n".join(system_blocks)}] + history
+        learning_blind_spot_context, learning_blind_spots = _build_learning_blind_spot_context(
+            db,
+            request.username,
+            workspace_id=request.workspace_id,
+        )
         
         # 6. 构建教务数据上下文（从数据库缓存，按学期组织）
         edu_context = ""
@@ -793,11 +982,16 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                             conversation_id=conversation.id,
                             role="assistant",
                             content=grounded_answer,
-                            message_meta=_build_message_meta({"sources": ["grounded_structured_data"], "tool_trace": runtime_tool_trace}, workspace_id=request.workspace_id),
+                            message_meta=_build_message_meta({
+                                "sources": ["grounded_structured_data"],
+                                "tool_trace": runtime_tool_trace,
+                                "skill_matches": skill_matches,
+                                "blind_spots": learning_blind_spots,
+                            }, workspace_id=request.workspace_id),
                         )
                         db.add(ai_msg)
                         db.commit()
-                        yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_trace': runtime_tool_trace, 'skill_matches': skill_matches})}\n\n"
+                        yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'sources': ['grounded_structured_data'], 'highlights': [], 'tool_trace': runtime_tool_trace, 'skill_matches': skill_matches, 'blind_spots': learning_blind_spots})}\n\n"
 
                     return StreamingResponse(
                         grounded_stream(),
@@ -844,11 +1038,17 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
             edu_context = f"{edu_context}\n\n{skill_context}" if edu_context else skill_context
 
         workspace_context = _build_workspace_context(db, request.username, request.message, session_store=session_store, workspace_id=request.workspace_id)
-        workspace_sources = _collect_context_sources(workspace_context)
-        workspace_highlights = _collect_context_highlights(workspace_context)
+        learning_memory_context = _build_learning_memory_context(db, request.username, request.message, workspace_id=request.workspace_id)
+        workspace_sources = _collect_context_sources(workspace_context, learning_memory_context)
+        workspace_highlights = _collect_context_highlights(workspace_context, learning_memory_context)
         if workspace_context:
             workspace_text = _render_workspace_rag_context(workspace_context)
             edu_context = f"{edu_context}\n\n{workspace_text}" if edu_context else workspace_text
+        if learning_memory_context:
+            memory_text = _render_learning_memory_rag_context(learning_memory_context)
+            edu_context = f"{edu_context}\n\n{memory_text}" if edu_context else memory_text
+        if learning_blind_spot_context:
+            edu_context = f"{edu_context}\n\n{learning_blind_spot_context}" if edu_context else learning_blind_spot_context
         
         # 7. 流式生成AI回复（先回包，再在流内执行工具调用/模型调用）
         async def generate():
@@ -898,12 +1098,29 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                             "framework": agent_result.get("framework", ""),
                             "sources": response_sources,
                             "highlights": response_highlights,
+                            "blind_spots": learning_blind_spots,
                         }, workspace_id=request.workspace_id),
                     )
                     db.add(ai_msg)
                     db.commit()
+                    _capture_learning_memory(
+                        db,
+                        username=request.username,
+                        workspace_id=request.workspace_id,
+                        question_text=request.message,
+                        answer_text=full_content or tool_content,
+                        source_refs={
+                            "tool_calls": tool_calls_info,
+                            "tool_trace": tool_trace_info,
+                            "skill_matches": skill_matches_info,
+                            "sources": response_sources,
+                            "highlights": response_highlights,
+                        },
+                        conversation_id=conversation.id,
+            prompt_strategy=(request.prompt_strategy or "").strip(),
+        )
 
-                    yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info, 'tool_trace': tool_trace_info, 'skill_matches': skill_matches_info, 'sources': response_sources, 'highlights': response_highlights})}\n\n"
+                    yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info, 'tool_trace': tool_trace_info, 'skill_matches': skill_matches_info, 'sources': response_sources, 'highlights': response_highlights, 'blind_spots': learning_blind_spots})}\n\n"
                     done_sent = True
                     return
 
@@ -935,14 +1152,30 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                                     role="assistant",
                                     content=full_content,
                                     message_meta=_build_message_meta(
-                                        {"tool_calls": tool_calls_info, "tool_trace": tool_trace_info, "skill_matches": skill_matches_info, "sources": response_sources, "highlights": response_highlights},
+                                        {"tool_calls": tool_calls_info, "tool_trace": tool_trace_info, "skill_matches": skill_matches_info, "sources": response_sources, "highlights": response_highlights, "blind_spots": learning_blind_spots},
                                         workspace_id=request.workspace_id,
                                     )
                                 )
                                 db.add(ai_msg)
                                 db.commit()
+                                _capture_learning_memory(
+                                    db,
+                                    username=request.username,
+                                    workspace_id=request.workspace_id,
+                                    question_text=request.message,
+                                    answer_text=full_content,
+                                    source_refs={
+                                        "tool_calls": tool_calls_info,
+                                        "tool_trace": tool_trace_info,
+                                        "skill_matches": skill_matches_info,
+                                        "sources": response_sources,
+                                        "highlights": response_highlights,
+                                    },
+                                    conversation_id=conversation.id,
+            prompt_strategy=(request.prompt_strategy or "").strip(),
+        )
 
-                                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info, 'tool_trace': tool_trace_info, 'skill_matches': skill_matches_info, 'sources': response_sources, 'highlights': response_highlights})}\n\n"
+                                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info, 'tool_trace': tool_trace_info, 'skill_matches': skill_matches_info, 'sources': response_sources, 'highlights': response_highlights, 'blind_spots': learning_blind_spots})}\n\n"
                                 done_sent = True
                                 return
                     except Exception as e:
@@ -998,14 +1231,30 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                     role="assistant",
                     content=full_content,
                     message_meta=_build_message_meta(
-                        {"tool_calls": tool_calls_info, "tool_trace": tool_trace_info, "skill_matches": skill_matches_info, "sources": response_sources, "highlights": response_highlights},
+                        {"tool_calls": tool_calls_info, "tool_trace": tool_trace_info, "skill_matches": skill_matches_info, "sources": response_sources, "highlights": response_highlights, "blind_spots": learning_blind_spots},
                         workspace_id=request.workspace_id,
                     ) if (tool_calls_info or tool_trace_info or skill_matches_info or response_sources or response_highlights or request.workspace_id) else None
                 )
                 db.add(ai_msg)
                 db.commit()
+                _capture_learning_memory(
+                    db,
+                    username=request.username,
+                    workspace_id=request.workspace_id,
+                    question_text=request.message,
+                    answer_text=full_content,
+                    source_refs={
+                        "tool_calls": tool_calls_info,
+                        "tool_trace": tool_trace_info,
+                        "skill_matches": skill_matches_info,
+                        "sources": response_sources,
+                        "highlights": response_highlights,
+                    },
+                    conversation_id=conversation.id,
+            prompt_strategy=(request.prompt_strategy or "").strip(),
+        )
 
-                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_trace': tool_trace_info, 'skill_matches': skill_matches_info, 'sources': response_sources, 'highlights': response_highlights})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_trace': tool_trace_info, 'skill_matches': skill_matches_info, 'sources': response_sources, 'highlights': response_highlights, 'blind_spots': learning_blind_spots})}\n\n"
                 done_sent = True
             except asyncio.CancelledError:
                 logger.warning(f"流式连接被客户端中断: conversation_id={conversation.id}")
@@ -1086,3 +1335,5 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                 "Content-Encoding": "identity",
             },
         )
+
+
