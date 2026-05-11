@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Blocks,
@@ -19,7 +19,6 @@ import {
 import { KnowledgeVisualization } from "@/components/knowledge/KnowledgeVisualization";
 import { AIPanel } from "@/components/workspace/ai-panel";
 import { PlatformSidebarFooter, PlatformSidebarHeader, createPlatformNav } from "@/components/workspace/app-sidebar";
-import { LearningStatus } from "@/components/workspace/learning-status";
 import { ReminderModal } from "@/components/workspace/reminder-modal";
 import {
   WorkbenchBadge,
@@ -33,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -70,38 +70,6 @@ type GraphData = {
   workspace: { id: number; name: string; slug: string };
   nodes: Array<{ id: string; label: string; type: string }>;
   edges: Array<{ id: string; source: string; target: string; label: string }>;
-};
-
-type PlatformSkill = {
-  id: number;
-  name: string;
-  version?: string;
-  description?: string;
-  enabled: boolean;
-  triggers: string[];
-  tools: Array<{ name?: string }>;
-};
-
-type PlatformMcp = {
-  id: number;
-  name: string;
-  description?: string;
-  kind: string;
-  enabled: boolean;
-};
-
-type CompositionData = {
-  owner: string;
-  skills: string[];
-  mcp_tools: string[];
-};
-
-type AgentFramework = {
-  id: string;
-  name: string;
-  recommended: boolean;
-  available: boolean;
-  requires?: string[];
 };
 
 type WorkspaceDetailResponse = {
@@ -222,6 +190,13 @@ type LearningMemoryResponse = {
   };
 };
 
+type DraftPromptPayload = {
+  id: string;
+  content: string;
+  sourceLabel?: string;
+  headline?: string;
+};
+
 const MEMORY_TYPE_LABELS: Record<string, string> = {
   practice: "做题应用",
   concept: "概念理解",
@@ -260,7 +235,6 @@ export default function WorkspaceDetailPage() {
   const [documentChunks, setDocumentChunks] = useState<KnowledgeChunk[]>([]);
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [learningStatus, setLearningStatus] = useState<LearningStatusResponse | null>(null);
-  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [reminders, setReminders] = useState<SuggestionItem[]>([]);
   const [learningMemories, setLearningMemories] = useState<LearningMemoryItem[]>([]);
   const [learningMemorySummary, setLearningMemorySummary] = useState<LearningMemoryResponse["summary"] | null>(null);
@@ -268,9 +242,12 @@ export default function WorkspaceDetailPage() {
   const [memoryTypeFilter, setMemoryTypeFilter] = useState("");
   const [memoryPointFilter, setMemoryPointFilter] = useState("");
   const [preferDefaultPromptSuggestions, setPreferDefaultPromptSuggestions] = useState(false);
+  const [resolvedMemoriesExpanded, setResolvedMemoriesExpanded] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<LearningMemoryItem | null>(null);
   const [memoryDetailLoading, setMemoryDetailLoading] = useState(false);
-  const [draftPrompt, setDraftPrompt] = useState("");
+  const [draftPrompt, setDraftPrompt] = useState<DraftPromptPayload | null>(null);
+  const [activeReviewContext, setActiveReviewContext] = useState<DraftPromptPayload | null>(null);
+  const [reviewContextDismissVersion, setReviewContextDismissVersion] = useState(0);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [textFilename, setTextFilename] = useState("notes.md");
   const [textContent, setTextContent] = useState("");
@@ -284,7 +261,7 @@ export default function WorkspaceDetailPage() {
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
   const knowledgePanelStorageKey = useMemo(() => `workspace:${workspaceId}:knowledge-collapsed`, [workspaceId]);
 
-  const refreshKnowledge = async (uname: string) => {
+  const refreshKnowledge = useCallback(async (uname: string) => {
     const res = await fetch(`${API_BASE}/api/knowledge/${encodeURIComponent(uname)}/${workspaceId}`, {
       credentials: "include",
     });
@@ -292,35 +269,34 @@ export default function WorkspaceDetailPage() {
     if (!json?.success) return;
     setWorkspace(json.workspace || null);
     setDocuments(json.documents || []);
-  };
+  }, [API_BASE, workspaceId]);
 
-  const refreshDetail = async (uname: string) => {
+  const refreshDetail = useCallback(async (uname: string) => {
     const res = await fetch(`${API_BASE}/api/workspace/${encodeURIComponent(uname)}/detail/${workspaceId}`, {
       credentials: "include",
     });
     const json: WorkspaceDetailResponse | null = res.ok ? await res.json() : null;
     setGraph(json?.graph || null);
-  };
+  }, [API_BASE, workspaceId]);
 
-  const refreshLearningStatus = async (uname: string) => {
+  const refreshLearningStatus = useCallback(async (uname: string) => {
     const res = await fetch(`${API_BASE}/api/status/${workspaceId}?username=${encodeURIComponent(uname)}`, {
       credentials: "include",
     });
     const json: LearningStatusResponse | null = res.ok ? await res.json() : null;
     if (json?.success) setLearningStatus(json);
-  };
+  }, [API_BASE, workspaceId]);
 
-  const refreshSuggestions = async (uname: string) => {
+  const refreshSuggestions = useCallback(async (uname: string) => {
     const res = await fetch(`${API_BASE}/api/suggestions/${workspaceId}?username=${encodeURIComponent(uname)}`, {
       credentials: "include",
     });
     const json: SuggestionsResponse | null = res.ok ? await res.json() : null;
     if (!json?.success) return;
-    setSuggestions(json.suggestions || []);
     setReminders(json.reminders || []);
-  };
+  }, [API_BASE, workspaceId]);
 
-  const refreshLearningMemories = async (
+  const refreshLearningMemories = useCallback(async (
     uname: string,
     filters?: { course?: string; type?: string; point?: string }
   ) => {
@@ -338,7 +314,18 @@ export default function WorkspaceDetailPage() {
     if (!json?.success) return;
     setLearningMemories(json.items || []);
     setLearningMemorySummary(json.summary || null);
-  };
+  }, [API_BASE, workspaceId]);
+
+  const refreshLearningLoop = useCallback(async (
+    uname: string,
+    filters?: { course?: string; type?: string; point?: string }
+  ) => {
+    await Promise.all([
+      refreshLearningMemories(uname, filters),
+      refreshLearningStatus(uname),
+      refreshSuggestions(uname),
+    ]);
+  }, [refreshLearningMemories, refreshLearningStatus, refreshSuggestions]);
 
   const openMemoryDetail = async (memory: LearningMemoryItem) => {
     setSelectedMemory(memory);
@@ -378,13 +365,13 @@ export default function WorkspaceDetailPage() {
     });
   };
 
-  const refreshDocumentChunks = async (uname: string, documentId: number) => {
+  const refreshDocumentChunks = useCallback(async (uname: string, documentId: number) => {
     const res = await fetch(`${API_BASE}/api/knowledge/${encodeURIComponent(uname)}/${workspaceId}/documents/${documentId}/chunks`, {
       credentials: "include",
     });
     const json = res.ok ? await res.json() : null;
     setDocumentChunks(json?.chunks || []);
-  };
+  }, [API_BASE, workspaceId]);
 
   useEffect(() => {
     const run = async () => {
@@ -400,9 +387,7 @@ export default function WorkspaceDetailPage() {
         await Promise.all([
           refreshKnowledge(uname),
           refreshDetail(uname),
-          refreshLearningStatus(uname),
-          refreshSuggestions(uname),
-          refreshLearningMemories(uname),
+          refreshLearningLoop(uname),
         ]);
       } catch {
         router.replace("/workspace");
@@ -416,13 +401,7 @@ export default function WorkspaceDetailPage() {
       return;
     }
     run();
-  }, [API_BASE, router, workspaceId]);
-
-  const authorityTone = (authority: string) => {
-    if (authority === "system") return "warning";
-    if (authority === "school") return "secondary";
-    return "outline";
-  };
+  }, [API_BASE, refreshDetail, refreshKnowledge, refreshLearningLoop, router, workspaceId]);
 
   const statusTone = (status: string) => {
     if (status === "ready") return "success";
@@ -534,6 +513,18 @@ export default function WorkspaceDetailPage() {
   const primaryPromptStrategy = promptStrategyCards[0]?.strategy || "";
   const hasMemoryFilters = Boolean(memoryCourseFilter || memoryTypeFilter || memoryPointFilter);
   const nextPriorityMemory = reviewPriorityItems[0] || null;
+  const hasActiveReviewContext = Boolean(activeReviewContext?.content?.trim());
+  const unresolvedLearningMemories = useMemo(
+    () => learningMemories.filter((item) => item.status !== "resolved"),
+    [learningMemories]
+  );
+  const resolvedLearningMemories = useMemo(
+    () => learningMemories.filter((item) => item.status === "resolved"),
+    [learningMemories]
+  );
+  const memoryFilterSummary = hasMemoryFilters
+    ? `课程：${memoryCourseFilter || "全部"} · 类型：${memoryTypeFilter ? formatMemoryTypeLabel(memoryTypeFilter) : "全部"} · 知识点：${memoryPointFilter || "全部"}`
+    : "系统会把有价值的追问沉淀到这里，便于后续复习。";
 
   const resolvePromptStrategyForChat = () => {
     if (preferDefaultPromptSuggestions) return "";
@@ -562,7 +553,12 @@ export default function WorkspaceDetailPage() {
       "请先判断我现在最可能没真正弄懂的是哪一层，再给我一个最适合继续追问的切入点。",
     ].filter(Boolean).join("\n\n");
     setSelectedMemory(null);
-    setDraftPrompt(prompt);
+    setDraftPrompt({
+      id: `memory:${memory.id}:${Date.now()}`,
+      content: prompt,
+      sourceLabel: "学习疑问",
+      headline: memory.question_summary || memory.question_text,
+    });
   };
 
   const openFilteredMemoriesDraftInPanel = () => {
@@ -581,7 +577,12 @@ export default function WorkspaceDetailPage() {
       topQuestions ? `当前优先问题有：\n${topQuestions}` : "",
       "请先归纳这些问题背后的共性卡点，再告诉我应该先从哪一个问题切入。",
     ].filter(Boolean).join("\n\n");
-    setDraftPrompt(prompt);
+    setDraftPrompt({
+      id: `memory-filter:${Date.now()}`,
+      content: prompt,
+      sourceLabel: hasMemoryFilters ? "筛选后的学习疑问" : "最近学习疑问",
+      headline: focusText || "围绕当前筛选出的学习疑问继续复习",
+    });
   };
 
   const openPriorityMemoryDraftInPanel = () => {
@@ -592,7 +593,12 @@ export default function WorkspaceDetailPage() {
       `问题类型：${formatMemoryTypeLabel(nextPriorityMemory.question_type)}`,
       "请先帮我判断我最可能卡在哪一层，再给我当前工作区里最适合直接继续问的一句追问。",
     ].filter(Boolean).join("\n");
-    setDraftPrompt(prompt);
+    setDraftPrompt({
+      id: `memory-priority:${nextPriorityMemory.id}:${Date.now()}`,
+      content: prompt,
+      sourceLabel: "高优先级学习疑问",
+      headline: nextPriorityMemory.question_summary,
+    });
   };
 
   const continueWithMemoryInChat = (memory: LearningMemoryItem) => {
@@ -664,8 +670,48 @@ export default function WorkspaceDetailPage() {
       sourceLabel ? `来源：${sourceLabel}` : "",
       "请基于这段内容帮我提炼出我应该追问的关键问题，并直接给我最短的追问方式。",
     ].filter(Boolean).join("\n\n");
-    setDraftPrompt(prompt);
+    setDraftPrompt({
+      id: `reference:${title}:${Date.now()}`,
+      content: prompt,
+      sourceLabel: sourceLabel || "知识片段",
+      headline: title,
+    });
   };
+
+  const clearActiveReviewContext = () => {
+    setDraftPrompt(null);
+    setActiveReviewContext(null);
+    setReviewContextDismissVersion((prev) => prev + 1);
+  };
+
+  const focusReviewPanel = () => {
+    const panel = document.getElementById("workspace-ai-panel");
+    panel?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const openPrimaryReviewEntry = () => {
+    if (hasActiveReviewContext) {
+      focusReviewPanel();
+      return;
+    }
+    if (nextPriorityMemory) {
+      openPriorityMemoryDraftInPanel();
+      return;
+    }
+    if (learningMemories.length) {
+      openFilteredMemoriesDraftInPanel();
+      return;
+    }
+    focusReviewPanel();
+  };
+
+  const primaryReviewEntryLabel = hasActiveReviewContext
+    ? "继续当前复习"
+    : nextPriorityMemory
+      ? "开始本轮复习"
+      : learningMemories.length
+        ? "围绕学习疑问复习"
+        : "去右侧开始提问";
 
   useEffect(() => {
     if (!requestedDocId || documents.length === 0) return;
@@ -685,7 +731,7 @@ export default function WorkspaceDetailPage() {
       return;
     }
     void refreshDocumentChunks(username, requestedDocId);
-  }, [username, requestedDocId]);
+  }, [refreshDocumentChunks, requestedDocId, username]);
 
   useEffect(() => {
     if (!requestedDocId || documentChunks.length === 0) return;
@@ -712,7 +758,7 @@ export default function WorkspaceDetailPage() {
       type: memoryTypeFilter,
       point: memoryPointFilter,
     });
-  }, [memoryCourseFilter, memoryPointFilter, memoryTypeFilter, username, workspaceId]);
+  }, [memoryCourseFilter, memoryPointFilter, memoryTypeFilter, refreshLearningMemories, username, workspaceId]);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -721,6 +767,12 @@ export default function WorkspaceDetailPage() {
     setMemoryPointFilter(requestedMemoryPoint);
     setMemoryTypeFilter(requestedMemoryType);
   }, [requestedMemoryCourse, requestedMemoryPoint, requestedMemoryType, workspaceId]);
+
+  useEffect(() => {
+    if (unresolvedLearningMemories.length === 0 && resolvedLearningMemories.length > 0) {
+      setResolvedMemoriesExpanded(true);
+    }
+  }, [resolvedLearningMemories.length, unresolvedLearningMemories.length]);
 
   useEffect(() => {
     if (!workspaceId || typeof window === "undefined") return;
@@ -1013,6 +1065,10 @@ export default function WorkspaceDetailPage() {
               className="xl:flex xl:h-[calc(100vh-6.5rem)] xl:flex-col"
               actions={
                 <div className="flex flex-wrap gap-2">
+                  <Button onClick={openPrimaryReviewEntry}>
+                    <Brain className="h-4 w-4" />
+                    {primaryReviewEntryLabel}
+                  </Button>
                   <Button variant="outline" onClick={() => router.push("/composition")}>
                     <Blocks className="h-4 w-4" />
                     去组合编排
@@ -1027,15 +1083,54 @@ export default function WorkspaceDetailPage() {
               }
             >
               <div className="grid gap-4 xl:flex-1 xl:min-h-0 xl:grid-rows-[minmax(360px,1fr)_auto]">
+                {hasActiveReviewContext ? (
+                  <div className="rounded-3xl border border-sky-200 bg-sky-50/80 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                          <Brain className="h-4 w-4 text-sky-600" />
+                          当前复习会话
+                        </div>
+                        <div className="mt-2 text-sm text-slate-700">
+                          {activeReviewContext?.headline || "右侧 AI 面板正在围绕当前资料或学习疑问继续辅导。"}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {activeReviewContext?.sourceLabel ? (
+                            <Badge variant="outline">{activeReviewContext.sourceLabel}</Badge>
+                          ) : null}
+                          {primaryPromptStrategy ? (
+                            <Badge variant="secondary">建议策略：{primaryPromptStrategy}</Badge>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={focusReviewPanel}
+                        >
+                          继续在右侧复习
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={clearActiveReviewContext}>
+                          结束当前复习
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="xl:min-h-0">
                   <AIPanel
                     username={username}
                     workspaceId={workspaceId}
                     workspaceName={workspace?.name}
                     draftPrompt={draftPrompt}
-                    onDraftPromptConsumed={() => setDraftPrompt("")}
+                    promptStrategy={resolvePromptStrategyForChat()}
+                    onDraftPromptConsumed={() => setDraftPrompt(null)}
+                    onDraftPromptCleared={() => setDraftPrompt(null)}
+                    onActiveReviewContextChange={setActiveReviewContext}
+                    reviewContextDismissVersion={reviewContextDismissVersion}
                     onLearningMemoryCaptured={() =>
-                      void refreshLearningMemories(username, {
+                      void refreshLearningLoop(username, {
                         course: memoryCourseFilter,
                         type: memoryTypeFilter,
                         point: memoryPointFilter,
@@ -1045,27 +1140,92 @@ export default function WorkspaceDetailPage() {
                 </div>
 
                 <div className="grid gap-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
-                  <div className="grid gap-3 lg:grid-cols-[1.15fr_0.85fr]">
+                  <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
                     <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                        <Brain className="h-4 w-4 text-sky-600" />
-                        学习记忆概览
-                      </div>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                          <div className="text-xs text-slate-500">总疑问</div>
-                          <div className="mt-1 text-lg font-semibold text-slate-900">{learningMemorySummary?.total || 0}</div>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                            <FlagTriangleRight className="h-4 w-4 text-amber-500" />
+                            当前复习路径
+                          </div>
+                          <div className="mt-2 text-sm text-slate-700">
+                            {nextPriorityMemory
+                              ? nextPriorityMemory.question_summary
+                              : "继续在右侧对话里追问关键问题，系统会逐步形成更明确的复习优先项。"}
+                          </div>
+                          <div className="mt-2 text-xs leading-6 text-slate-500">
+                            {nextPriorityMemory
+                              ? `${nextPriorityMemory.course_name || workspace?.name || "当前课程"} · ${formatMemoryTypeLabel(nextPriorityMemory.question_type)}`
+                              : "当前还没有足够的疑问沉淀。"}
+                          </div>
                         </div>
-                        <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
-                          <div className="text-xs text-slate-500">未解决</div>
-                          <div className="mt-1 text-lg font-semibold text-slate-900">{learningMemorySummary?.unresolved || 0}</div>
-                        </div>
-                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
-                          <div className="text-xs text-slate-500">已解决</div>
-                          <div className="mt-1 text-lg font-semibold text-slate-900">{learningMemorySummary?.resolved || 0}</div>
+                        <div className="grid min-w-[220px] gap-3 sm:grid-cols-3 xl:min-w-[260px] xl:grid-cols-1">
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                            <div className="text-xs text-slate-500">总疑问</div>
+                            <div className="mt-1 text-lg font-semibold text-slate-900">{learningMemorySummary?.total || 0}</div>
+                          </div>
+                          <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+                            <div className="text-xs text-slate-500">未解决</div>
+                            <div className="mt-1 text-lg font-semibold text-slate-900">{learningMemorySummary?.unresolved || 0}</div>
+                          </div>
+                          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+                            <div className="text-xs text-slate-500">已解决</div>
+                            <div className="mt-1 text-lg font-semibold text-slate-900">{learningMemorySummary?.resolved || 0}</div>
+                          </div>
                         </div>
                       </div>
 
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {nextPriorityMemory ? (
+                          <>
+                            <Button size="sm" onClick={openPriorityMemoryDraftInPanel}>
+                              <Brain className="h-4 w-4" />
+                              切到这条疑问
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={continueWithPrioritySummaryInChat}>
+                              <BookOpenCheck className="h-4 w-4" />
+                              打开完整聊天页
+                            </Button>
+                          </>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                          <Sparkles className="h-4 w-4 text-sky-600" />
+                          建议排序
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {promptStrategyCards.length ? promptStrategyCards.map((item) => (
+                            <Badge key={item.strategy} variant="outline">
+                              {item.strategy} · {item.count}
+                            </Badge>
+                          )) : (
+                            <span className="text-xs text-slate-500">暂无偏好统计</span>
+                          )}
+                        </div>
+                        <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                          <div className="text-xs text-slate-600">本次按默认建议排序</div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={preferDefaultPromptSuggestions ? "default" : "outline"}
+                            onClick={() => setPreferDefaultPromptSuggestions((prev) => !prev)}
+                          >
+                            {preferDefaultPromptSuggestions ? "已启用" : "使用默认"}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                        <Brain className="h-4 w-4 text-sky-600" />
+                        高频知识点
+                      </div>
+                      <div className="mt-2 text-xs leading-6 text-slate-500">
+                        这里优先展示最近反复卡住的点，适合作为筛选入口，不再和“下一步建议”并列抢注意力。
+                      </div>
                       <div className="mt-4 flex flex-wrap gap-2">
                         {reviewPointCards.map((point) => (
                           <button
@@ -1085,80 +1245,24 @@ export default function WorkspaceDetailPage() {
                         ) : null}
                       </div>
                     </div>
-
-                    <div className="grid gap-3">
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                          <FlagTriangleRight className="h-4 w-4 text-amber-500" />
-                          下一步建议
-                        </div>
-                        <div className="mt-2 text-sm text-slate-700">
-                          {nextPriorityMemory ? nextPriorityMemory.question_summary : "继续在对话里追问关键问题，系统会逐步形成复习优先项。"}
-                        </div>
-                        <div className="mt-2 text-xs leading-6 text-slate-500">
-                          {nextPriorityMemory
-                            ? `${nextPriorityMemory.course_name || workspace?.name || "当前课程"} · ${formatMemoryTypeLabel(nextPriorityMemory.question_type)}`
-                            : "当前还没有足够的疑问沉淀。"}
-                        </div>
-                        {nextPriorityMemory ? (
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <Button size="sm" onClick={openPriorityMemoryDraftInPanel}>
-                              <Brain className="h-4 w-4" />
-                              先在右侧复习
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={continueWithPrioritySummaryInChat}>
-                              <BookOpenCheck className="h-4 w-4" />
-                              去聊天页追问
-                            </Button>
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                          <Sparkles className="h-4 w-4 text-sky-600" />
-                          建议排序
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {promptStrategyCards.length ? promptStrategyCards.map((item) => (
-                            <Badge key={item.strategy} variant="outline">
-                              {item.strategy} · {item.count}
-                            </Badge>
-                          )) : (
-                            <span className="text-xs text-slate-500">暂无偏好统计</span>
-                          )}
-                        </div>
-                        <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3">
-                          <div className="text-xs text-slate-600">本次按默认建议排序</div>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={preferDefaultPromptSuggestions ? "default" : "outline"}
-                            onClick={() => setPreferDefaultPromptSuggestions((prev) => !prev)}
-                          >
-                            {preferDefaultPromptSuggestions ? "已启用" : "使用默认"}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 bg-white p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <div className="text-sm font-semibold text-slate-900">{hasMemoryFilters ? "筛选后的学习疑问" : "最近学习疑问"}</div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {hasMemoryFilters ? "筛选后的学习疑问" : "最近学习疑问"}
+                        </div>
                         <div className="mt-1 text-xs text-slate-500">
-                          {hasMemoryFilters
-                            ? `课程：${memoryCourseFilter || "全部"} · 类型：${memoryTypeFilter ? formatMemoryTypeLabel(memoryTypeFilter) : "全部"} · 知识点：${memoryPointFilter || "全部"}`
-                            : "系统会把有价值的追问沉淀到这里，便于后续复习。"}
+                          {memoryFilterSummary}
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button size="sm" onClick={openFilteredMemoriesDraftInPanel} disabled={!learningMemories.length}>
-                          先在右侧复习
+                          按当前筛选复习
                         </Button>
                         <Button size="sm" variant="outline" onClick={continueWithFilteredMemoriesInChat} disabled={!learningMemories.length}>
-                          去聊天页追问
+                          打开完整聊天页
                         </Button>
                         {hasMemoryFilters ? (
                           <Button
@@ -1253,36 +1357,92 @@ export default function WorkspaceDetailPage() {
                       </div>
                     ) : null}
 
-                    <div className="mt-4 grid gap-3">
-                      {learningMemories.length ? learningMemories.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => void openMemoryDetail(item)}
-                          className={cn(
-                            "rounded-2xl border px-4 py-3 text-left transition-colors hover:bg-slate-50",
-                            item.status === "resolved" ? "border-slate-200 bg-white" : "border-amber-200 bg-amber-50/60"
-                          )}
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-medium text-slate-900">{item.question_summary}</span>
-                            <Badge variant={item.status === "resolved" ? "secondary" : "outline"}>
-                              {formatMemoryStatusLabel(item.status)}
-                            </Badge>
-                            <Badge variant="outline">{formatMemoryTypeLabel(item.question_type)}</Badge>
+                    {learningMemories.length ? (
+                      <div className="mt-4 space-y-4">
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-semibold text-slate-900">优先清掉的未解决问题</div>
+                            <Badge variant="outline">{unresolvedLearningMemories.length} 条</Badge>
                           </div>
-                          <div className="mt-1 text-xs leading-6 text-slate-500">
-                            {item.course_name || workspace?.name || "当前课程"}
-                            {item.answer_summary ? ` · ${item.answer_summary}` : ""}
+                          <div className="mt-3 grid gap-3">
+                            {unresolvedLearningMemories.length ? unresolvedLearningMemories.map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => void openMemoryDetail(item)}
+                                className="rounded-2xl border border-amber-200 bg-white px-4 py-3 text-left transition-colors hover:bg-amber-50/40"
+                              >
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-sm font-medium text-slate-900">{item.question_summary}</span>
+                                  <Badge variant="outline">{formatMemoryStatusLabel(item.status)}</Badge>
+                                  <Badge variant="outline">{formatMemoryTypeLabel(item.question_type)}</Badge>
+                                </div>
+                                <div className="mt-1 text-xs leading-6 text-slate-500">
+                                  {item.course_name || workspace?.name || "当前课程"}
+                                  {item.answer_summary ? ` · ${item.answer_summary}` : ""}
+                                </div>
+                              </button>
+                            )) : (
+                              <div className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/60 px-4 py-4 text-xs leading-6 text-emerald-800">
+                                当前筛选下没有未解决问题，可以继续查阅下方已解决记录，或者回到右侧继续发起新的追问。
+                              </div>
+                            )}
                           </div>
-                        </button>
-                      )) : (
+                        </div>
+
+                        {resolvedLearningMemories.length ? (
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-sm font-semibold text-slate-900">已解决记录</div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary">{resolvedLearningMemories.length} 条</Badge>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setResolvedMemoriesExpanded((prev) => !prev)}
+                                >
+                                  {resolvedMemoriesExpanded ? "收起" : "展开"}
+                                </Button>
+                              </div>
+                            </div>
+                            {resolvedMemoriesExpanded ? (
+                              <div className="mt-3 grid gap-3">
+                                {resolvedLearningMemories.map((item) => (
+                                  <button
+                                    key={item.id}
+                                    type="button"
+                                    onClick={() => void openMemoryDetail(item)}
+                                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                                  >
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="text-sm font-medium text-slate-900">{item.question_summary}</span>
+                                      <Badge variant="secondary">{formatMemoryStatusLabel(item.status)}</Badge>
+                                      <Badge variant="outline">{formatMemoryTypeLabel(item.question_type)}</Badge>
+                                    </div>
+                                    <div className="mt-1 text-xs leading-6 text-slate-500">
+                                      {item.course_name || workspace?.name || "当前课程"}
+                                      {item.answer_summary ? ` · ${item.answer_summary}` : ""}
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="mt-3 text-xs leading-6 text-slate-500">
+                                已解决的问题默认收起，避免稀释当前复习重点。需要回顾时再展开查看。
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="mt-4">
                         <WorkbenchEmpty
                           title="暂无学习疑问沉淀"
                           description="继续在上方对话区问几个关键问题，系统会把有价值的疑问整理到这里。"
                         />
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1313,25 +1473,18 @@ export default function WorkspaceDetailPage() {
       />
 
       <Dialog open={Boolean(selectedMemory)} onOpenChange={(open) => !open && setSelectedMemory(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl border-slate-200 bg-white p-0">
           <DialogHeader>
-            <DialogTitle>学习疑问详情</DialogTitle>
-            <DialogDescription>
-              {selectedMemory?.course_name || workspace?.name || "当前课程"}
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedMemory ? (
-            <div className="space-y-4 text-sm text-slate-700">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">问题</div>
-                <div className="mt-2 leading-6">{selectedMemory.question_text || selectedMemory.question_summary}</div>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">状态</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
+            <div className="border-b border-slate-200 px-6 pb-5 pt-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <DialogTitle className="text-xl font-semibold tracking-[-0.03em] text-slate-950">学习疑问详情</DialogTitle>
+                  <DialogDescription className="text-sm leading-6 text-slate-600">
+                    {selectedMemory?.course_name || workspace?.name || "当前课程"}
+                  </DialogDescription>
+                </div>
+                {selectedMemory ? (
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={selectedMemory.status === "resolved" ? "secondary" : "outline"}>
                       {formatMemoryStatusLabel(selectedMemory.status)}
                     </Badge>
@@ -1340,71 +1493,117 @@ export default function WorkspaceDetailPage() {
                       <Badge variant="outline">重要度 {selectedMemory.importance}</Badge>
                     ) : null}
                   </div>
-                </div>
+                ) : null}
+              </div>
+            </div>
+          </DialogHeader>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">知识点</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {selectedMemory.knowledge_points.length ? selectedMemory.knowledge_points.map((point) => (
-                      <button
-                        key={point}
-                        type="button"
-                        onClick={() => {
-                          applyMemoryFilters({
-                            course: selectedMemory.course_name || "",
-                            type: selectedMemory.question_type || "",
-                            point,
-                          });
-                          setSelectedMemory(null);
-                        }}
-                      >
-                        <Badge variant="secondary">{point}</Badge>
-                      </button>
-                    )) : (
-                      <span className="text-xs text-slate-500">暂无知识点</span>
-                    )}
+          {selectedMemory ? (
+            <div className="space-y-5 px-6 pb-6 text-sm text-slate-700">
+              <div className="rounded-3xl border border-sky-200 bg-sky-50/80 p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0 space-y-2">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">优先动作</div>
+                    <div className="text-base font-semibold text-slate-950">
+                      {selectedMemory.question_summary || selectedMemory.question_text}
+                    </div>
+                    <div className="text-sm leading-6 text-slate-600">
+                      先把这条疑问带到右侧继续复习，再决定是否标记为已解决或查看同类问题。
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={() => openMemoryDraftInPanel(selectedMemory)}>
+                      <Brain className="h-4 w-4" />
+                      切到这条疑问
+                    </Button>
+                    <Button
+                      variant={selectedMemory.status === "resolved" ? "outline" : "secondary"}
+                      onClick={() => void updateMemoryStatus(selectedMemory.id, selectedMemory.status === "resolved" ? "unresolved" : "resolved")}
+                    >
+                      {selectedMemory.status === "resolved" ? "改回未解决" : "标记为已解决"}
+                    </Button>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">AI 摘要</div>
-                <div className="mt-2 leading-6">{selectedMemory.answer_summary || "暂无摘要"}</div>
+              <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">问题原文</div>
+                    <div className="mt-2 text-sm leading-7 text-slate-800">
+                      {selectedMemory.question_text || selectedMemory.question_summary}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">AI 摘要</div>
+                      {memoryDetailLoading ? (
+                        <span className="text-xs text-slate-500">正在刷新详情...</span>
+                      ) : null}
+                    </div>
+                    <div className="mt-2 text-sm leading-7 text-slate-700">
+                      {selectedMemory.answer_summary || "暂无摘要"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">知识点</div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {selectedMemory.knowledge_points.length ? selectedMemory.knowledge_points.map((point) => (
+                        <button
+                          key={point}
+                          type="button"
+                          onClick={() => {
+                            applyMemoryFilters({
+                              course: selectedMemory.course_name || "",
+                              type: selectedMemory.question_type || "",
+                              point,
+                            });
+                            setSelectedMemory(null);
+                          }}
+                        >
+                          <Badge variant="secondary">{point}</Badge>
+                        </button>
+                      )) : (
+                        <span className="text-xs text-slate-500">暂无知识点</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">后续分流</div>
+                    <div className="mt-3 space-y-3">
+                      <Button variant="outline" className="w-full justify-start" onClick={() => continueWithMemoryInChat(selectedMemory)}>
+                        <BookOpenCheck className="h-4 w-4" />
+                        打开完整聊天页
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          applyMemoryFilters({
+                            course: selectedMemory.course_name || "",
+                            type: selectedMemory.question_type || "",
+                            point: "",
+                          });
+                          setSelectedMemory(null);
+                        }}
+                      >
+                        查看同类问题
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={() => openMemoryDraftInPanel(selectedMemory)}>
-                  <Brain className="h-4 w-4" />
-                  先在右侧复习
-                </Button>
-                <Button variant="outline" onClick={() => continueWithMemoryInChat(selectedMemory)}>
-                  <BookOpenCheck className="h-4 w-4" />
-                  去聊天页追问
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => void updateMemoryStatus(selectedMemory.id, selectedMemory.status === "resolved" ? "unresolved" : "resolved")}
-                >
-                  {selectedMemory.status === "resolved" ? "改回未解决" : "标记为已解决"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    applyMemoryFilters({
-                      course: selectedMemory.course_name || "",
-                      type: selectedMemory.question_type || "",
-                      point: "",
-                    });
-                    setSelectedMemory(null);
-                  }}
-                >
-                  查看同类问题
-                </Button>
-              </div>
+              <Separator />
 
-              {memoryDetailLoading ? (
-                <div className="text-xs text-slate-500">正在刷新详情...</div>
-              ) : null}
+              <div className="text-xs leading-6 text-slate-500">
+                处理建议：先在右侧复习这条疑问，如果已经彻底讲清，再标记为已解决；如果发现这是同类问题的代表，再回到列表查看同类问题。
+              </div>
             </div>
           ) : null}
         </DialogContent>

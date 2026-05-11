@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Bot, FileSearch, LibraryBig, RefreshCcw, Trash2 } from "lucide-react";
 
@@ -66,7 +66,7 @@ type KnowledgeOverviewResponse = {
   documents: KnowledgeDocument[];
 };
 
-export default function KnowledgePage() {
+function KnowledgePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [username, setUsername] = useState("");
@@ -91,15 +91,15 @@ export default function KnowledgePage() {
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
 
-  const refreshWorkspaces = async (uname: string) => {
+  const refreshWorkspaces = useCallback(async (uname: string) => {
     const res = await fetch(`${API_BASE}/api/workspace/${encodeURIComponent(uname)}`, { credentials: "include" });
     const json = res.ok ? await res.json() : null;
     const items = json?.workspaces || [];
     setWorkspaces(items);
     return items as WorkspaceItem[];
-  };
+  }, [API_BASE]);
 
-  const refreshKnowledge = async (uname: string, wid: number) => {
+  const refreshKnowledge = useCallback(async (uname: string, wid: number) => {
     if (!wid) return;
     const res = await fetch(`${API_BASE}/api/knowledge/${encodeURIComponent(uname)}/${wid}`, {
       credentials: "include",
@@ -109,9 +109,9 @@ export default function KnowledgePage() {
     setWorkspace(json.workspace || null);
     setDocuments(json.documents || []);
     setStats(json.stats || null);
-  };
+  }, [API_BASE]);
 
-  const refreshChunks = async (uname: string, wid: number, docId: number) => {
+  const refreshChunks = useCallback(async (uname: string, wid: number, docId: number) => {
     if (!wid || !docId) {
       setChunks([]);
       return;
@@ -121,7 +121,7 @@ export default function KnowledgePage() {
     });
     const json = res.ok ? await res.json() : null;
     setChunks(json?.chunks || []);
-  };
+  }, [API_BASE]);
 
   useEffect(() => {
     const run = async () => {
@@ -148,19 +148,19 @@ export default function KnowledgePage() {
       }
     };
     run();
-  }, [API_BASE, router, searchParams]);
+  }, [API_BASE, refreshKnowledge, refreshWorkspaces, router, searchParams]);
 
   useEffect(() => {
     if (!username || !workspaceId) return;
     void refreshKnowledge(username, workspaceId);
     setSelectedDocId(0);
     setChunks([]);
-  }, [username, workspaceId]);
+  }, [refreshKnowledge, username, workspaceId]);
 
   useEffect(() => {
     if (!username || !workspaceId || !selectedDocId) return;
     void refreshChunks(username, workspaceId, selectedDocId);
-  }, [username, workspaceId, selectedDocId]);
+  }, [refreshChunks, selectedDocId, username, workspaceId]);
 
   const filteredDocuments = useMemo(() => {
     return documents.filter((doc) => {
@@ -502,5 +502,27 @@ export default function KnowledgePage() {
         </div>
       </div>
     </WorkbenchShell>
+  );
+}
+
+function KnowledgePageFallback() {
+  return (
+    <div className="min-h-screen bg-slate-50 px-4 py-6 md:px-6 md:py-8">
+      <div className="mx-auto max-w-6xl">
+        <Card className="border-slate-200 shadow-none">
+          <CardContent className="flex min-h-[240px] items-center justify-center p-6 text-sm text-slate-500">
+            正在加载知识库页面...
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+export default function KnowledgePage() {
+  return (
+    <Suspense fallback={<KnowledgePageFallback />}>
+      <KnowledgePageContent />
+    </Suspense>
   );
 }

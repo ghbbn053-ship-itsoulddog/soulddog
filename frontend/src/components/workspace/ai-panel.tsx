@@ -72,11 +72,33 @@ type PanelMessage = {
   streaming?: boolean;
 };
 
+type DraftPromptPayload = {
+  id: string;
+  content: string;
+  sourceLabel?: string;
+  headline?: string;
+};
+
+type HistoryMessage = {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+  meta?: {
+    thinking?: string;
+    highlights?: MessageHighlight[];
+    blind_spots?: BlindSpotItem[];
+    sources?: string[];
+    tool_trace?: ToolTrace[];
+    skill_matches?: SkillMatch[];
+  };
+};
+
 function parseKnowledgeSource(source: string) {
   const trimmed = (source || "").trim();
   const match = /^knowledge:\/\/workspace\/([^/]+)\/([^?]+)(?:\?(.*))?$/.exec(trimmed);
   if (!match) return null;
-  const [, workspaceRaw, _titleRaw, queryRaw] = match;
+  const [, workspaceRaw, , queryRaw] = match;
   const params = new URLSearchParams(queryRaw || "");
   const workspaceId = Number(workspaceRaw || 0);
   const docId = Number(params.get("doc") || 0);
@@ -103,13 +125,21 @@ export function AIPanel({
   onLearningMemoryCaptured,
   draftPrompt,
   onDraftPromptConsumed,
+  promptStrategy,
+  onDraftPromptCleared,
+  onActiveReviewContextChange,
+  reviewContextDismissVersion,
 }: {
   username: string;
   workspaceId: number;
   workspaceName?: string;
   onLearningMemoryCaptured?: () => void;
-  draftPrompt?: string;
+  draftPrompt?: DraftPromptPayload | null;
   onDraftPromptConsumed?: () => void;
+  promptStrategy?: string;
+  onDraftPromptCleared?: () => void;
+  onActiveReviewContextChange?: (payload: DraftPromptPayload | null) => void;
+  reviewContextDismissVersion?: number;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<PanelMessage[]>([]);
@@ -120,9 +150,11 @@ export function AIPanel({
   const [executionMode, setExecutionMode] = useState("agent");
   const [agentFramework, setAgentFramework] = useState("openai_agents");
   const [showThinking, setShowThinking] = useState(false);
+  const [activeDraftPrompt, setActiveDraftPrompt] = useState<DraftPromptPayload | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const panelRootRef = useRef<HTMLDivElement>(null);
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
   const STREAM_API_BASE = useMemo(() => {
@@ -160,7 +192,7 @@ export function AIPanel({
       const data = res.ok ? await res.json() : null;
       if (!data?.messages) return;
       setMessages(
-        data.messages.map((m: any) => ({
+        (data.messages as HistoryMessage[]).map((m) => ({
           id: m.id,
           role: m.role,
           content: m.content,
@@ -184,13 +216,30 @@ export function AIPanel({
   }, [fetchConversations, workspaceId]);
 
   useEffect(() => {
-    if (!draftPrompt?.trim()) return;
-    setInput(draftPrompt);
+    if (!draftPrompt?.content?.trim()) return;
+    setActiveDraftPrompt(draftPrompt);
+    setInput(draftPrompt.content);
+    panelRootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    requestAnimationFrame(() => inputRef.current?.focus());
     onDraftPromptConsumed?.();
   }, [draftPrompt, onDraftPromptConsumed]);
 
-  const activePromptBase = (input.trim() || draftPrompt?.trim() || "").trim();
-  const hasDraftPrompt = Boolean(draftPrompt?.trim());
+  useEffect(() => {
+    onActiveReviewContextChange?.(activeDraftPrompt ?? null);
+  }, [activeDraftPrompt, onActiveReviewContextChange]);
+
+  useEffect(() => {
+    if (!reviewContextDismissVersion) return;
+    setInput((current) => {
+      if (!activeDraftPrompt?.content?.trim()) return current;
+      return current.trim() === activeDraftPrompt.content.trim() ? "" : current;
+    });
+    setActiveDraftPrompt(null);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [activeDraftPrompt, reviewContextDismissVersion]);
+
+  const activePromptBase = (input.trim() || activeDraftPrompt?.content?.trim() || "").trim();
+  const hasDraftPrompt = Boolean(activeDraftPrompt?.content?.trim());
   const quickPromptTitle = hasDraftPrompt ? "基于当前资料的快捷追问" : "快速提问";
 
   const applyPromptTemplate = useCallback(
@@ -240,6 +289,7 @@ export function AIPanel({
           message: userText,
           conversation_id: conversationId,
           workspace_id: workspaceId,
+          prompt_strategy: promptStrategy || undefined,
           execution_mode: executionMode,
           agent_framework: agentFramework,
           show_thinking: showThinking,
@@ -337,7 +387,7 @@ export function AIPanel({
   };
 
   return (
-    <div className="grid gap-4">
+    <div id="workspace-ai-panel" ref={panelRootRef} className="grid gap-4">
       <Card className="shadow-none">
         <CardContent className="space-y-3 p-4">
           <div className="flex items-center justify-between gap-3">
@@ -580,7 +630,18 @@ export function AIPanel({
                     <div className="mb-1 text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{quickPromptTitle}</div>
                     {hasDraftPrompt ? (
                       <div className="mb-3 text-xs leading-6 text-slate-500">
-                        已把资料片段转成问题草稿。你可以直接发送，也可以先用下面的快捷动作改写一下。
+                        已经把当前复习上下文转成问题草稿。你可以直接发送，也可以先用下面的快捷动作改写一下。
+                      </div>
+                    ) : null}
+                    {activeDraftPrompt?.headline ? (
+                      <div className="mb-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs leading-6 text-slate-600">
+                        <div className="mb-1 font-medium text-slate-900">当前复习上下文</div>
+                        <div>{activeDraftPrompt.headline}</div>
+                      </div>
+                    ) : null}
+                    {activeDraftPrompt?.sourceLabel ? (
+                      <div className="mb-3">
+                        <Badge variant="outline">{activeDraftPrompt.sourceLabel}</Badge>
                       </div>
                     ) : null}
                     <div className="flex flex-wrap gap-2">
@@ -596,6 +657,21 @@ export function AIPanel({
                       <Button type="button" size="sm" variant="ghost" onClick={() => applyPromptTemplate("followup")}>
                         {hasDraftPrompt ? "生成追问" : "继续追问"}
                       </Button>
+                      {hasDraftPrompt ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setInput("");
+                            setActiveDraftPrompt(null);
+                            onDraftPromptCleared?.();
+                            requestAnimationFrame(() => inputRef.current?.focus());
+                          }}
+                        >
+                          结束当前复习
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}

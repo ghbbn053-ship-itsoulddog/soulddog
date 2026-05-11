@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import React, { Suspense, useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import MarkdownMessage from "@/components/MarkdownMessage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -33,7 +33,6 @@ import {
   Plus,
   Save,
   Send,
-  Sparkles,
   Trash2,
   User,
   WandSparkles,
@@ -117,10 +116,19 @@ interface WorkspaceItem {
   is_default: boolean;
 }
 
-interface CompositionData {
-  owner: string;
-  skills: string[];
-  mcp_tools: string[];
+interface HistoryMessage {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+  meta?: {
+    sources?: string[];
+    highlights?: MessageHighlight[];
+    blind_spots?: BlindSpotItem[];
+    tool_calls?: ToolCall[];
+    tool_trace?: ToolTrace[];
+    skill_matches?: SkillMatch[];
+  };
 }
 
 function toolDisplayName(name: string) {
@@ -217,7 +225,7 @@ function parseKnowledgeSource(source: string) {
   };
 }
 
-export default function ChatPage() {
+function ChatPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -411,7 +419,7 @@ export default function ChatPage() {
         ]);
         const workspaceJson = workspaceRes.ok ? await workspaceRes.json() : null;
         const prefJson = prefRes.ok ? await prefRes.json() : null;
-        const compositionJson = compositionRes.ok ? await compositionRes.json() : null;
+        await compositionRes.json().catch(() => null);
         const items: WorkspaceItem[] = workspaceJson?.workspaces || [];
         setWorkspaces(items);
         const requestedWorkspace = requestedWorkspaceId ? items.find((item) => item.id === requestedWorkspaceId) : null;
@@ -457,7 +465,7 @@ export default function ChatPage() {
           if (reqId !== activeHistoryReqRef.current) return;
           if (data?.messages) {
             setMessages(
-              data.messages.map((m: any) => ({
+              (data.messages as HistoryMessage[]).map((m) => ({
                 id: m.id,
                 role: m.role,
                 content: m.content,
@@ -855,7 +863,7 @@ export default function ChatPage() {
           if (reqId !== activeHistoryReqRef.current || !mounted) return;
           if (data?.messages) {
             setMessages(
-              data.messages.map((m: any) => ({
+              (data.messages as HistoryMessage[]).map((m) => ({
                 id: m.id,
                 role: m.role,
                 content: m.content,
@@ -1655,6 +1663,28 @@ export default function ChatPage() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function ChatPageFallback() {
+  return (
+    <div className="min-h-screen bg-slate-50 px-4 py-6 md:px-6 md:py-8">
+      <div className="mx-auto max-w-6xl">
+        <Card className="border-slate-200 shadow-none">
+          <CardContent className="flex min-h-[240px] items-center justify-center p-6 text-sm text-slate-500">
+            正在加载聊天页面...
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<ChatPageFallback />}>
+      <ChatPageContent />
+    </Suspense>
   );
 }
 
