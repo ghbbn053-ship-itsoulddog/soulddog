@@ -25,7 +25,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { InlineStatusMessage, PageLoading } from "@/components/ui/feedback";
 import { EducationStatus, normalizeScheduleData } from "@/lib/education-cache";
-import { getDevPreviewUsername, isDevPreviewEnabled } from "@/lib/dev-preview";
 
 type WorkspaceItem = {
   id: number;
@@ -139,17 +138,6 @@ export default function HomePage() {
     let mounted = true;
 
     const bootstrap = async () => {
-      if (isDevPreviewEnabled()) {
-        if (!mounted) return;
-        setUsername(getDevPreviewUsername());
-        setWorkspaces([]);
-        setSchedule([]);
-        setEducationStatus(null);
-        setConversations([]);
-        setLoading(false);
-        return;
-      }
-
       try {
         const meRes = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
         const me = meRes.ok ? await meRes.json() : null;

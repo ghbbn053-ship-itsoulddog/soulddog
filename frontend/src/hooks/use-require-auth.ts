@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getDevPreviewUsername, isDevPreviewEnabled } from "@/lib/dev-preview";
 
 type AuthState = {
   authenticated: boolean;
@@ -18,13 +17,6 @@ export function useRequireAuth(apiBase: string, fallbackPath = "/chat") {
     let active = true;
 
     const run = async () => {
-      if (isDevPreviewEnabled()) {
-        if (!active) return;
-        setUsername(getDevPreviewUsername());
-        setAuthLoading(false);
-        return;
-      }
-
       try {
         const meRes = await fetch(`${apiBase}/api/auth/me`, { credentials: "include" });
         const me = (meRes.ok ? await meRes.json() : null) as AuthState | null;

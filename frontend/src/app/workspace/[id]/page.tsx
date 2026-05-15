@@ -30,7 +30,6 @@ import { InlineStatusMessage, PageLoading } from "@/components/ui/feedback";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { getDevPreviewUsername, isDevPreviewEnabled } from "@/lib/dev-preview";
 
 type WorkspaceItem = {
   id: number;
@@ -468,31 +467,6 @@ export default function WorkspaceDetailPage() {
 
   useEffect(() => {
     const run = async () => {
-      if (isDevPreviewEnabled()) {
-        const previewWorkspace: WorkspaceItem = {
-          id: workspaceId,
-          slug: `workspace-${workspaceId}`,
-          name: `预览工作区 #${workspaceId}`,
-          description: "开发预览模式：当前页面展示结构与空态，不依赖真实登录和接口数据。",
-          is_default: workspaceId === 1,
-        };
-        setUsername(getDevPreviewUsername());
-        setWorkspace(previewWorkspace);
-        setDocuments([]);
-        setGraph({
-          workspace: { id: previewWorkspace.id, name: previewWorkspace.name, slug: previewWorkspace.slug },
-          nodes: [],
-          edges: [],
-        });
-        setLearningStatus(null);
-        setReminders([]);
-        setLearningMemories([]);
-        setLearningMemorySummary(null);
-        setDocumentChunks([]);
-        setLoading(false);
-        return;
-      }
-
       try {
         const meRes = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
         const me = meRes.ok ? await meRes.json() : null;
