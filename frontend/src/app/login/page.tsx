@@ -11,6 +11,9 @@ import { Input } from "@/components/ui/input";
 
 export default function LoginPage() {
   const router = useRouter();
+  const previewEnabled = ["1", "true", "on", "yes"].includes(
+    String(process.env.NEXT_PUBLIC_DEV_PREVIEW_AUTH || "").trim().toLowerCase()
+  );
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [captcha, setCaptcha] = useState("");
@@ -123,6 +126,34 @@ export default function LoginPage() {
       setCaptcha("");
     } catch {
       setError("网络错误，请检查网络连接");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePreviewLogin = async () => {
+    setIsLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE}/api/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          username: "24251102121",
+          password: "preview",
+          code: "preview",
+          captcha_session_id: "preview",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.detail || data?.message || `预览登录失败(${res.status})`);
+      }
+      localStorage.setItem("username", "24251102121");
+      router.replace("/workspace");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "预览登录失败");
     } finally {
       setIsLoading(false);
     }
@@ -264,6 +295,17 @@ export default function LoginPage() {
             </form>
 
             <div className="text-center text-xs text-slate-400">使用教务系统账号密码登录</div>
+            {previewEnabled ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+                <div className="text-sm font-medium text-amber-900">临时预览入口</div>
+                <div className="mt-2 text-xs leading-6 text-amber-800">
+                  当前用于网络异常时临时进入系统，仅用于查看和调试，不走教务验证码登录。
+                </div>
+                <Button type="button" variant="outline" className="mt-3 w-full" onClick={handlePreviewLogin} disabled={isLoading}>
+                  直接进入 24251102121
+                </Button>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       </div>

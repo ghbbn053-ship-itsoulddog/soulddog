@@ -3,6 +3,7 @@
 """
 
 import base64
+import os
 import re
 import time
 import secrets
@@ -21,6 +22,12 @@ from app.security import enforce_username_isolation
 
 router = APIRouter(tags=["认证与同步"])
 SYNC_REUSE_TTL_HOURS = 12
+DEV_PREVIEW_USERNAME = os.getenv("DEV_PREVIEW_USERNAME", "24251102121").strip() or "24251102121"
+
+
+def _is_dev_preview_auth_enabled() -> bool:
+    raw = str(os.getenv("ENABLE_DEV_PREVIEW_AUTH", "")).strip().lower()
+    return raw in {"1", "true", "on", "yes"}
 
 
 def select_server(username: str) -> str:
@@ -94,6 +101,37 @@ async def login(request: Request, background_tasks: BackgroundTasks):
         captcha_session_id = data.get("captcha_session_id")
         if not all([username, password, code]):
             raise HTTPException(status_code=400, detail="缺少必要参数")
+
+        if _is_dev_preview_auth_enabled() and str(username).strip() == DEV_PREVIEW_USERNAME:
+            auth_session_id = secrets.token_urlsafe(32)
+            session_store.set_auth_session(auth_session_id, username=DEV_PREVIEW_USERNAME, user_id=None)
+            resp = JSONResponse(
+                content={
+                    "success": True,
+                    "message": "预览模式登录成功",
+                    "username": DEV_PREVIEW_USERNAME,
+                    "session_id": "",
+                    "sync_status": "completed",
+                    "sync_message": "预览模式不执行教务同步",
+                }
+            )
+            resp.set_cookie(
+                key="session_username",
+                value=DEV_PREVIEW_USERNAME,
+                max_age=24 * 3600,
+                path="/",
+                samesite="lax",
+                httponly=False,
+            )
+            resp.set_cookie(
+                key="auth_session_id",
+                value=auth_session_id,
+                max_age=24 * 3600,
+                path="/",
+                samesite="lax",
+                httponly=True,
+            )
+            return resp
 
         server_index = None
         if captcha_session_id:
