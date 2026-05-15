@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -48,7 +48,7 @@ async def create_qr_login_session(payload: QrLoginSessionCreateRequest, http_req
 
 
 @router.get("/qr-login/session")
-async def get_qr_login_session(username: str, session_token: str, http_request: Optional[Request] = None):
+async def get_qr_login_session(username: str, session_token: str, http_request: Request = None):
     enforce_username_isolation(http_request, username)
     session = get_yuketang_qr_login_service().get_session_state(session_token)
     if not session:
@@ -63,7 +63,7 @@ async def wait_qr_login_session(
     username: str,
     session_token: str,
     timeout_seconds: float = 60.0,
-    http_request: Optional[Request] = None,
+    http_request: Request = None,
 ):
     enforce_username_isolation(http_request, username)
     session = get_yuketang_qr_login_service().get_session_state(session_token)
