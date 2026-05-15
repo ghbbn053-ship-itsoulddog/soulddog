@@ -151,7 +151,7 @@ class SuggestionService:
                     "suggestion_key": "validate-workspace-chat",
                     "suggestion_type": "review_reminder",
                     "title": "现在适合做一次工作区验证对话",
-                    "content": "工作区已经有文档，但今天还没有围绕它发起提问。可以直接进聊天页验证知识引用、来源跳转和回答质量。",
+                    "content": "工作区已经有文档，但今天还没有围绕它发起提问。适合直接回到当前工作区，在右侧 AI 面板验证知识引用、来源跳转和回答质量。",
                     "reason": "知识库不经过实际对话验证，无法判断检索和回答链是否真的生效。",
                     "tone": "normal",
                 }

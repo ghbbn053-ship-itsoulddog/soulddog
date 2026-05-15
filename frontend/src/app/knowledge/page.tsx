@@ -10,11 +10,13 @@ import {
   WorkbenchEmpty,
   WorkbenchSection,
   WorkbenchShell,
-  WorkbenchStatCard,
 } from "@/components/workspace/workbench-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { InlineStatusMessage, PageFallback, PageLoading } from "@/components/ui/feedback";
+import { useRequireAuth } from "@/hooks/use-require-auth";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -66,10 +68,23 @@ type KnowledgeOverviewResponse = {
   documents: KnowledgeDocument[];
 };
 
+type KnowledgeModuleKey = "workspaces" | "knowledge" | "chunks";
+
+type KnowledgeModuleErrors = Partial<Record<KnowledgeModuleKey, string>>;
+
+function getApiErrorMessage(payload: unknown, fallback: string) {
+  if (payload && typeof payload === "object") {
+    const detail = "detail" in payload ? String((payload as { detail?: unknown }).detail || "").trim() : "";
+    if (detail) return detail;
+    const message = "message" in payload ? String((payload as { message?: unknown }).message || "").trim() : "";
+    if (message) return message;
+  }
+  return fallback;
+}
+
 function KnowledgePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -80,6 +95,8 @@ function KnowledgePageContent() {
   const [stats, setStats] = useState<KnowledgeOverviewResponse["stats"] | null>(null);
   const [chunks, setChunks] = useState<KnowledgeChunk[]>([]);
   const [selectedDocId, setSelectedDocId] = useState(0);
+  const [workspaceSelectorOpen, setWorkspaceSelectorOpen] = useState(false);
+  const [chunkPreviewOpen, setChunkPreviewOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [textFilename, setTextFilename] = useState("notes.md");
@@ -87,68 +104,129 @@ function KnowledgePageContent() {
   const [textAuthority, setTextAuthority] = useState("user");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadAuthority, setUploadAuthority] = useState("user");
+  const [moduleErrors, setModuleErrors] = useState<KnowledgeModuleErrors>({});
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
+  const { username, authLoading } = useRequireAuth(API_BASE, "/workspace");
+
+  const setModuleError = useCallback((key: KnowledgeModuleKey, message: string) => {
+    setModuleErrors((prev) => (prev[key] === message ? prev : { ...prev, [key]: message }));
+  }, []);
+
+  const clearModuleError = useCallback((key: KnowledgeModuleKey) => {
+    setModuleErrors((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
 
   const refreshWorkspaces = useCallback(async (uname: string) => {
-    const res = await fetch(`${API_BASE}/api/workspace/${encodeURIComponent(uname)}`, { credentials: "include" });
-    const json = res.ok ? await res.json() : null;
-    const items = json?.workspaces || [];
-    setWorkspaces(items);
-    return items as WorkspaceItem[];
-  }, [API_BASE]);
+    try {
+      const res = await fetch(`${API_BASE}/api/workspace/${encodeURIComponent(uname)}`, { credentials: "include" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        setModuleError("workspaces", getApiErrorMessage(json, `工作区加载失败(${res.status})`));
+        setWorkspaces([]);
+        return [];
+      }
+      clearModuleError("workspaces");
+      const items = json?.workspaces || [];
+      setWorkspaces(items);
+      return items as WorkspaceItem[];
+    } catch {
+      setModuleError("workspaces", "工作区列表请求失败，请检查网络或登录状态");
+      setWorkspaces([]);
+      return [];
+    }
+  }, [API_BASE, clearModuleError, setModuleError]);
 
   const refreshKnowledge = useCallback(async (uname: string, wid: number) => {
     if (!wid) return;
-    const res = await fetch(`${API_BASE}/api/knowledge/${encodeURIComponent(uname)}/${wid}`, {
-      credentials: "include",
-    });
-    const json: KnowledgeOverviewResponse | null = res.ok ? await res.json() : null;
-    if (!json?.success) return;
-    setWorkspace(json.workspace || null);
-    setDocuments(json.documents || []);
-    setStats(json.stats || null);
-  }, [API_BASE]);
+    try {
+      const res = await fetch(`${API_BASE}/api/knowledge/${encodeURIComponent(uname)}/${wid}`, {
+        credentials: "include",
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setModuleError("knowledge", getApiErrorMessage(json, `知识库加载失败(${res.status})`));
+        setWorkspace(null);
+        setDocuments([]);
+        setStats(null);
+        return;
+      }
+      clearModuleError("knowledge");
+      setWorkspace(json.workspace || null);
+      setDocuments(json.documents || []);
+      setStats(json.stats || null);
+    } catch {
+      setModuleError("knowledge", "知识库请求失败，请检查网络或登录状态");
+      setWorkspace(null);
+      setDocuments([]);
+      setStats(null);
+    }
+  }, [API_BASE, clearModuleError, setModuleError]);
 
   const refreshChunks = useCallback(async (uname: string, wid: number, docId: number) => {
     if (!wid || !docId) {
       setChunks([]);
+      clearModuleError("chunks");
       return;
     }
-    const res = await fetch(`${API_BASE}/api/knowledge/${encodeURIComponent(uname)}/${wid}/documents/${docId}/chunks`, {
-      credentials: "include",
-    });
-    const json = res.ok ? await res.json() : null;
-    setChunks(json?.chunks || []);
-  }, [API_BASE]);
+    try {
+      const res = await fetch(`${API_BASE}/api/knowledge/${encodeURIComponent(uname)}/${wid}/documents/${docId}/chunks`, {
+        credentials: "include",
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        setModuleError("chunks", getApiErrorMessage(json, `切片加载失败(${res.status})`));
+        setChunks([]);
+        return;
+      }
+      clearModuleError("chunks");
+      setChunks(json?.chunks || []);
+    } catch {
+      setModuleError("chunks", "切片请求失败，请检查网络或登录状态");
+      setChunks([]);
+    }
+  }, [API_BASE, clearModuleError, setModuleError]);
+
+  const buildWorkspaceReferenceQuery = useCallback((
+    doc: KnowledgeDocument | null | undefined,
+    chunk?: KnowledgeChunk | null,
+  ) => {
+    if (!workspaceId || !doc) return "";
+    const params = new URLSearchParams();
+    params.set("doc", String(doc.id));
+    if (chunk && typeof chunk.chunk_index === "number") {
+      params.set("chunk", String(chunk.chunk_index));
+    }
+    if (doc.title) params.set("ref_title", doc.title);
+    const snippet = (chunk?.content || doc.summary || "").trim();
+    if (snippet) params.set("ref_snippet", snippet.slice(0, 240));
+    params.set("ref_source", chunk ? `Chunk #${chunk.chunk_index}` : `${doc.doc_type} 文档`);
+    return params.toString();
+  }, [workspaceId]);
 
   useEffect(() => {
+    if (authLoading || !username) return;
     const run = async () => {
       try {
-        const meRes = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
-        const me = meRes.ok ? await meRes.json() : null;
-        if (!me?.authenticated || !me?.username) {
-          router.replace("/login");
-          return;
-        }
-        const uname = String(me.username);
-        setUsername(uname);
-        const items = await refreshWorkspaces(uname);
+        const items = await refreshWorkspaces(username);
         const requestedWorkspaceId = Number(searchParams.get("workspace_id") || 0);
         const initialWorkspaceId = requestedWorkspaceId || items[0]?.id || 0;
         setWorkspaceId(initialWorkspaceId);
         if (initialWorkspaceId) {
-          await refreshKnowledge(uname, initialWorkspaceId);
+          await refreshKnowledge(username, initialWorkspaceId);
         }
-      } catch {
-        router.replace("/workspace");
       } finally {
         setLoading(false);
       }
     };
-    run();
-  }, [API_BASE, refreshKnowledge, refreshWorkspaces, router, searchParams]);
+    void run();
+  }, [authLoading, refreshKnowledge, refreshWorkspaces, searchParams, username]);
 
   useEffect(() => {
     if (!username || !workspaceId) return;
@@ -258,9 +336,7 @@ function KnowledgePageContent() {
     }
   };
 
-  if (loading) {
-    return <div className="p-6 text-sm text-slate-500">加载中...</div>;
-  }
+  if (loading || authLoading) return <PageLoading label="正在加载知识库..." />;
 
   return (
     <WorkbenchShell
@@ -279,11 +355,22 @@ function KnowledgePageContent() {
       footer={<PlatformSidebarFooter username={username} detail="Knowledge operator" />}
       topActions={
         <>
-          <Button variant="outline" onClick={() => workspaceId && refreshKnowledge(username, workspaceId)}>
+          <Button
+            variant="outline"
+            className="border-slate-300 bg-white/90 text-slate-700 hover:bg-slate-50"
+            onClick={() => workspaceId && refreshKnowledge(username, workspaceId)}
+          >
             <RefreshCcw className="h-4 w-4" />
             刷新
           </Button>
-          <Button onClick={() => router.push(workspaceId ? `/workspace/${workspaceId}` : "/workspace")}>
+          <Button
+            className="bg-blue-600 shadow-[0_14px_30px_rgba(31,111,235,0.22)] hover:bg-blue-700"
+            onClick={() => {
+              const doc = documents.find((item) => item.id === selectedDocId) || null;
+              const query = buildWorkspaceReferenceQuery(doc);
+              router.push(workspaceId ? `/workspace/${workspaceId}${query ? `?${query}` : ""}` : "/workspace");
+            }}
+          >
             <Bot className="h-4 w-4" />
             进入工作区对话
           </Button>
@@ -291,117 +378,102 @@ function KnowledgePageContent() {
       }
     >
       <div className="grid gap-4">
-        <div className="grid gap-4 md:grid-cols-4">
-          <WorkbenchStatCard label="Workspace" value={workspace?.name || "-"} hint="当前知识库所属工作区" />
-          <WorkbenchStatCard label="Documents" value={stats?.documents || 0} hint={`ready ${stats?.ready_documents || 0} · failed ${stats?.failed_documents || 0}`} />
-          <WorkbenchStatCard label="Chunks" value={stats?.knowledge_units || 0} hint={`relations ${stats?.relations || 0}`} />
-          <WorkbenchStatCard label="Tokens" value={stats?.total_tokens || 0} hint="知识体量估算" />
-        </div>
-
-        <WorkbenchSection title="快速入库" description="只保留最直接的入口：输入文本或选择文件，然后统一入库整理。">
-          <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        {moduleErrors.workspaces || moduleErrors.knowledge ? (
+          <InlineStatusMessage tone="warning">
+            {[moduleErrors.workspaces, moduleErrors.knowledge].filter(Boolean).join("；")}
+          </InlineStatusMessage>
+        ) : null}
+        <div className="rounded-[1.7rem] border border-slate-200/90 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(244,248,252,0.96)_56%,rgba(239,246,255,0.88))] px-5 py-5 shadow-[0_18px_46px_rgba(15,23,42,0.05)]">
+          <div className="grid gap-4 xl:grid-cols-[1.16fr_0.84fr]">
             <div className="space-y-3">
-              <Input value={textFilename} onChange={(e) => setTextFilename(e.target.value)} placeholder="例如：规则整理.md" />
-              <div className="flex flex-wrap gap-2">
-                {["user", "school", "system"].map((level) => (
-                  <Button
-                    key={level}
-                    type="button"
-                    size="sm"
-                    variant={textAuthority === level ? "default" : "outline"}
-                    onClick={() => setTextAuthority(level)}
-                  >
-                    {level}
-                  </Button>
-                ))}
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">{workspace?.name || "未选择工作区"}</Badge>
+                <Badge variant="outline">{stats?.documents || 0} 份文档</Badge>
+                <Badge variant="outline">{stats?.knowledge_units || 0} 个切片</Badge>
+                <Badge variant="secondary">tokens≈{stats?.total_tokens || 0}</Badge>
               </div>
-              <Input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} className="bg-white" />
+              <div className="max-w-3xl">
+                <div className="text-xl font-semibold tracking-[-0.03em] text-slate-950">知识库页只负责资料治理，不负责承载主要学习动作。</div>
+                <div className="mt-2 text-sm leading-6 text-slate-600">
+                  这里主要做三件事：切换工作区、清理和浏览文档、把有价值的资料片段送回工作区继续追问。入库仍然保留，但不再抢主画面。
+                </div>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {["user", "school", "system"].map((level) => (
-                  <Button
-                    key={`upload-${level}`}
-                    type="button"
-                    size="sm"
-                    variant={uploadAuthority === level ? "default" : "outline"}
-                    onClick={() => setUploadAuthority(level)}
-                  >
-                    {level}
-                  </Button>
-                ))}
+                <Button
+                  onClick={() => {
+                    const doc = documents.find((item) => item.id === selectedDocId) || null;
+                    const query = buildWorkspaceReferenceQuery(doc);
+                    router.push(workspaceId ? `/workspace/${workspaceId}${query ? `?${query}` : ""}` : "/workspace");
+                  }}
+                >
+                  <Bot className="h-4 w-4" />
+                  回到工作区对话
+                </Button>
+                <Button variant="outline" onClick={() => setWorkspaceSelectorOpen(true)}>
+                  切换工作区
+                </Button>
               </div>
             </div>
-            <div className="space-y-3">
-              <textarea
-                value={textContent}
-                onChange={(e) => setTextContent(e.target.value)}
-                placeholder="直接输入要整理进知识库的内容，或者上面选择文件后点击入库整理。"
-                className="min-h-[180px] w-full rounded-xl border border-[hsl(var(--border))] bg-white px-3 py-3 text-sm outline-none"
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={() => void saveTextDoc()} disabled={saving || !textContent.trim()}>
-                  入库整理
-                </Button>
-                <Button variant="outline" onClick={() => void uploadDocument()} disabled={saving || !uploadFile}>
-                  上传文件入库
-                </Button>
+
+            <div className="rounded-[1.5rem] border border-blue-100 bg-[linear-gradient(135deg,rgba(239,246,255,0.96),rgba(255,255,255,0.98))] p-5 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+              <div className="text-sm font-semibold text-slate-900">当前治理重点</div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3">
+                  <div className="text-xs text-slate-500">可用文档</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900">{stats?.ready_documents || 0}</div>
+                </div>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+                  <div className="text-xs text-slate-500">失败文档</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900">{stats?.failed_documents || 0}</div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3">
+                  <div className="text-xs text-slate-500">关系数</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900">{stats?.relations || 0}</div>
+                </div>
               </div>
             </div>
           </div>
-        </WorkbenchSection>
+        </div>
 
-        {msg ? (
-          <Card className="border-slate-200 bg-slate-50 shadow-none">
-            <CardContent className="p-4 text-sm text-slate-700">{msg}</CardContent>
-          </Card>
-        ) : null}
+        {msg ? <InlineStatusMessage>{msg}</InlineStatusMessage> : null}
 
-        <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)_420px]">
-          <WorkbenchSection title="工作区切换" description="按工作区隔离知识库。">
-            <div className="space-y-2">
-              {workspaces.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setWorkspaceId(item.id)}
-                  className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
-                    workspaceId === item.id ? "border-[hsl(var(--primary))] bg-blue-50/70" : "border-slate-200 bg-white hover:bg-slate-50"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-medium text-slate-900">{item.name}</div>
-                    {item.is_default ? <Badge variant="secondary">默认</Badge> : <Badge variant="outline">#{item.id}</Badge>}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">{item.description || item.slug}</div>
-                </button>
-              ))}
-            </div>
-          </WorkbenchSection>
-
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.34fr)_360px] 2xl:grid-cols-[minmax(0,1.34fr)_390px]">
           <WorkbenchSection
             title="文档管理"
-            description="筛选、浏览、删除文档，处理失败文档和重复版本。"
+            description="左侧作为主文档区，只负责筛选、清理和把资料送回工作区。切片明细和工作区切换都走右侧控制塔与弹层。"
             actions={
               <div className="flex flex-wrap gap-2">
-                <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索标题或摘要" className="h-9 w-56" />
-                <div className="flex gap-2">
-                  {["all", "ready", "failed"].map((item) => (
-                    <Button
-                      key={item}
-                      variant={statusFilter === item ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setStatusFilter(item)}
-                    >
-                      {item}
-                    </Button>
-                  ))}
-                </div>
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="搜索标题或摘要"
+                    className="h-9 w-56 border-slate-200 bg-white shadow-none"
+                  />
+                  <div className="flex gap-2">
+                    {["all", "ready", "failed"].map((item) => (
+                      <Button
+                        key={item}
+                        variant={statusFilter === item ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setStatusFilter(item)}
+                      >
+                        {item}
+                      </Button>
+                    ))}
+                  </div>
               </div>
             }
           >
             <ScrollArea className="h-[720px] pr-3">
               <div className="space-y-3">
-                {filteredDocuments.length === 0 ? (
-                  <WorkbenchEmpty title="没有匹配文档" description="可以切换工作区、清空筛选，或者先去工作区详情页上传资料。" />
+                {moduleErrors.knowledge ? (
+                  <InlineStatusMessage tone="warning">{moduleErrors.knowledge}</InlineStatusMessage>
+                ) : null}
+                {!moduleErrors.knowledge && documents.length === 0 ? (
+                  <WorkbenchEmpty title="当前工作区还没有文档" description="可以先在右侧快速入库，或者去工作区详情页上传资料。" tone="hint" />
+                ) : null}
+                {!moduleErrors.knowledge && documents.length > 0 && filteredDocuments.length === 0 ? (
+                  <WorkbenchEmpty title="没有匹配文档" description="可以切换工作区、清空筛选，或者先去工作区详情页上传资料。" tone="warning" />
                 ) : null}
                 {filteredDocuments.map((doc) => {
                   const authority = String(doc.metadata?.authority_level || "user");
@@ -411,11 +483,22 @@ function KnowledgePageContent() {
                   return (
                     <Card
                       key={doc.id}
-                      className={selectedDocId === doc.id ? "border-[hsl(var(--primary))] bg-blue-50/60 shadow-none" : "shadow-none"}
+                      className={
+                        selectedDocId === doc.id
+                          ? "border-blue-200 bg-[linear-gradient(135deg,rgba(219,234,254,0.72),rgba(255,255,255,0.98))] shadow-[0_12px_28px_rgba(31,111,235,0.08)]"
+                          : "border-slate-200/90 bg-white/96 shadow-[0_8px_22px_rgba(15,23,42,0.03)]"
+                      }
                     >
                       <CardContent className="space-y-3 p-4">
                         <div className="flex items-start justify-between gap-3">
-                          <button type="button" className="min-w-0 text-left" onClick={() => setSelectedDocId(doc.id)}>
+                          <button
+                            type="button"
+                            className="min-w-0 text-left"
+                            onClick={() => {
+                              setSelectedDocId(doc.id);
+                              setChunkPreviewOpen(true);
+                            }}
+                          >
                             <div className="truncate text-sm font-medium text-slate-900">{doc.title}</div>
                             <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{doc.summary || "无摘要"}</div>
                           </button>
@@ -434,11 +517,27 @@ function KnowledgePageContent() {
                           <Badge variant="outline">tokens≈{doc.token_estimate}</Badge>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          <Button size="sm" variant="outline" onClick={() => router.push(`/workspace/${workspaceId}?doc=${doc.id}`)}>
+                          <Button size="sm" onClick={() => {
+                            const query = buildWorkspaceReferenceQuery(doc);
+                            router.push(`/workspace/${workspaceId}${query ? `?${query}` : ""}`);
+                          }}>
+                            去工作区对话
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => {
+                            const query = buildWorkspaceReferenceQuery(doc);
+                            router.push(`/workspace/${workspaceId}${query ? `?${query}` : ""}`);
+                          }}>
                             定位到工作区
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => router.push(`/workspace/${workspaceId}`)}>
-                            去工作区对话
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedDocId(doc.id);
+                              setChunkPreviewOpen(true);
+                            }}
+                          >
+                            查看 Chunk
                           </Button>
                           <Button size="sm" variant="outline" disabled={saving} onClick={() => void handleDelete(doc.id)}>
                             <Trash2 className="h-4 w-4" />
@@ -453,12 +552,175 @@ function KnowledgePageContent() {
             </ScrollArea>
           </WorkbenchSection>
 
-          <WorkbenchSection title="Chunk 预览" description="独立管理台里直接看文档切片，判断知识是否适合被检索。">
+          <div className="grid gap-4 xl:sticky xl:top-6 xl:self-start">
+            <Card className="border-slate-200/90 bg-white/96 shadow-[0_12px_34px_rgba(15,23,42,0.04)]">
+              <CardContent className="space-y-4 p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">知识控制塔</div>
+                    <div className="mt-1 text-xs leading-6 text-slate-500">
+                      这里只保留工作区切换、切片预览和快速入库。真正的文档列表始终放在左侧。
+                    </div>
+                  </div>
+                  <Badge variant="outline">{workspace?.name || "未选择"}</Badge>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setWorkspaceSelectorOpen(true)}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left transition-colors hover:bg-slate-100"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">工作区切换</div>
+                      <div className="mt-1 text-xs leading-6 text-slate-500">
+                        {workspace?.description || workspace?.slug || "按工作区隔离知识库，避免不同课程和任务混在一起。"}
+                      </div>
+                    </div>
+                    <Badge variant="secondary">{workspaces.length}</Badge>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => selectedDocument && setChunkPreviewOpen(true)}
+                  disabled={!selectedDocument}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left transition-colors hover:bg-slate-100 disabled:cursor-not-allowed"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">Chunk 预览</div>
+                      <div className="mt-1 text-xs leading-6 text-slate-500">
+                        {selectedDocument
+                          ? selectedDocument.title
+                          : "先在左侧选中文档，再查看 chunk 切片和引用定位。"}
+                      </div>
+                    </div>
+                    <Badge variant={selectedDocument ? "secondary" : "outline"}>
+                      {selectedDocument ? `${chunks.length} chunks` : "未选择"}
+                    </Badge>
+                  </div>
+                </button>
+
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-[linear-gradient(180deg,rgba(248,250,252,0.94),rgba(255,255,255,0.98))] p-4">
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Quick Intake</div>
+                  <div className="mb-3 text-sm font-medium text-slate-900">按需补资料</div>
+                  <div className="space-y-3">
+                    <Input
+                      value={textFilename}
+                      onChange={(e) => setTextFilename(e.target.value)}
+                      placeholder="例如：规则整理.md"
+                      className="border-slate-200 bg-white shadow-none"
+                    />
+                    <textarea
+                      value={textContent}
+                      onChange={(e) => setTextContent(e.target.value)}
+                      placeholder="只在需要时补充内容，不要让入库流程盖过文档治理主线。"
+                      className="min-h-[140px] w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none"
+                    />
+                    <Input
+                      type="file"
+                      onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                      className="border-slate-200 bg-white shadow-none"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      {["user", "school", "system"].map((level) => (
+                        <Button
+                          key={`knowledge-${level}`}
+                          type="button"
+                          size="sm"
+                          variant={textAuthority === level ? "default" : "outline"}
+                          onClick={() => {
+                            setTextAuthority(level);
+                            setUploadAuthority(level);
+                          }}
+                        >
+                          {level}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => void saveTextDoc()} disabled={saving || !textContent.trim()}>
+                        入库整理
+                      </Button>
+                      <Button variant="outline" onClick={() => void uploadDocument()} disabled={saving || !uploadFile}>
+                        上传文件
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button className="flex-1" onClick={() => setWorkspaceSelectorOpen(true)}>
+                    选择工作区
+                  </Button>
+                  <Button variant="outline" className="flex-1" onClick={() => selectedDocument && setChunkPreviewOpen(true)} disabled={!selectedDocument}>
+                    查看切片
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      <Dialog open={workspaceSelectorOpen} onOpenChange={setWorkspaceSelectorOpen}>
+        <DialogContent className="max-w-2xl border-slate-200 bg-white p-0">
+          <DialogHeader className="border-b border-slate-200 px-6 pb-5 pt-6">
+            <DialogTitle className="text-xl font-semibold tracking-[-0.03em] text-slate-950">工作区切换</DialogTitle>
+            <DialogDescription className="text-sm leading-6 text-slate-600">
+              按工作区隔离知识库，避免不同课程和任务混在一起。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 px-6 pb-6 pt-5">
+            {moduleErrors.workspaces ? (
+              <InlineStatusMessage tone="warning">{moduleErrors.workspaces}</InlineStatusMessage>
+            ) : null}
+            {!moduleErrors.workspaces && workspaces.length === 0 ? (
+              <WorkbenchEmpty title="暂无可切换工作区" description="当前没有读取到工作区列表，稍后可以刷新重试。" tone="warning" />
+            ) : null}
+            {workspaces.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setWorkspaceId(item.id);
+                  setWorkspaceSelectorOpen(false);
+                }}
+                className={`w-full rounded-[1.2rem] border px-3.5 py-3 text-left transition-all ${
+                  workspaceId === item.id
+                    ? "border-blue-200 bg-[linear-gradient(135deg,rgba(219,234,254,0.9),rgba(255,255,255,0.95))] shadow-[0_10px_24px_rgba(31,111,235,0.08)]"
+                    : "border-slate-200 bg-white/96 hover:border-slate-300 hover:bg-slate-50 hover:shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium text-slate-900">{item.name}</div>
+                  {item.is_default ? <Badge variant="secondary">默认</Badge> : <Badge variant="outline">#{item.id}</Badge>}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">{item.description || item.slug}</div>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={chunkPreviewOpen} onOpenChange={setChunkPreviewOpen}>
+        <DialogContent className="max-w-4xl border-slate-200 bg-white p-0">
+          <DialogHeader className="border-b border-slate-200 px-6 pb-5 pt-6">
+            <DialogTitle className="text-xl font-semibold tracking-[-0.03em] text-slate-950">Chunk 预览</DialogTitle>
+            <DialogDescription className="text-sm leading-6 text-slate-600">
+              这里直接看文档切片，判断知识是否适合被检索，再决定要不要回工作区继续验证。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-6 pb-6 pt-5">
             {!selectedDocument ? (
-              <WorkbenchEmpty title="尚未选中文档" description="左侧点一份文档，这里会加载它的 chunk 列表。" />
+              <WorkbenchEmpty title="尚未选中文档" description="先在文档列表里点一份文档，这里会加载它的 chunk 列表。" tone="hint" />
             ) : (
               <div className="space-y-3">
-                <Card className="shadow-none">
+                {moduleErrors.chunks ? (
+                  <InlineStatusMessage tone="warning">{moduleErrors.chunks}</InlineStatusMessage>
+                ) : null}
+                <Card className="border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] shadow-[0_10px_24px_rgba(15,23,42,0.03)]">
                   <CardContent className="space-y-2 p-4">
                     <div className="text-sm font-medium text-slate-900">{selectedDocument.title}</div>
                     <div className="text-xs text-slate-500">
@@ -466,13 +728,13 @@ function KnowledgePageContent() {
                     </div>
                   </CardContent>
                 </Card>
-                <ScrollArea className="h-[620px] pr-3">
+                <ScrollArea className="h-[560px] pr-3">
                   <div className="space-y-3">
-                    {chunks.length === 0 ? (
-                      <WorkbenchEmpty title="暂无 chunk" description="这份文档还没有可读切片，可能解析失败或尚未完成处理。" />
+                    {!moduleErrors.chunks && chunks.length === 0 ? (
+                      <WorkbenchEmpty title="暂无 chunk" description="这份文档还没有可读切片，可能解析失败或尚未完成处理。" tone="warning" />
                     ) : null}
                     {chunks.map((chunk) => (
-                      <Card key={chunk.id} className="shadow-none">
+                      <Card key={chunk.id} className="border-slate-200/90 bg-white/96 shadow-[0_8px_20px_rgba(15,23,42,0.03)]">
                         <CardContent className="space-y-2 p-4">
                           <div className="flex items-center justify-between gap-2">
                             <div className="text-sm font-medium text-slate-900">
@@ -485,7 +747,10 @@ function KnowledgePageContent() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => router.push(`/workspace/${workspaceId}?doc=${selectedDocument.id}&chunk=${chunk.chunk_index}`)}
+                              onClick={() => {
+                                const query = buildWorkspaceReferenceQuery(selectedDocument, chunk);
+                                router.push(`/workspace/${workspaceId}${query ? `?${query}` : ""}`);
+                              }}
                             >
                               <FileSearch className="h-4 w-4" />
                               在工作区定位
@@ -498,25 +763,15 @@ function KnowledgePageContent() {
                 </ScrollArea>
               </div>
             )}
-          </WorkbenchSection>
-        </div>
-      </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </WorkbenchShell>
   );
 }
 
 function KnowledgePageFallback() {
-  return (
-    <div className="min-h-screen bg-slate-50 px-4 py-6 md:px-6 md:py-8">
-      <div className="mx-auto max-w-6xl">
-        <Card className="border-slate-200 shadow-none">
-          <CardContent className="flex min-h-[240px] items-center justify-center p-6 text-sm text-slate-500">
-            正在加载知识库页面...
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
+  return <PageFallback label="正在加载知识库页面..." />;
 }
 
 export default function KnowledgePage() {

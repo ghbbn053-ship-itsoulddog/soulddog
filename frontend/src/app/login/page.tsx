@@ -114,7 +114,7 @@ export default function LoginPage() {
         localStorage.setItem("username", username);
         setSyncStatus("syncing");
         setError("");
-        router.replace("/chat");
+        router.replace("/workspace");
         return;
       }
 
@@ -142,7 +142,7 @@ export default function LoginPage() {
             <div className="space-y-3">
               <CardTitle className="text-4xl font-semibold tracking-[-0.04em] text-slate-950">教务登录</CardTitle>
               <CardDescription className="max-w-md text-sm leading-6 text-slate-600">
-                登录后进入快速会话与工作区。教务同步仍由后端继续执行，但登录页不再强行卡住等待。
+                登录后优先进入工作区入口。教务同步仍由后端继续执行，但登录页不再强行卡住等待。
               </CardDescription>
             </div>
           </CardHeader>
@@ -154,7 +154,7 @@ export default function LoginPage() {
                   登录说明
                 </div>
                 <div>使用教务系统账号和验证码登录。</div>
-                <div>登录后默认进入 `/chat`，后台继续同步数据。</div>
+                <div>登录后默认进入 `/workspace`，后台继续同步数据。</div>
                 <div>如需切换账号，直接重新访问 `/login` 即可。</div>
               </CardContent>
             </Card>
@@ -168,7 +168,7 @@ export default function LoginPage() {
               <Card className="border-transparent bg-slate-50 shadow-none">
                 <CardContent className="p-4">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">跳转页面</div>
-                  <div className="mt-2 text-lg font-semibold text-slate-950">快速会话</div>
+                  <div className="mt-2 text-lg font-semibold text-slate-950">工作区入口</div>
                 </CardContent>
               </Card>
             </div>
@@ -197,7 +197,7 @@ export default function LoginPage() {
               >
                 {syncStatus === "syncing" ? "登录成功，后台正在同步教务数据..." : null}
                 {syncStatus === "completed" ? "数据同步完成，正在跳转..." : null}
-                {syncStatus === "failed" ? "数据同步失败，将进入基础对话模式。" : null}
+                {syncStatus === "failed" ? "数据同步失败，仍会进入工作区基础模式。" : null}
               </div>
             ) : null}
 

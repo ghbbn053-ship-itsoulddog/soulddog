@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, Blocks, Bot, LibraryBig, Network, Wrench } from "lucide-react";
 
@@ -15,6 +15,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { InlineStatusMessage, PageLoading } from "@/components/ui/feedback";
+import { useRequireAuth } from "@/hooks/use-require-auth";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 type CompositionData = {
@@ -98,7 +100,6 @@ const BOUNDARY_LABELS: Record<string, string> = {
 
 export default function CompositionPage() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -110,8 +111,9 @@ export default function CompositionPage() {
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
+  const { username, authLoading } = useRequireAuth(API_BASE);
 
-  const refresh = async (uname: string) => {
+  const refresh = useCallback(async (uname: string) => {
     const [compositionRes, skillsRes, mcpRes, workspaceRes, prefRes] = await Promise.all([
       fetch(`${API_BASE}/api/composition/${encodeURIComponent(uname)}`, { credentials: "include" }),
       fetch(`${API_BASE}/api/platform/${encodeURIComponent(uname)}/skills`, { credentials: "include" }),
@@ -134,7 +136,7 @@ export default function CompositionPage() {
       workspaceItems[0] ||
       null;
     setWorkspaceId(preferredWorkspace?.id || null);
-  };
+  }, [API_BASE]);
 
   const updateWorkspacePreference = async (uname: string, nextWorkspaceId: number) => {
     const nextWorkspace = workspaces.find((item) => item.id === nextWorkspaceId);
@@ -152,25 +154,16 @@ export default function CompositionPage() {
   };
 
   useEffect(() => {
+    if (authLoading || !username) return;
     const run = async () => {
       try {
-        const meRes = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
-        const me = meRes.ok ? await meRes.json() : null;
-        if (!me?.authenticated || !me?.username) {
-          router.replace("/login");
-          return;
-        }
-        const uname = String(me.username);
-        setUsername(uname);
-        await refresh(uname);
-      } catch {
-        router.replace("/chat");
+        await refresh(username);
       } finally {
         setLoading(false);
       }
     };
-    run();
-  }, [API_BASE, router]);
+    void run();
+  }, [authLoading, refresh, username]);
 
   const skillEnabled = (name: string) => {
     if (!data) return true;
@@ -295,7 +288,7 @@ export default function CompositionPage() {
       items.push("现在最适合补一个执行类或检索类 MCP，让 Skill 有真实工具可调用。");
     }
     if (enabledSkillDetails.length > 0 && enabledMcpDetails.length > 0) {
-      items.push("当前已经具备组合基础，可以直接进工作区或聊天页验证 tool trace 和知识命中。");
+      items.push("当前已经具备组合基础，优先回到工作区验证 tool trace 和知识命中；只有超出当前上下文时再走聊天页。");
     }
     if (!workspaceId) {
       items.push("先绑定一个工作区，再去做知识导入和对话验证，不要让编排脱离上下文。");
@@ -308,8 +301,8 @@ export default function CompositionPage() {
     [workspaces, workspaceId]
   );
 
-  if (loading) {
-    return <div className="p-6 text-sm text-slate-500">加载中...</div>;
+  if (loading || authLoading) {
+    return <PageLoading label="正在加载组合编排..." />;
   }
 
   return (
@@ -435,11 +428,7 @@ export default function CompositionPage() {
           </WorkbenchSection>
         </div>
 
-        {msg ? (
-          <Card className="border-slate-200 bg-slate-50 shadow-none">
-            <CardContent className="p-4 text-sm text-slate-700">{msg}</CardContent>
-          </Card>
-        ) : null}
+        {msg ? <InlineStatusMessage>{msg}</InlineStatusMessage> : null}
 
         <div className="grid gap-4 lg:grid-cols-2">
           <WorkbenchSection title="Skill 拼装" description="启停 Skill，决定路由是否允许进入对应能力链路。">

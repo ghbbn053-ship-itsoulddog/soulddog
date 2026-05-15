@@ -400,8 +400,11 @@ def _capture_learning_memory(
     source_refs: Optional[dict] = None,
     conversation_id: int | None = None,
     prompt_strategy: str = "",
+    generated_by: str = "",
 ):
     if not workspace_id:
+        return None
+    if (generated_by or "").strip() == "learning_assistant_followup":
         return None
     try:
         svc = get_learning_assistant_service()
@@ -458,6 +461,7 @@ class ChatRequest(BaseModel):
     execution_mode: Optional[str] = "chat"
     agent_framework: Optional[str] = "openai_agents"
     prompt_strategy: Optional[str] = None
+    generated_by: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -719,6 +723,7 @@ async def send_message(request: ChatRequest, http_request: Request, db: Session 
             },
             conversation_id=conversation.id,
             prompt_strategy=(request.prompt_strategy or "").strip(),
+            generated_by=(request.generated_by or "").strip(),
         )
         
         return ChatResponse(
@@ -1117,8 +1122,9 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                             "highlights": response_highlights,
                         },
                         conversation_id=conversation.id,
-            prompt_strategy=(request.prompt_strategy or "").strip(),
-        )
+                        prompt_strategy=(request.prompt_strategy or "").strip(),
+                        generated_by=(request.generated_by or "").strip(),
+                    )
 
                     yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info, 'tool_trace': tool_trace_info, 'skill_matches': skill_matches_info, 'sources': response_sources, 'highlights': response_highlights, 'blind_spots': learning_blind_spots})}\n\n"
                     done_sent = True
@@ -1172,8 +1178,9 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                                         "highlights": response_highlights,
                                     },
                                     conversation_id=conversation.id,
-            prompt_strategy=(request.prompt_strategy or "").strip(),
-        )
+                                    prompt_strategy=(request.prompt_strategy or "").strip(),
+                                    generated_by=(request.generated_by or "").strip(),
+                                )
 
                                 yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_calls': tool_calls_info, 'tool_trace': tool_trace_info, 'skill_matches': skill_matches_info, 'sources': response_sources, 'highlights': response_highlights, 'blind_spots': learning_blind_spots})}\n\n"
                                 done_sent = True
@@ -1251,8 +1258,9 @@ async def send_message_stream(request: ChatRequest, http_request: Request, db: S
                         "highlights": response_highlights,
                     },
                     conversation_id=conversation.id,
-            prompt_strategy=(request.prompt_strategy or "").strip(),
-        )
+                    prompt_strategy=(request.prompt_strategy or "").strip(),
+                    generated_by=(request.generated_by or "").strip(),
+                )
 
                 yield f"data: {json.dumps({'done': True, 'conversation_id': conversation.id, 'tool_trace': tool_trace_info, 'skill_matches': skill_matches_info, 'sources': response_sources, 'highlights': response_highlights, 'blind_spots': learning_blind_spots})}\n\n"
                 done_sent = True

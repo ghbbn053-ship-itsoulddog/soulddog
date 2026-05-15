@@ -43,7 +43,7 @@ _CIRCUIT: dict[str, dict] = {}
 
 def _resolve_owner(request: Request | None) -> str:
     if request is None:
-        return "system"
+        raise HTTPException(status_code=401, detail="未检测到登录会话，请重新登录")
     auth_session_id = request.cookies.get("auth_session_id")
     app_obj = request.scope.get("app")
     session_store = getattr(getattr(app_obj, "state", None), "session_store", None) if app_obj else None
@@ -51,7 +51,7 @@ def _resolve_owner(request: Request | None) -> str:
         auth_payload = session_store.get_auth_session(auth_session_id)
         if auth_payload and auth_payload.get("username"):
             return str(auth_payload.get("username"))
-    return "system"
+    raise HTTPException(status_code=401, detail="未检测到有效登录会话，请重新登录")
 
 
 def _assert_task_owner(task: dict, owner: str):
@@ -189,7 +189,7 @@ def _append_history(root: Path, record: dict):
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
-def _read_history(root: Path, limit: int = 20) -> list[dict]:
+def _read_history(root: Path, limit: int = 20, owner: str | None = None) -> list[dict]:
     hp = _history_path(root)
     if not hp.exists():
         return []
@@ -200,9 +200,12 @@ def _read_history(root: Path, limit: int = 20) -> list[dict]:
         if not line:
             continue
         try:
-            rows.append(json.loads(line))
+            item = json.loads(line)
         except Exception:
             continue
+        if owner and str(item.get("owner", "")) != owner:
+            continue
+        rows.append(item)
         if len(rows) >= max(1, limit):
             break
     return rows
@@ -534,6 +537,7 @@ def _run_pipeline_task(root: Path, run_id: str):
             root,
             {
                 "run_id": run_id,
+                "owner": str(task.get("owner", "")),
                 "started_at": started_at,
                 "duration_ms": result["duration_ms"],
                 "params": payload.model_dump(),
@@ -564,6 +568,7 @@ def _run_pipeline_task(root: Path, run_id: str):
             root,
             {
                 "run_id": run_id,
+                "owner": str(task.get("owner", "")),
                 "started_at": started_at,
                 "duration_ms": total_ms,
                 "params": payload.model_dump(),
@@ -621,6 +626,7 @@ def _run_pipeline_task(root: Path, run_id: str):
             root,
             {
                 "run_id": run_id,
+                "owner": str(task.get("owner", "")),
                 "started_at": started_at,
                 "duration_ms": total_ms,
                 "params": payload.model_dump(),
@@ -896,7 +902,8 @@ def _execute_pipeline(root: Path, payload: IntakePipelineRequest, run_id: str, s
 
 
 @router.post("/run")
-async def run_autopilot(payload: IntakeRunRequest):
+async def run_autopilot(payload: IntakeRunRequest, http_request: Request):
+    _resolve_owner(http_request)
     root = _repo_root()
     script = root / "scripts" / "github_autopilot.py"
     if not script.exists():
@@ -930,7 +937,8 @@ async def run_autopilot(payload: IntakeRunRequest):
 
 
 @router.get("/report")
-async def get_autopilot_report():
+async def get_autopilot_report(http_request: Request):
+    _resolve_owner(http_request)
     root = _repo_root()
     report = root / "docs" / "github-intake" / "autopilot-report.json"
     if not report.exists():
@@ -943,7 +951,8 @@ async def get_autopilot_report():
 
 
 @router.post("/generate-mcp-tools")
-async def generate_mcp_tools_from_report():
+async def generate_mcp_tools_from_report(http_request: Request):
+    _resolve_owner(http_request)
     root = _repo_root()
     script = root / "scripts" / "generate_mcp_external_tools.py"
     if not script.exists():
@@ -959,7 +968,8 @@ async def generate_mcp_tools_from_report():
 
 
 @router.post("/probe-mcp-tools")
-async def probe_generated_mcp_tools(auto_enable: bool = False):
+async def probe_generated_mcp_tools(auto_enable: bool = False, http_request: Request = None):
+    _resolve_owner(http_request)
     root = _repo_root()
     script = root / "scripts" / "probe_mcp_external_tools.py"
     if not script.exists():
@@ -972,7 +982,8 @@ async def probe_generated_mcp_tools(auto_enable: bool = False):
 
 
 @router.post("/enrich-mcp-tools")
-async def enrich_generated_mcp_tools():
+async def enrich_generated_mcp_tools(http_request: Request):
+    _resolve_owner(http_request)
     root = _repo_root()
     script = root / "scripts" / "enrich_mcp_external_tools.py"
     if not script.exists():
@@ -1050,42 +1061,59 @@ async def run_pipeline(payload: IntakePipelineRequest, http_request: Request):
 
 
 @router.get("/pipeline/history")
-async def get_pipeline_history(limit: int = 20):
+async def get_pipeline_history(limit: int = 20, http_request: Request = None):
     root = _repo_root()
-    rows = _read_history(root, limit=limit)
+    owner = _resolve_owner(http_request)
+    rows = _read_history(root, limit=limit, owner=owner)
     return {"success": True, "count": len(rows), "items": rows}
 
 
 @router.get("/pipeline/latest")
-async def get_pipeline_latest():
+async def get_pipeline_latest(http_request: Request):
     root = _repo_root()
-    rows = _read_history(root, limit=1)
+    owner = _resolve_owner(http_request)
+    rows = _read_history(root, limit=1, owner=owner)
     if not rows:
         raise HTTPException(status_code=404, detail="暂无 pipeline 运行记录")
     return {"success": True, "item": rows[0]}
 
 
 @router.get("/pipeline/state")
-async def get_pipeline_state():
+async def get_pipeline_state(http_request: Request):
     root = _repo_root()
+    owner = _resolve_owner(http_request)
     with _WORKER_LOCK:
         workers_alive = len([t for t in _WORKER_THREADS if t.is_alive()])
+    owner_tasks = [t for t in _read_tasks(root) if str(t.get("owner", "")) == owner]
+    owner_running = sum(1 for t in owner_tasks if str(t.get("status", "")) == "running")
+    owner_queue = sum(1 for t in owner_tasks if str(t.get("status", "")) in {"queued", "claimed"})
+    latest_owner_task = owner_tasks[0] if owner_tasks else None
     return {
         "success": True,
-        "state": _read_state(root),
-        "queue_size": _queued_count(root),
-        "running_count": _running_count(root),
+        "state": {
+            **_read_state(root),
+            "owner": owner,
+            "latest_owner_run_id": latest_owner_task.get("run_id") if latest_owner_task else "",
+        },
+        "queue_size": owner_queue,
+        "running_count": owner_running,
         "worker_count": _WORKER_COUNT,
         "workers_alive": workers_alive,
     }
 
 
 @router.post("/pipeline/unlock")
-async def force_unlock_pipeline():
+async def force_unlock_pipeline(http_request: Request):
     root = _repo_root()
+    owner = _resolve_owner(http_request)
     state = _read_state(root)
     if not state.get("running"):
         return {"success": True, "message": "pipeline 未锁定", "state": state}
+    run_id = str(state.get("run_id", "")).strip()
+    if run_id:
+        task = _get_task(root, run_id)
+        if task:
+            _assert_task_owner(task, owner)
     _write_state(
         root,
         {

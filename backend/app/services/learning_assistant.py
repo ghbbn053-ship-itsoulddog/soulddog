@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 import secrets
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -90,6 +90,56 @@ def _workspace_filter(query, workspace_id: int | None):
 
 
 class LearningAssistantService:
+    def get_workspace_memory_briefs(
+        self,
+        db: Session,
+        owner_username: str,
+        workspace_ids: List[int],
+    ) -> Dict[int, Dict[str, Any]]:
+        ids = [int(item) for item in workspace_ids if int(item or 0) > 0]
+        if not ids:
+            return {}
+
+        rows = (
+            db.query(LearningStudyMemory)
+            .filter(
+                LearningStudyMemory.owner_username == owner_username,
+                LearningStudyMemory.workspace_id.in_(ids),
+            )
+            .order_by(
+                LearningStudyMemory.workspace_id.asc(),
+                (LearningStudyMemory.status == "resolved").asc(),
+                LearningStudyMemory.importance.desc(),
+                LearningStudyMemory.updated_at.desc(),
+                LearningStudyMemory.created_at.desc(),
+            )
+            .all()
+        )
+
+        grouped: Dict[int, List[LearningStudyMemory]] = defaultdict(list)
+        for row in rows:
+            wid = int(row.workspace_id or 0)
+            if wid > 0:
+                grouped[wid].append(row)
+
+        output: Dict[int, Dict[str, Any]] = {}
+        for wid in ids:
+            items = grouped.get(wid, [])
+            unresolved = [item for item in items if (item.status or "").strip() != "resolved"]
+            summary = self._build_memory_summary_payload(items, unresolved)
+            summary["recommended_followup"] = self._build_recommended_followup(
+                unresolved,
+                summary.get("prompt_strategy_rank") or [],
+            )
+            output[wid] = {
+                "unresolved": int(summary.get("unresolved") or 0),
+                "resolved": int(summary.get("resolved") or 0),
+                "review_priority": summary.get("review_priority") or [],
+                "recommended_followup": summary.get("recommended_followup"),
+                "prompt_strategy_rank": summary.get("prompt_strategy_rank") or [],
+            }
+        return output
+
     def ensure_binding(self, db: Session, owner_username: str) -> ExternalServiceBinding:
         binding = (
             db.query(ExternalServiceBinding)
@@ -881,6 +931,33 @@ class LearningAssistantService:
         ]
         if any(fragment in q for fragment in low_value_fragments):
             return False
+        generated_prompt_prefixes = [
+            "请围绕这条当前最该继续解决的学习疑问辅导我",
+            "请围绕这个高优先级学习疑问继续辅导我",
+            "请围绕这些筛选后的学习疑问继续辅导我",
+            "请围绕我最近的学习疑问继续辅导我",
+            "请围绕这门课当前最集中的学习卡点继续辅导我",
+            "我正在看资料《",
+        ]
+        generated_prompt_fragments = [
+            "当前优先问题有：",
+            "请先判断我真正没弄懂的是哪一层",
+            "请先帮我判断我最可能卡在哪一层",
+            "请先判断我为什么会反复卡在这里",
+            "请基于这段内容帮我提炼出我应该追问的关键问题",
+            "再给我当前工作区里最适合直接继续问的一句追问",
+            "再给我一个最适合继续发给工作区 AI 的具体追问",
+            "并直接给我最短的追问方式",
+            "已有回答摘要：",
+            "相关知识点：",
+            "问题类型：",
+            "当前课程：",
+            "建议策略：",
+        ]
+        if any(q.startswith(prefix) for prefix in generated_prompt_prefixes):
+            return False
+        if sum(1 for fragment in generated_prompt_fragments if fragment in q) >= 2:
+            return False
         learning_signal_fragments = [
             "为什么",
             "怎么",
@@ -1083,41 +1160,11 @@ class LearningAssistantService:
         db.refresh(row)
         return row
 
-    def get_learning_memory_overview(
-        self,
-        db: Session,
-        owner_username: str,
-        workspace_id: int | None = None,
-        *,
-        status: str = "",
-        query: str = "",
-        course_name: str = "",
-        question_type: str = "",
-        knowledge_point: str = "",
-        limit: int = 20,
+    @staticmethod
+    def _build_memory_summary_payload(
+        items: List[LearningStudyMemory],
+        unresolved: List[LearningStudyMemory],
     ) -> Dict[str, Any]:
-        all_items = self.list_learning_memories(
-            db,
-            owner_username,
-            workspace_id=workspace_id,
-            status=status,
-            query=query,
-            limit=limit,
-            apply_limit=False,
-        )
-        items = self.list_learning_memories(
-            db,
-            owner_username,
-            workspace_id=workspace_id,
-            status=status,
-            query=query,
-            course_name=course_name,
-            question_type=question_type,
-            knowledge_point=knowledge_point,
-            limit=limit,
-            apply_limit=True,
-        )
-        unresolved = [item for item in all_items if (item.status or "").strip() != "resolved"]
         by_status: Dict[str, int] = {}
         by_type: Dict[str, int] = {}
         by_course: Dict[str, int] = {}
@@ -1125,7 +1172,10 @@ class LearningAssistantService:
         points_counter: Counter[str] = Counter()
         source_material_counter: Counter[str] = Counter()
         source_material_map: Dict[str, Dict[str, Any]] = {}
-        for item in all_items:
+        prompt_strategy_counter: Counter[str] = Counter()
+        unresolved_points_by_course: Dict[str, Counter[str]] = {}
+
+        for item in items:
             by_status[item.status] = by_status.get(item.status, 0) + 1
             by_type[item.question_type] = by_type.get(item.question_type, 0) + 1
             course = item.course_name or "未命名课程"
@@ -1162,10 +1212,8 @@ class LearningAssistantService:
                             "hit_count": 0,
                         },
                     )
-        course_rank = sorted(
-            by_course.items(),
-            key=lambda pair: (-pair[1], pair[0]),
-        )
+
+        course_rank = sorted(by_course.items(), key=lambda pair: (-pair[1], pair[0]))
         review_priority = sorted(
             [
                 {
@@ -1180,6 +1228,7 @@ class LearningAssistantService:
             ],
             key=lambda item: (-item["importance"], item["course_name"], item["question_summary"]),
         )[:5]
+
         source_material_rank = []
         for key, count in source_material_counter.most_common(5):
             payload = dict(source_material_map.get(key) or {})
@@ -1187,6 +1236,7 @@ class LearningAssistantService:
                 continue
             payload["hit_count"] = count
             source_material_rank.append(payload)
+
         course_insights = []
         for course_name, total in sorted(by_course.items(), key=lambda pair: (-pair[1], pair[0]))[:8]:
             type_counter = by_course_type.get(course_name) or Counter()
@@ -1207,9 +1257,7 @@ class LearningAssistantService:
                     "dominant_type_count": dominant_count,
                 }
             )
-        blind_spots = []
-        prompt_strategy_counter: Counter[str] = Counter()
-        unresolved_points_by_course: Dict[str, Counter[str]] = {}
+
         for item in unresolved:
             course_name = item.course_name or "未命名课程"
             unresolved_points_by_course.setdefault(course_name, Counter())
@@ -1221,6 +1269,8 @@ class LearningAssistantService:
                 text = str(point).strip()
                 if text:
                     unresolved_points_by_course[course_name][text] += 1
+
+        blind_spots = []
         for course_name, total in sorted(by_course.items(), key=lambda pair: (-pair[1], pair[0]))[:8]:
             unresolved_count = sum(
                 1
@@ -1250,27 +1300,179 @@ class LearningAssistantService:
         blind_spots.sort(
             key=lambda item: (-item["unresolved"], -item["dominant_type_count"], item["course_name"])
         )
+
         prompt_strategy_rank = [
             {"strategy": strategy, "count": count}
             for strategy, count in prompt_strategy_counter.most_common(3)
         ]
+
+        return {
+            "total": len(items),
+            "unresolved": len(unresolved),
+            "resolved": sum(1 for item in items if (item.status or "").strip() == "resolved"),
+            "by_status": by_status,
+            "by_type": by_type,
+            "by_course": by_course,
+            "course_rank": [name for name, _ in course_rank[:8]],
+            "top_points": [item for item, _ in points_counter.most_common(8)],
+            "review_priority": review_priority,
+            "top_source_materials": source_material_rank,
+            "course_insights": course_insights,
+            "blind_spots": blind_spots[:6],
+            "prompt_strategy_rank": prompt_strategy_rank,
+        }
+
+    @staticmethod
+    def _build_recommended_followup(
+        unresolved: List[LearningStudyMemory],
+        prompt_strategy_rank: List[Dict[str, Any]],
+        *,
+        course_name: str = "",
+        question_type: str = "",
+        knowledge_point: str = "",
+    ) -> Dict[str, Any] | None:
+        if not unresolved:
+            return None
+
+        top = sorted(
+            unresolved,
+            key=lambda item: (
+                -int(item.importance or 0),
+                str(item.course_name or "未命名课程"),
+                str(item.question_summary or item.question_text or ""),
+            ),
+        )[0]
+        strategy = ""
+        if prompt_strategy_rank:
+            strategy = str(prompt_strategy_rank[0].get("strategy") or "").strip()
+
+        point_list = [str(point).strip() for point in (top.knowledge_points_json or []) if str(point).strip()]
+        primary_point = knowledge_point.strip() or (point_list[0] if point_list else "")
+        course_label = course_name.strip() or top.course_name or ""
+        type_label = (question_type.strip() or top.question_type or "general").strip()
+        summary = (top.question_summary or top.question_text or "").strip()
+        answer_summary = (top.answer_summary or "").strip()
+
+        if primary_point and type_label == "concept":
+            student_question = f"{primary_point}到底该怎么理解？我总觉得自己只是记住了字面意思。"
+        elif primary_point and type_label == "practice":
+            student_question = f"碰到{primary_point}这类题，我第一步到底该从哪里下手？"
+        elif primary_point and type_label == "confusion":
+            student_question = f"{primary_point}和我容易混淆的那个概念，到底该怎么区分？"
+        elif primary_point and type_label == "reasoning":
+            student_question = f"{primary_point}相关的推导为什么会这样走？我中间那一步总接不上。"
+        elif primary_point and type_label == "review":
+            student_question = f"{primary_point}这块我总是记不住，复习时到底应该抓住什么？"
+        elif summary:
+            student_question = summary
+            if not student_question.endswith(("？", "?")):
+                if "为什么" in student_question or "怎么" in student_question or "如何" in student_question:
+                    student_question = student_question.rstrip("。") + "？"
+                else:
+                    student_question = f"{student_question.rstrip('。')}，我到底该怎么理解？"
+        else:
+            student_question = "我现在最该先问清楚的那个点到底是什么？"
+
+        coach_context_parts = []
+        if course_label:
+            coach_context_parts.append(f"当前课程：{course_label}")
+        if primary_point:
+            coach_context_parts.append(f"聚焦知识点：{primary_point}")
+        if type_label:
+            coach_context_parts.append(f"问题类型：{type_label}")
+        if answer_summary:
+            coach_context_parts.append(f"已有回答摘要：{answer_summary}")
+        if strategy:
+            coach_context_parts.append(f"建议策略：{strategy}")
+
+        prompt_parts = [
+            "下面这句是系统根据当前学习记忆整理出的下一句追问，请直接围绕它继续辅导，不要先重复背景：",
+            student_question,
+        ]
+        if coach_context_parts:
+            prompt_parts.append("\n".join(coach_context_parts))
+
+        reason_parts = []
+        if course_label:
+            reason_parts.append(course_label)
+        if type_label:
+            reason_parts.append(type_label)
+        if primary_point:
+            reason_parts.append(primary_point)
+        reason_parts.append(f"importance {int(top.importance or 0)}")
+
+        return {
+            "headline": student_question,
+            "content": "\n\n".join([part for part in prompt_parts if part.strip()]),
+            "source_label": "系统建议追问",
+            "reason": " · ".join(reason_parts),
+            "memory_id": top.id,
+            "course_name": top.course_name or "",
+            "question_type": top.question_type or "",
+            "strategy": strategy,
+            "generated_by": "learning_assistant_followup",
+        }
+
+    def get_learning_memory_overview(
+        self,
+        db: Session,
+        owner_username: str,
+        workspace_id: int | None = None,
+        *,
+        status: str = "",
+        query: str = "",
+        course_name: str = "",
+        question_type: str = "",
+        knowledge_point: str = "",
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        overall_items = self.list_learning_memories(
+            db,
+            owner_username,
+            workspace_id=workspace_id,
+            status=status,
+            query=query,
+            limit=100,
+            apply_limit=False,
+        )
+        scoped_items = self.list_learning_memories(
+            db,
+            owner_username,
+            workspace_id=workspace_id,
+            status=status,
+            query=query,
+            course_name=course_name,
+            question_type=question_type,
+            knowledge_point=knowledge_point,
+            limit=100,
+            apply_limit=False,
+        )
+        items = scoped_items[: max(1, min(limit, 100))]
+        unresolved = [item for item in scoped_items if (item.status or "").strip() != "resolved"]
+        summary = self._build_memory_summary_payload(scoped_items, unresolved)
+        overall_unresolved = [item for item in overall_items if (item.status or "").strip() != "resolved"]
+        overall_summary = self._build_memory_summary_payload(overall_items, overall_unresolved)
+        summary["overall"] = {
+            "total": overall_summary["total"],
+            "unresolved": overall_summary["unresolved"],
+            "resolved": overall_summary["resolved"],
+        }
+        summary["scope"] = {
+            "course_name": course_name.strip(),
+            "question_type": question_type.strip(),
+            "knowledge_point": knowledge_point.strip(),
+            "is_filtered": bool(course_name.strip() or question_type.strip() or knowledge_point.strip()),
+        }
+        summary["recommended_followup"] = self._build_recommended_followup(
+            unresolved,
+            summary.get("prompt_strategy_rank") or [],
+            course_name=course_name,
+            question_type=question_type,
+            knowledge_point=knowledge_point,
+        )
         return {
             "items": [item.to_dict() for item in items],
-            "summary": {
-                "total": len(all_items),
-                "unresolved": len(unresolved),
-                "resolved": sum(1 for item in all_items if (item.status or "").strip() == "resolved"),
-                "by_status": by_status,
-                "by_type": by_type,
-                "by_course": by_course,
-                "course_rank": [name for name, _ in course_rank[:8]],
-                "top_points": [item for item, _ in points_counter.most_common(8)],
-                "review_priority": review_priority,
-                "top_source_materials": source_material_rank,
-                "course_insights": course_insights,
-                "blind_spots": blind_spots[:6],
-                "prompt_strategy_rank": prompt_strategy_rank,
-            },
+            "summary": summary,
         }
 
     def log_attempt(

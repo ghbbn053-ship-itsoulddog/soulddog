@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
@@ -23,6 +23,77 @@ def _safe_dt(value: datetime | None) -> datetime | None:
 
 
 class LearningStatusService:
+    def get_workspace_status_briefs(self, db: Session, username: str, workspace_ids: list[int]) -> Dict[int, Dict[str, int]]:
+        ids = [int(item) for item in workspace_ids if int(item or 0) > 0]
+        if not ids:
+            return {}
+
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            return {}
+
+        docs = (
+            db.query(KnowledgeDocument)
+            .filter(KnowledgeDocument.owner_username == username, KnowledgeDocument.workspace_id.in_(ids))
+            .all()
+        )
+        docs_by_workspace: Dict[int, int] = defaultdict(int)
+        for doc in docs:
+            wid = int(doc.workspace_id or 0)
+            if wid > 0:
+                docs_by_workspace[wid] += 1
+
+        conversations = db.query(Conversation).filter(Conversation.user_id == user.id).all()
+        conversation_workspace_map = {}
+        for item in conversations:
+            meta = item.conversation_meta or {}
+            wid = int(meta.get("workspace_id") or 0)
+            if wid in ids:
+                conversation_workspace_map[item.id] = wid
+
+        recent_messages = (
+            db.query(Message)
+            .filter(Message.conversation_id.in_(list(conversation_workspace_map.keys())))
+            .all()
+            if conversation_workspace_map
+            else []
+        )
+
+        now = _utc_now()
+        today_start = now - timedelta(hours=24)
+        prompts_by_workspace: Dict[int, int] = defaultdict(int)
+        assistant_by_workspace: Dict[int, int] = defaultdict(int)
+        highlights_by_workspace: Dict[int, int] = defaultdict(int)
+
+        for msg in recent_messages:
+            meta = msg.message_meta or {}
+            message_workspace_id = int(meta.get("workspace_id") or 0)
+            workspace_id = message_workspace_id if message_workspace_id in ids else conversation_workspace_map.get(msg.conversation_id, 0)
+            if workspace_id not in ids:
+                continue
+            created = _safe_dt(msg.created_at)
+            if msg.role == "user" and created and created >= today_start:
+                prompts_by_workspace[workspace_id] += 1
+            if msg.role == "assistant" and created and created >= today_start:
+                assistant_by_workspace[workspace_id] += 1
+                highlights_by_workspace[workspace_id] += len(meta.get("highlights") or [])
+
+        output: Dict[int, Dict[str, int]] = {}
+        for wid in ids:
+            today_prompts = int(prompts_by_workspace.get(wid, 0))
+            today_assistant = int(assistant_by_workspace.get(wid, 0))
+            highlight_count = int(highlights_by_workspace.get(wid, 0))
+            today_minutes = max(
+                5,
+                today_prompts * 6 + today_assistant * 2 + min(highlight_count, 20),
+            ) if today_prompts or today_assistant else 0
+            output[wid] = {
+                "today_minutes": today_minutes,
+                "today_prompts": today_prompts,
+                "documents": int(docs_by_workspace.get(wid, 0)),
+            }
+        return output
+
     def get_workspace_status(self, db: Session, username: str, workspace_id: int) -> Dict[str, Any]:
         user = db.query(User).filter(User.username == username).first()
         workspace = (

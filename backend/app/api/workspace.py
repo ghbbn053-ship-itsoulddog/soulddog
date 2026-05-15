@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 
 from app.models import get_db
 from app.security import enforce_username_isolation
+from app.services.learning_assistant import get_learning_assistant_service
+from app.services.learning_status import get_learning_status_service
 from app.services.workspace_knowledge import get_workspace_knowledge_service
 
 router = APIRouter(prefix="/api/workspace", tags=["工作区知识库"])
@@ -44,18 +46,40 @@ async def list_workspaces(username: str, http_request: Request, db: Session = De
     enforce_username_isolation(http_request, username)
     svc = get_workspace_knowledge_service()
     items = svc.list_workspaces(db, username)
-    return {
-        "success": True,
-        "workspaces": [
+    learning_svc = get_learning_assistant_service()
+    status_svc = get_learning_status_service()
+    workspace_ids = [item.id for item in items]
+    memory_briefs = learning_svc.get_workspace_memory_briefs(db, username, workspace_ids)
+    status_briefs = status_svc.get_workspace_status_briefs(db, username, workspace_ids)
+    workspaces = []
+    for item in items:
+        learning_summary = memory_briefs.get(item.id) or {}
+        learning_status = status_briefs.get(item.id) or {}
+        recommended_followup = learning_summary.get("recommended_followup") or None
+        workspaces.append(
             {
                 "id": item.id,
                 "slug": item.slug,
                 "name": item.name,
                 "description": item.description,
                 "is_default": item.is_default,
+                "learning_summary": {
+                    "unresolved": int(learning_summary.get("unresolved") or 0),
+                    "resolved": int(learning_summary.get("resolved") or 0),
+                    "review_priority": learning_summary.get("review_priority") or [],
+                    "recommended_followup": recommended_followup,
+                    "prompt_strategy_rank": learning_summary.get("prompt_strategy_rank") or [],
+                },
+                "status_summary": {
+                    "today_minutes": int((learning_status or {}).get("today_minutes") or 0),
+                    "today_prompts": int((learning_status or {}).get("today_prompts") or 0),
+                    "documents": int((learning_status or {}).get("documents") or 0),
+                },
             }
-            for item in items
-        ],
+        )
+    return {
+        "success": True,
+        "workspaces": workspaces,
     }
 
 

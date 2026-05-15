@@ -142,6 +142,19 @@ def _sanitize_agent_schema(http_request: Request, db: Session, schema: dict[str,
     return sanitized
 
 
+def _require_web_owner(http_request: Request) -> str:
+    auth_session_id = http_request.cookies.get("auth_session_id")
+    app_obj = http_request.scope.get("app")
+    session_store = getattr(getattr(app_obj, "state", None), "session_store", None) if app_obj else None
+    if not auth_session_id or not session_store:
+        raise HTTPException(status_code=401, detail="未检测到有效登录会话，请重新登录")
+    auth_payload = session_store.get_auth_session(auth_session_id)
+    owner_username = str((auth_payload or {}).get("username") or "").strip()
+    if not owner_username:
+        raise HTTPException(status_code=401, detail="未检测到有效登录会话，请重新登录")
+    return owner_username
+
+
 @router.get("/service-catalog")
 async def service_catalog():
     """
@@ -371,8 +384,9 @@ async def get_tool_schema(tool_name: str, http_request: Request, db: Session = D
 
 
 @router.post("/tools/reload")
-async def reload_tools():
+async def reload_tools(http_request: Request):
     """热重载 MCP 工具配置（包括 external_tools.json）"""
+    _require_web_owner(http_request)
     registry = reload_mcp_registry()
     return {"success": True, "tools": registry.list_tools(), "count": len(registry.list_tools())}
 

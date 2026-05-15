@@ -11,7 +11,9 @@ def enforce_username_isolation(http_request: Request, username: str):
     auth_session_id = http_request.cookies.get("auth_session_id")
     app_obj = http_request.scope.get("app")
     session_store = getattr(getattr(app_obj, "state", None), "session_store", None) if app_obj else None
-    if auth_session_id and session_store:
+    if auth_session_id:
+        if not session_store:
+            raise HTTPException(status_code=401, detail="登录会话不可用，请重新登录")
         auth_payload = session_store.get_auth_session(auth_session_id)
         if not auth_payload:
             raise HTTPException(status_code=401, detail="登录会话已失效，请重新登录")
@@ -21,5 +23,9 @@ def enforce_username_isolation(http_request: Request, username: str):
 
     # 兼容：旧 cookie 最小校验
     cookie_username = http_request.cookies.get("session_username")
-    if cookie_username and cookie_username != username:
-        raise HTTPException(status_code=403, detail="学号与登录会话不一致")
+    if cookie_username:
+        if cookie_username != username:
+            raise HTTPException(status_code=403, detail="学号与登录会话不一致")
+        return
+
+    raise HTTPException(status_code=401, detail="未检测到登录会话，请重新登录")

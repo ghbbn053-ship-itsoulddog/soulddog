@@ -14,6 +14,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { InlineStatusMessage, PageLoading } from "@/components/ui/feedback";
+import { useRequireAuth } from "@/hooks/use-require-auth";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +34,6 @@ type ProviderItem = {
 
 export default function ModelsSettingsPage() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
   const [providers, setProviders] = useState<ProviderItem[]>([]);
   const [provider, setProvider] = useState("qwen");
   const [model, setModel] = useState("");
@@ -47,25 +48,18 @@ export default function ModelsSettingsPage() {
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
+  const { username, authLoading } = useRequireAuth(API_BASE);
 
   useEffect(() => {
+    if (authLoading || !username) return;
     const run = async () => {
       try {
-        const meRes = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
-        const me = meRes.ok ? await meRes.json() : null;
-        if (!me?.authenticated || !me?.username) {
-          router.replace("/login");
-          return;
-        }
-        const uname = String(me.username);
-        setUsername(uname);
-
         const availRes = await fetch(`${API_BASE}/api/models/available`, { credentials: "include" });
         const avail = availRes.ok ? await availRes.json() : null;
         const list: ProviderItem[] = avail?.providers || [];
         setProviders(list);
 
-        const prefRes = await fetch(`${API_BASE}/api/models/preference/${encodeURIComponent(uname)}`, {
+        const prefRes = await fetch(`${API_BASE}/api/models/preference/${encodeURIComponent(username)}`, {
           credentials: "include",
         });
         const pref = prefRes.ok ? await prefRes.json() : null;
@@ -77,14 +71,12 @@ export default function ModelsSettingsPage() {
         setApiKeyMasked(pref?.api_key_masked || "");
         setReasoningMode(pref?.reasoning_mode || "standard");
         setShowThinking(!!pref?.show_thinking);
-      } catch {
-        router.replace("/chat");
       } finally {
         setLoading(false);
       }
     };
-    run();
-  }, [API_BASE, router]);
+    void run();
+  }, [API_BASE, authLoading, username]);
 
   const providerMeta = useMemo(
     () => providers.find((item) => item.provider === provider),
@@ -135,8 +127,8 @@ export default function ModelsSettingsPage() {
     }
   };
 
-  if (loading) {
-    return <div className="p-6 text-sm text-slate-500">加载中...</div>;
+  if (loading || authLoading) {
+    return <PageLoading label="正在加载模型配置..." />;
   }
 
   return (
@@ -174,11 +166,7 @@ export default function ModelsSettingsPage() {
           <WorkbenchStatCard label="Endpoint" value={providerMeta?.supports_custom_endpoint ? "Custom" : "Builtin"} hint="是否需要单独配置地址" />
         </div>
 
-        {msg ? (
-          <Card className="border-slate-200 bg-slate-50 shadow-none">
-            <CardContent className="p-4 text-sm text-slate-700">{msg}</CardContent>
-          </Card>
-        ) : null}
+        {msg ? <InlineStatusMessage>{msg}</InlineStatusMessage> : null}
 
         <WorkbenchSection title="选择接入方式" description="先挑 provider，再进入具体配置。">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookMarked,
   CheckCircle2,
@@ -27,6 +27,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { InlineStatusMessage, PageLoading } from "@/components/ui/feedback";
+import { useRequireAuth } from "@/hooks/use-require-auth";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 type CourseCatalogItem = {
@@ -256,10 +258,8 @@ function statusLabel(status: string | undefined) {
 }
 
 export default function ChaoxingLearningPage() {
-  const router = useRouter();
   const pollTimerRef = useRef<number | null>(null);
 
-  const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
@@ -267,6 +267,7 @@ export default function ChaoxingLearningPage() {
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
+  const { username, authLoading } = useRequireAuth(API_BASE);
 
   const visualCourses = useMemo(
     () => buildVisualCourses(qrSession?.browser_meta?.course_catalog || [], qrSession?.browser_meta?.course_metrics || []),
@@ -328,12 +329,12 @@ export default function ChaoxingLearningPage() {
     };
   }, [visualCourses]);
 
-  const stopPolling = () => {
+  const stopPolling = useCallback(() => {
     if (pollTimerRef.current) {
       window.clearInterval(pollTimerRef.current);
       pollTimerRef.current = null;
     }
-  };
+  }, []);
 
   const getStoredSessionToken = (uname: string) => {
     if (typeof window === "undefined" || !uname) return "";
@@ -345,7 +346,7 @@ export default function ChaoxingLearningPage() {
     window.localStorage.setItem(`${QR_SESSION_STORAGE_PREFIX}${uname}`, sessionToken);
   };
 
-  const loadLatestSession = async (uname: string, sessionToken: string) => {
+  const loadLatestSession = useCallback(async (uname: string, sessionToken: string) => {
     const qs = new URLSearchParams({ username: uname, session_token: sessionToken });
     const res = await fetch(`${API_BASE}/api/chaoxing/qr-login/session?${qs.toString()}`, { credentials: "include" });
     const data = res.ok ? await res.json() : null;
@@ -353,9 +354,9 @@ export default function ChaoxingLearningPage() {
       setQrSession(data.session);
       storeSessionToken(uname, sessionToken);
     }
-  };
+  }, [API_BASE]);
 
-  const pollSession = async (uname: string, sessionToken: string) => {
+  const pollSession = useCallback(async (uname: string, sessionToken: string) => {
     const res = await fetch(`${API_BASE}/api/chaoxing/qr-login/poll`, {
       method: "POST",
       credentials: "include",
@@ -380,14 +381,14 @@ export default function ChaoxingLearningPage() {
       stopPolling();
       setMessage(nextSession.last_error || "二维码会话已结束");
     }
-  };
+  }, [API_BASE, stopPolling]);
 
-  const ensurePolling = (uname: string, sessionToken: string) => {
+  const ensurePolling = useCallback((uname: string, sessionToken: string) => {
     stopPolling();
     pollTimerRef.current = window.setInterval(() => {
       void pollSession(uname, sessionToken);
     }, QR_POLL_MS);
-  };
+  }, [pollSession, stopPolling]);
 
   const createQrSession = async () => {
     if (!username) return;
@@ -439,29 +440,20 @@ export default function ChaoxingLearningPage() {
   };
 
   useEffect(() => {
+    if (authLoading || !username) return;
     const run = async () => {
       try {
-        const meRes = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
-        const me = meRes.ok ? await meRes.json() : null;
-        if (!me?.authenticated || !me?.username) {
-          router.replace("/login");
-          return;
-        }
-        const uname = String(me.username);
-        setUsername(uname);
-        const storedSessionToken = getStoredSessionToken(uname);
+        const storedSessionToken = getStoredSessionToken(username);
         if (storedSessionToken) {
-          await loadLatestSession(uname, storedSessionToken);
+          await loadLatestSession(username, storedSessionToken);
         }
-      } catch {
-        router.replace("/chat");
       } finally {
         setLoading(false);
       }
     };
     void run();
     return () => stopPolling();
-  }, [API_BASE, router]);
+  }, [authLoading, loadLatestSession, stopPolling, username]);
 
   useEffect(() => {
     if (!username || !qrSession?.session_token) return;
@@ -475,10 +467,10 @@ export default function ChaoxingLearningPage() {
         stopPolling();
       }
     };
-  }, [username, qrSession?.session_token, qrSession?.status]);
+  }, [ensurePolling, qrSession?.session_token, qrSession?.status, stopPolling, username]);
 
-  if (loading) {
-    return <div className="p-6 text-sm text-slate-500">加载中...</div>;
+  if (loading || authLoading) {
+    return <PageLoading label="正在加载学习通课程看板..." />;
   }
 
   return (
@@ -525,11 +517,7 @@ export default function ChaoxingLearningPage() {
             <WorkbenchStatCard label="Exams" value={courseSummary.totalExams} hint="累计考试数" />
           </div>
 
-          {message ? (
-            <Card className="border-slate-200 bg-slate-50 shadow-none">
-              <CardContent className="whitespace-pre-line p-4 text-sm text-slate-700">{message}</CardContent>
-            </Card>
-          ) : null}
+          {message ? <InlineStatusMessage className="whitespace-pre-line">{message}</InlineStatusMessage> : null}
 
           <WorkbenchSection
             title="扫码登录"
@@ -550,9 +538,12 @@ export default function ChaoxingLearningPage() {
                 {qrSession?.qr_image_data ? (
                   <div className="space-y-3">
                     <div className="flex justify-center rounded-2xl bg-white p-3 md:p-5">
-                      <img
+                      <Image
                         src={qrSession.qr_image_data}
                         alt="学习通登录二维码"
+                        width={380}
+                        height={380}
+                        unoptimized
                         className="h-[320px] w-[320px] rounded-xl object-contain md:h-[380px] md:w-[380px]"
                       />
                     </div>

@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, ChevronLeft, ChevronRight, RefreshCcw } from "lucide-react";
+import { CalendarDays, RefreshCcw } from "lucide-react";
 
 import { PlatformSidebarFooter, PlatformSidebarHeader, createPlatformNav } from "@/components/workspace/app-sidebar";
 import { WorkbenchBadge, WorkbenchSection, WorkbenchShell } from "@/components/workspace/workbench-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { InlineStatusMessage, PageLoading } from "@/components/ui/feedback";
+import { useRequireAuth } from "@/hooks/use-require-auth";
 import { normalizeScheduleData, resolveDefaultSemester } from "@/lib/education-cache";
 
 type ScheduleCourse = Record<string, unknown>;
@@ -164,35 +166,28 @@ function getFreshnessMeta(status: EducationStatus | null) {
 
 export default function SchedulePage() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [semester, setSemester] = useState("");
   const [availableSemesters, setAvailableSemesters] = useState<string[]>([]);
-  const [weekIndex, setWeekIndex] = useState(1);
   const [courses, setCourses] = useState<ScheduleCourse[]>([]);
   const [allCourses, setAllCourses] = useState<ScheduleCourse[]>([]);
   const [coursesBySemester, setCoursesBySemester] = useState<Record<string, ScheduleCourse[]>>({});
   const [status, setStatus] = useState<EducationStatus | null>(null);
+  const [refreshMessage, setRefreshMessage] = useState("");
+  const [refreshTone, setRefreshTone] = useState<"neutral" | "warning" | "danger" | "success">("neutral");
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
+  const { username, authLoading } = useRequireAuth(API_BASE, "/");
 
   useEffect(() => {
+    if (authLoading || !username) return;
     const run = async () => {
       try {
-        const meRes = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
-        const me = meRes.ok ? await meRes.json() : null;
-        if (!me?.authenticated || !me?.username) {
-          router.replace("/login");
-          return;
-        }
-        const uname = String(me.username);
-        setUsername(uname);
-
         const [scheduleRes, statusRes] = await Promise.all([
-          fetch(`${API_BASE}/api/schedule/db?username=${encodeURIComponent(uname)}`, { credentials: "include" }),
-          fetch(`${API_BASE}/api/education/status?username=${encodeURIComponent(uname)}`, { credentials: "include" }),
+          fetch(`${API_BASE}/api/schedule/db?username=${encodeURIComponent(username)}`, { credentials: "include" }),
+          fetch(`${API_BASE}/api/education/status?username=${encodeURIComponent(username)}`, { credentials: "include" }),
         ]);
 
         const scheduleJson: ScheduleResponse | null = scheduleRes.ok ? await scheduleRes.json() : null;
@@ -205,14 +200,12 @@ export default function SchedulePage() {
         setSemester(defaultSemester);
         setCourses(defaultSemester ? normalized.bySemester[defaultSemester] || normalized.courses : normalized.courses);
         setStatus(statusJson || null);
-      } catch {
-        router.replace("/");
       } finally {
         setLoading(false);
       }
     };
-    run();
-  }, [API_BASE, router]);
+    void run();
+  }, [API_BASE, authLoading, username]);
 
   const freshness = useMemo(() => getFreshnessMeta(status), [status]);
   const visibleCourseCount = useMemo(() => {
@@ -237,10 +230,25 @@ export default function SchedulePage() {
     if (!username || refreshing) return;
     try {
       setRefreshing(true);
-      await fetch(`${API_BASE}/api/refresh?username=${encodeURIComponent(username)}`, {
+      setRefreshMessage("");
+      const refreshRes = await fetch(`${API_BASE}/api/refresh?username=${encodeURIComponent(username)}`, {
         method: "POST",
         credentials: "include",
       });
+      const refreshJson = refreshRes.ok ? await refreshRes.json().catch(() => null) : await refreshRes.json().catch(() => null);
+      if (!refreshRes.ok || !refreshJson?.success) {
+        const message = refreshJson?.message || refreshJson?.detail || `刷新失败(${refreshRes.status})`;
+        setRefreshTone(refreshRes.status === 401 || refreshRes.status === 403 ? "danger" : "warning");
+        setRefreshMessage(message);
+        if (refreshRes.status === 401) {
+          router.push("/login");
+        }
+        return;
+      }
+
+      setRefreshTone("success");
+      setRefreshMessage(refreshJson?.message || "已开始刷新课表缓存");
+
       const [scheduleRes, statusRes] = await Promise.all([
         fetch(`${API_BASE}/api/schedule/db?username=${encodeURIComponent(username)}`, { credentials: "include" }),
         fetch(`${API_BASE}/api/education/status?username=${encodeURIComponent(username)}`, { credentials: "include" }),
@@ -255,6 +263,9 @@ export default function SchedulePage() {
       setSemester(defaultSemester);
       setCourses(defaultSemester ? normalized.bySemester[defaultSemester] || normalized.courses : normalized.courses);
       setStatus(statusJson || null);
+    } catch {
+      setRefreshTone("danger");
+      setRefreshMessage("刷新请求失败，请检查网络或登录状态");
     } finally {
       setRefreshing(false);
     }
@@ -272,9 +283,7 @@ export default function SchedulePage() {
     setCourses(allCourses);
   }, [allCourses, coursesBySemester, semester]);
 
-  if (loading) {
-    return <div className="p-6 text-sm text-slate-500">加载中...</div>;
-  }
+  if (loading) return <PageLoading label="正在加载课表..." />;
 
   return (
     <WorkbenchShell
@@ -287,14 +296,20 @@ export default function SchedulePage() {
       title="我的课表"
       description="完整课表页直接读取缓存课表数据，支持快速刷新和周视图浏览。"
       sidebarTitle="课表导航"
-      sidebarDescription="当前先做缓存驱动的周视图，后续再补课程详情弹窗和统计面板。"
+      sidebarDescription="当前展示的是按学期整理后的缓存周视图，不做真实教学周切换。"
       sidebarHeader={<PlatformSidebarHeader />}
       navItems={createPlatformNav("schedule")}
       footer={<PlatformSidebarFooter username={username} detail="当前登录用户" />}
       topActions={
         <>
-          <Button variant="outline" onClick={() => router.push("/")}>返回首页</Button>
-          <Button onClick={handleRefresh} disabled={refreshing}>
+          <Button
+            variant="outline"
+            className="border-slate-300 bg-white/90 text-slate-700 hover:bg-slate-50"
+            onClick={() => router.push("/")}
+          >
+            返回首页
+          </Button>
+          <Button className="bg-blue-600 shadow-[0_14px_30px_rgba(31,111,235,0.22)] hover:bg-blue-700" onClick={handleRefresh} disabled={refreshing}>
             {refreshing ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
             刷新
           </Button>
@@ -302,21 +317,12 @@ export default function SchedulePage() {
       }
     >
       <div className="grid gap-4">
+        {refreshMessage ? <InlineStatusMessage tone={refreshTone}>{refreshMessage}</InlineStatusMessage> : null}
         <WorkbenchSection
           title="周视图课表"
-          description={`学期 ${semester || "未知"} · ${freshness.label} · 当前显示该学期全部缓存课程，共 ${visibleCourseCount} 条`}
+          description={`学期 ${semester || "未知"} · ${freshness.label} · 当前显示该学期全部缓存课程，共 ${visibleCourseCount} 条；这里只做学期级缓存视图，不按教学周切换。`}
           actions={
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setWeekIndex((prev) => Math.max(1, prev - 1))}>
-                <ChevronLeft className="h-4 w-4" />
-                上一周
-              </Button>
-              <div className="min-w-[96px] text-center text-sm font-medium text-slate-700">第 {weekIndex} 周</div>
-              <Button variant="outline" size="sm" onClick={() => setWeekIndex((prev) => prev + 1)}>
-                下一周
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+            <Badge variant="outline">缓存周视图</Badge>
           }
         >
           <div className="mb-4 flex flex-wrap gap-2">
@@ -327,12 +333,11 @@ export default function SchedulePage() {
                   type="button"
                   onClick={() => {
                     setSemester(item);
-                    setWeekIndex(1);
                   }}
                   className={
                     item === semester
-                      ? "rounded-full border border-[hsl(var(--primary))] bg-[hsla(var(--primary),0.08)] px-3 py-1 text-xs font-medium text-slate-900"
-                      : "rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+                      ? "rounded-full border border-blue-200 bg-[linear-gradient(135deg,rgba(219,234,254,0.9),rgba(255,255,255,0.95))] px-3 py-1 text-xs font-medium text-slate-900 shadow-[0_8px_20px_rgba(31,111,235,0.08)]"
+                      : "rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
                   }
                 >
                   {item}
@@ -343,8 +348,8 @@ export default function SchedulePage() {
             )}
           </div>
           <div className="overflow-x-auto">
-            <div className="min-w-[940px] rounded-2xl border border-slate-200 bg-white">
-              <div className="grid grid-cols-[88px_repeat(7,minmax(0,1fr))] border-b border-slate-200 bg-slate-50/80 text-sm font-medium text-slate-700">
+            <div className="min-w-[940px] rounded-[1.6rem] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.95))] shadow-[0_16px_40px_rgba(15,23,42,0.05)]">
+              <div className="grid grid-cols-[88px_repeat(7,minmax(0,1fr))] border-b border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.92),rgba(241,245,249,0.86))] text-sm font-medium text-slate-700">
                 <div className="border-r border-slate-200 px-4 py-3">节次</div>
                 {WEEKDAYS.map((day) => (
                   <div key={day} className="border-r border-slate-200 px-4 py-3 last:border-r-0">
@@ -355,7 +360,7 @@ export default function SchedulePage() {
 
               {PERIODS.map((period) => (
                 <div key={period} className="grid grid-cols-[88px_repeat(7,minmax(0,1fr))] border-b border-slate-200 last:border-b-0">
-                  <div className="border-r border-slate-200 bg-slate-50/60 px-4 py-4 text-sm font-medium text-slate-700">
+                  <div className="border-r border-slate-200 bg-slate-50/70 px-4 py-4 text-sm font-medium text-slate-700">
                     {period}
                   </div>
                   {WEEKDAYS.map((day) => {
@@ -364,12 +369,12 @@ export default function SchedulePage() {
                       <div key={`${day}-${period}`} className="min-h-[108px] border-r border-slate-200 p-2.5 last:border-r-0">
                         <div className="space-y-2">
                           {items.length === 0 ? (
-                            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-3 py-3 text-center text-xs text-slate-400">
+                            <div className="rounded-[1rem] border border-dashed border-slate-200 bg-slate-50/78 px-3 py-3 text-center text-xs text-slate-400">
                               暂无课程
                             </div>
                           ) : (
                             items.map((item, index) => (
-                              <Card key={`${day}-${period}-${index}`} className="border-blue-100 bg-blue-50/70 shadow-none">
+                              <Card key={`${day}-${period}-${index}`} className="border-blue-100 bg-[linear-gradient(135deg,rgba(219,234,254,0.74),rgba(255,255,255,0.96))] shadow-[0_8px_20px_rgba(31,111,235,0.06)]">
                                 <CardContent className="space-y-1.5 p-3">
                                   <div className="text-sm font-medium text-slate-900">{item.courseName}</div>
                                   <div className="text-xs text-slate-500">{item.location || "地点待定"}</div>

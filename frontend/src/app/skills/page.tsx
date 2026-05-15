@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Blocks, FileUp, Github, Upload } from "lucide-react";
 
@@ -15,6 +15,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { InlineStatusMessage, PageLoading } from "@/components/ui/feedback";
+import { useRequireAuth } from "@/hooks/use-require-auth";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -66,7 +68,6 @@ enabled: true
 
 export default function SkillsPage() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
   const [skills, setSkills] = useState<SkillItem[]>([]);
   const [yamlText, setYamlText] = useState(DEFAULT_SKILL_YAML);
   const [importUrl, setImportUrl] = useState("");
@@ -77,33 +78,25 @@ export default function SkillsPage() {
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
+  const { username, authLoading } = useRequireAuth(API_BASE);
 
-  const refresh = async (uname: string) => {
+  const refresh = useCallback(async (uname: string) => {
     const res = await fetch(`${API_BASE}/api/skills/${encodeURIComponent(uname)}`, { credentials: "include" });
     const data = res.ok ? await res.json() : null;
     setSkills(data?.skills || []);
-  };
+  }, [API_BASE]);
 
   useEffect(() => {
+    if (authLoading || !username) return;
     const run = async () => {
       try {
-        const meRes = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
-        const me = meRes.ok ? await meRes.json() : null;
-        if (!me?.authenticated || !me?.username) {
-          router.replace("/login");
-          return;
-        }
-        const uname = String(me.username);
-        setUsername(uname);
-        await refresh(uname);
-      } catch {
-        router.replace("/chat");
+        await refresh(username);
       } finally {
         setLoading(false);
       }
     };
-    run();
-  }, [API_BASE, router]);
+    void run();
+  }, [authLoading, refresh, username]);
 
   const upload = async () => {
     if (!username) return;
@@ -214,8 +207,8 @@ export default function SkillsPage() {
   const sorted = useMemo(() => [...skills].sort((a, b) => a.name.localeCompare(b.name)), [skills]);
   const enabledCount = sorted.filter((item) => item.enabled).length;
 
-  if (loading) {
-    return <div className="p-6 text-sm text-slate-500">加载中...</div>;
+  if (loading || authLoading) {
+    return <PageLoading label="正在加载 Skill 管理台..." />;
   }
 
   return (
@@ -283,10 +276,8 @@ export default function SkillsPage() {
                   <Upload className="h-4 w-4" />
                   {saving ? "处理中..." : "上传 Skill"}
                 </Button>
-                {msg ? (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{msg}</div>
-                ) : null}
               </div>
+              {msg ? <InlineStatusMessage>{msg}</InlineStatusMessage> : null}
             </div>
           </WorkbenchSection>
         </div>

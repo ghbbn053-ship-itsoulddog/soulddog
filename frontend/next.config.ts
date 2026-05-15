@@ -1,9 +1,13 @@
+import path from 'node:path';
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
   // 开发模式不使用静态导出，以支持 rewrites 反向代理
   // output: 'export',
+  turbopack: {
+    root: path.join(__dirname, '..'),
+  },
   allowedDevOrigins: [
     '*.dev.coze.site',
     'http://localhost:5000',

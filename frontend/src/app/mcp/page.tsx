@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, Github, KeyRound, RefreshCcw, SearchCheck, ShieldAlert, Trash2, Upload, Wrench } from "lucide-react";
 
@@ -15,6 +15,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { InlineStatusMessage, PageLoading } from "@/components/ui/feedback";
+import { useRequireAuth } from "@/hooks/use-require-auth";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -140,7 +142,6 @@ const BOUNDARY_LABELS: Record<string, string> = {
 
 export default function MCPPage() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
   const [tools, setTools] = useState<MCPTool[]>([]);
   const [importedTools, setImportedTools] = useState<MCPTool[]>([]);
   const [loading, setLoading] = useState(true);
@@ -162,35 +163,36 @@ export default function MCPPage() {
 
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
+  const { username, authLoading } = useRequireAuth(API_BASE);
 
-  const refreshTools = async (uname: string) => {
+  const refreshTools = useCallback(async (uname: string) => {
     const res = await fetch(`${API_BASE}/api/mcp/tools?username=${encodeURIComponent(uname)}`, { credentials: "include" });
     const data = res.ok ? await res.json() : null;
     setTools(data?.tools || []);
     setImportedTools(data?.imported_tools || []);
-  };
+  }, [API_BASE]);
 
-  const refreshHistory = async () => {
+  const refreshHistory = useCallback(async () => {
     const res = await fetch(`${API_BASE}/api/intake/pipeline/history?limit=8`, { credentials: "include" });
     const data = res.ok ? await res.json() : null;
     setHistory(data?.items || []);
-  };
+  }, [API_BASE]);
 
-  const refreshState = async () => {
+  const refreshState = useCallback(async () => {
     const res = await fetch(`${API_BASE}/api/intake/pipeline/state`, { credentials: "include" });
     const data = res.ok ? await res.json() : null;
     setState(data?.state || null);
     setQueueSize(Number(data?.queue_size || 0));
     setRunningCount(Number(data?.running_count || 0));
-  };
+  }, [API_BASE]);
 
-  const refreshTasks = async () => {
+  const refreshTasks = useCallback(async () => {
     const res = await fetch(`${API_BASE}/api/intake/pipeline/tasks?limit=10`, { credentials: "include" });
     const data = res.ok ? await res.json() : null;
     setTasks(data?.items || []);
-  };
+  }, [API_BASE]);
 
-  const refreshAgentAccess = async (uname: string) => {
+  const refreshAgentAccess = useCallback(async (uname: string) => {
     const res = await fetch(`${API_BASE}/api/agent-access/${encodeURIComponent(uname)}`, { credentials: "include" });
     const data = res.ok ? await res.json() : null;
     setAgentAccess(
@@ -202,41 +204,42 @@ export default function MCPPage() {
           }
         : null
     );
-  };
+  }, [API_BASE]);
 
-  const refreshAgentBootstrap = async (uname: string) => {
+  const refreshAgentBootstrap = useCallback(async (uname: string) => {
     const res = await fetch(`${API_BASE}/api/agent-access/${encodeURIComponent(uname)}/bootstrap`, { credentials: "include" });
     const data = res.ok ? await res.json() : null;
     setAgentBootstrap(data?.success ? (data as AgentBootstrap) : null);
-  };
+  }, [API_BASE]);
 
   useEffect(() => {
+    if (authLoading || !username) return;
     const run = async () => {
       try {
-        const meRes = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
-        const me = meRes.ok ? await meRes.json() : null;
-        if (!me?.authenticated || !me?.username) {
-          router.replace("/login");
-          return;
-        }
-        const uname = String(me.username);
-        setUsername(uname);
         await Promise.all([
-          refreshTools(uname),
+          refreshTools(username),
           refreshHistory(),
           refreshState(),
           refreshTasks(),
-          refreshAgentAccess(uname),
-          refreshAgentBootstrap(uname),
+          refreshAgentAccess(username),
+          refreshAgentBootstrap(username),
         ]);
-      } catch {
-        router.replace("/chat");
       } finally {
         setLoading(false);
       }
     };
-    run();
-  }, [API_BASE, router]);
+    void run();
+  }, [
+    authLoading,
+    refreshAgentAccess,
+    refreshAgentBootstrap,
+    refreshHistory,
+    refreshState,
+    refreshTasks,
+    refreshTools,
+    API_BASE,
+    username,
+  ]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -245,7 +248,7 @@ export default function MCPPage() {
       void refreshTasks();
     }, 8000);
     return () => clearInterval(id);
-  }, []);
+  }, [refreshHistory, refreshState, refreshTasks]);
 
   const createAgentToken = async () => {
     if (!username || !agentTokenName.trim()) return;
@@ -572,8 +575,8 @@ export default function MCPPage() {
   const sorted = useMemo(() => [...tools].sort((a, b) => a.name.localeCompare(b.name)), [tools]);
   const importedSorted = useMemo(() => [...importedTools].sort((a, b) => a.name.localeCompare(b.name)), [importedTools]);
 
-  if (loading) {
-    return <div className="p-6 text-sm text-slate-500">加载中...</div>;
+  if (loading || authLoading) {
+    return <PageLoading label="正在加载 MCP 控制台..." />;
   }
 
   return (
@@ -608,11 +611,7 @@ export default function MCPPage() {
           <WorkbenchStatCard label="Running" value={runningCount} hint={state?.status || "当前执行状态"} />
         </div>
 
-        {msg ? (
-          <Card className="border-slate-200 bg-slate-50 shadow-none">
-            <CardContent className="p-4 text-sm text-slate-700">{msg}</CardContent>
-          </Card>
-        ) : null}
+        {msg ? <InlineStatusMessage>{msg}</InlineStatusMessage> : null}
 
         <WorkbenchSection
           title="Agent Access"
@@ -887,13 +886,13 @@ export default function MCPPage() {
 
           <WorkbenchSection title="流水线任务" description="保留 intake pipeline 观测与控制。">
             <div className="space-y-4">
-              <Card className="border-slate-200 bg-slate-50 shadow-none">
-                <CardContent className="space-y-2 p-4 text-sm text-slate-600">
+              <InlineStatusMessage>
+                <div className="space-y-2 text-sm text-slate-600">
                   <div>state: {state?.status || "idle"}</div>
                   <div>queue: {queueSize}</div>
                   <div>running: {runningCount}</div>
-                </CardContent>
-              </Card>
+                </div>
+              </InlineStatusMessage>
 
               <ScrollArea className="h-[300px] pr-3">
                 <div className="space-y-3">
