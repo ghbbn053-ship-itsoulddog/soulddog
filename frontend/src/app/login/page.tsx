@@ -62,19 +62,7 @@ export default function LoginPage() {
       });
     } catch {
     }
-    fetchCaptcha();
   }, []);
-
-  const usernameRef = React.useRef(username);
-  usernameRef.current = username;
-  React.useEffect(() => {
-    if (username && username.length >= 10) {
-      const timer = setTimeout(() => {
-        fetchCaptcha(usernameRef.current);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [username]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -230,6 +218,12 @@ export default function LoginPage() {
             ) : null}
 
             <form onSubmit={handleLogin} className="space-y-4">
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                <span>{"\u9a8c\u8bc1\u7801\u4ec5\u7528\u4e8e\u666e\u901a\u767b\u5f55\uff1b\u9884\u89c8\u767b\u5f55\u53ef\u76f4\u63a5\u8fdb\u5165\u3002"}</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => fetchCaptcha(username)}>
+                  {"\u5237\u65b0\u9a8c\u8bc1\u7801"}
+                </Button>
+              </div>
               <label className="block space-y-2">
                 <div className="text-sm font-medium text-slate-900">学号</div>
                 <div className="relative">

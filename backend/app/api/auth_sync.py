@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from app.core.config import SERVERS, get_server_candidates
 from app.core.runtime import DB_AVAILABLE, EducationData, User, get_db, logger, session_store
@@ -23,6 +24,12 @@ from app.security import enforce_username_isolation
 router = APIRouter(tags=["认证与同步"])
 SYNC_REUSE_TTL_HOURS = 12
 DEV_PREVIEW_USERNAME = os.getenv("DEV_PREVIEW_USERNAME", "24251102121").strip() or "24251102121"
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+    code: str
+    captcha_session_id: str | None = None
 
 
 def _is_dev_preview_login(username: str, password: str, code: str, captcha_session_id: str) -> bool:
@@ -47,7 +54,7 @@ def select_server(username: str) -> str:
 
 
 @router.get("/api/captcha")
-async def get_captcha(username: str = None):
+def get_captcha(username: str = None):
     """获取验证码图片，返回 base64。"""
     try:
         if username and username.isdigit():
@@ -99,16 +106,15 @@ async def get_captcha(username: str = None):
 
 
 @router.post("/api/login")
-async def login(request: Request, background_tasks: BackgroundTasks):
+def login(payload: LoginRequest, background_tasks: BackgroundTasks):
     """登录接口。"""
     try:
-        data = await request.json()
-        username = data.get("username")
-        password = data.get("password")
-        code = data.get("code")
-        captcha_session_id = data.get("captcha_session_id")
+        username = payload.username
+        password = payload.password
+        code = payload.code
+        captcha_session_id = payload.captcha_session_id
         if not all([username, password, code]):
-            raise HTTPException(status_code=400, detail="缺少必要参数")
+            raise HTTPException(status_code=400, detail="\u7f3a\u5c11\u5fc5\u8981\u53c2\u6570")
 
         if _is_dev_preview_login(username, password, code, captcha_session_id):
             auth_session_id = secrets.token_urlsafe(32)
@@ -116,11 +122,11 @@ async def login(request: Request, background_tasks: BackgroundTasks):
             resp = JSONResponse(
                 content={
                     "success": True,
-                    "message": "预览模式登录成功",
+                    "message": "\u9884\u89c8\u6a21\u5f0f\u767b\u5f55\u6210\u529f",
                     "username": DEV_PREVIEW_USERNAME,
                     "session_id": "",
                     "sync_status": "completed",
-                    "sync_message": "预览模式不执行教务同步",
+                    "sync_message": "\u9884\u89c8\u6a21\u5f0f\u4e0d\u6267\u884c\u6559\u52a1\u540c\u6b65",
                 }
             )
             resp.set_cookie(
@@ -152,7 +158,10 @@ async def login(request: Request, background_tasks: BackgroundTasks):
 
         captcha_payload = session_store.pop_captcha_session(captcha_session_id) if captcha_session_id else None
         if not captcha_payload:
-            return {"success": False, "message": "验证码已过期，请刷新验证码后重试"}
+            return {
+                "success": False,
+                "message": "\u9a8c\u8bc1\u7801\u5df2\u8fc7\u671f\uff0c\u8bf7\u5237\u65b0\u9a8c\u8bc1\u7801\u540e\u91cd\u8bd5",
+            }
         session = captcha_payload["session"]
 
         stored_server_url = (captcha_payload.get("server_url") or "").strip()
@@ -170,13 +179,13 @@ async def login(request: Request, background_tasks: BackgroundTasks):
             timeout=10,
         )
         if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=f"登录请求失败: {response.status_code}")
+            raise HTTPException(status_code=500, detail=f"\u767b\u5f55\u8bf7\u6c42\u5931\u8d25: {response.status_code}")
 
         for encoding in ["utf-8", "gbk", "gb2312", "gb18030"]:
             try:
                 response.encoding = encoding
                 content = response.text
-                if any(c in content for c in ["用户", "密码", "验证", "登录", "framework"]):
+                if any(c in content for c in ["\u7528\u6237", "\u5bc6\u7801", "\u9a8c\u8bc1", "\u767b\u5f55", "framework"]):
                     break
             except Exception:
                 continue
@@ -184,18 +193,24 @@ async def login(request: Request, background_tasks: BackgroundTasks):
             response.encoding = response.apparent_encoding
             content = response.text
 
-        if "密码错误" in content or "验证码错误" in content or "用户名不存在" in content:
-            return {"success": False, "message": "用户名、密码或验证码错误"}
+        if "\u5bc6\u7801\u9519\u8bef" in content or "\u9a8c\u8bc1\u7801\u9519\u8bef" in content or "\u7528\u6237\u540d\u4e0d\u5b58\u5728" in content:
+            return {"success": False, "message": "\u7528\u6237\u540d\u3001\u5bc6\u7801\u6216\u9a8c\u8bc1\u7801\u9519\u8bef"}
 
-        is_login_page = ("LoginToXkLdap" in content or ("用户名" in content and "密码" in content and "验证码" in content)) and "framework" not in response.url
+        is_login_page = (
+            ("LoginToXkLdap" in content or ("\u7528\u6237\u540d" in content and "\u5bc6\u7801" in content and "\u9a8c\u8bc1\u7801" in content))
+            and "framework" not in response.url
+        )
         if is_login_page:
-            if "密码错误" in content:
-                return {"success": False, "message": "密码错误"}
-            if "验证码错误" in content:
-                return {"success": False, "message": "验证码错误"}
-            if "用户名不存在" in content:
-                return {"success": False, "message": "用户名不存在"}
-            return {"success": False, "message": "登录失败，请检查用户名、密码或验证码"}
+            if "\u5bc6\u7801\u9519\u8bef" in content:
+                return {"success": False, "message": "\u5bc6\u7801\u9519\u8bef"}
+            if "\u9a8c\u8bc1\u7801\u9519\u8bef" in content:
+                return {"success": False, "message": "\u9a8c\u8bc1\u7801\u9519\u8bef"}
+            if "\u7528\u6237\u540d\u4e0d\u5b58\u5728" in content:
+                return {"success": False, "message": "\u7528\u6237\u540d\u4e0d\u5b58\u5728"}
+            return {
+                "success": False,
+                "message": "\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u7528\u6237\u540d\u3001\u5bc6\u7801\u6216\u9a8c\u8bc1\u7801",
+            }
 
         if "/jsxsd/framework/" in content or "framework" in response.url:
             match = re.match(r"(https?://[^/]+/jsxsd/)", response.url)
@@ -234,7 +249,7 @@ async def login(request: Request, background_tasks: BackgroundTasks):
                                     username,
                                     {
                                         "status": "completed",
-                                        "message": f"使用最近一次成功快照（{data_count}条）",
+                                        "message": f"\u4f7f\u7528\u6700\u8fd1\u4e00\u6b21\u6210\u529f\u5feb\u7167\uff08{data_count}\u6761\uff09",
                                         "timestamp": time.time(),
                                         "cached": True,
                                     },
@@ -242,15 +257,14 @@ async def login(request: Request, background_tasks: BackgroundTasks):
                     finally:
                         db.close()
                 except Exception as e:
-                    logger.warning(f"【登录】检查数据失败: {e}，将执行爬取")
+                    logger.warning(f"\u3010\u767b\u5f55\u3011\u68c0\u67e5\u6570\u636e\u5931\u8d25: {e}\uff0c\u5c06\u6267\u884c\u722c\u53d6")
 
             if needs_sync:
                 background_tasks.add_task(auto_crawl_and_store, username, session, final_server_url)
-                sync_message = "首次登录，正在后台同步教务数据..."
+                sync_message = "\u9996\u6b21\u767b\u5f55\uff0c\u6b63\u5728\u540e\u53f0\u540c\u6b65\u6559\u52a1\u6570\u636e..."
             else:
-                sync_message = "已加载历史数据"
+                sync_message = "\u5df2\u52a0\u8f7d\u5386\u53f2\u6570\u636e"
 
-            # 服务端登录会话（强绑定 username/user_id）
             auth_session_id = secrets.token_urlsafe(32)
             session_store.set_auth_session(auth_session_id, username=username, user_id=user_id)
 
@@ -262,12 +276,12 @@ async def login(request: Request, background_tasks: BackgroundTasks):
                     finally:
                         db.close()
                 except Exception as e:
-                    logger.warning(f"【登录】同步外部服务绑定状态失败: {e}")
+                    logger.warning(f"\u3010\u767b\u5f55\u3011\u540c\u6b65\u5916\u90e8\u670d\u52a1\u7ed1\u5b9a\u72b6\u6001\u5931\u8d25: {e}")
 
             resp = JSONResponse(
                 content={
                     "success": True,
-                    "message": "登录成功",
+                    "message": "\u767b\u5f55\u6210\u529f",
                     "username": username,
                     "session_id": session.cookies.get("JSESSIONID", ""),
                     "sync_status": "completed" if not needs_sync else "syncing",
@@ -292,13 +306,12 @@ async def login(request: Request, background_tasks: BackgroundTasks):
             )
             return resp
 
-        return {"success": False, "message": "登录失败，请重试"}
+        return {"success": False, "message": "\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5"}
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("【登录】处理失败")
-        raise HTTPException(status_code=500, detail=f"登录失败: {str(e)}")
-
+        logger.exception("\u3010\u767b\u5f55\u3011\u5904\u7406\u5931\u8d25")
+        raise HTTPException(status_code=500, detail=f"\u767b\u5f55\u5931\u8d25: {str(e)}")
 
 @router.get("/api/sync-status")
 async def get_sync_status(username: str, http_request: Request):
