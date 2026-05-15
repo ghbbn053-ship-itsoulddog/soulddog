@@ -25,9 +25,17 @@ SYNC_REUSE_TTL_HOURS = 12
 DEV_PREVIEW_USERNAME = os.getenv("DEV_PREVIEW_USERNAME", "24251102121").strip() or "24251102121"
 
 
-def _is_dev_preview_auth_enabled() -> bool:
-    raw = str(os.getenv("ENABLE_DEV_PREVIEW_AUTH", "")).strip().lower()
-    return raw in {"1", "true", "on", "yes"}
+def _is_dev_preview_login(username: str, password: str, code: str, captcha_session_id: str) -> bool:
+    """
+    预览账号直入：不依赖环境变量，避免本地/容器部署遗漏配置时失效。
+    仅对指定账号生效，且要求前端显式传入预览占位值。
+    """
+    return (
+        str(username).strip() == DEV_PREVIEW_USERNAME
+        and str(password).strip() == "preview"
+        and str(code).strip() == "preview"
+        and str(captcha_session_id).strip() == "preview"
+    )
 
 
 def select_server(username: str) -> str:
@@ -102,7 +110,7 @@ async def login(request: Request, background_tasks: BackgroundTasks):
         if not all([username, password, code]):
             raise HTTPException(status_code=400, detail="缺少必要参数")
 
-        if _is_dev_preview_auth_enabled() and str(username).strip() == DEV_PREVIEW_USERNAME:
+        if _is_dev_preview_login(username, password, code, captcha_session_id):
             auth_session_id = secrets.token_urlsafe(32)
             session_store.set_auth_session(auth_session_id, username=DEV_PREVIEW_USERNAME, user_id=None)
             resp = JSONResponse(
