@@ -2,9 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, BrainCircuit, Loader2, MessageSquare, Send, Sparkles } from "lucide-react";
+import { Bot, BrainCircuit, Loader2, MessageSquare, PanelLeft, Send, Settings2, Sparkles } from "lucide-react";
 
 import MarkdownMessage from "@/components/MarkdownMessage";
+import {
+  sendChatFallback,
+  streamChatMessage,
+  type ChatTransportPayload,
+} from "@/components/chat/chat-transport";
+import {
+  ChatBlindSpots,
+  ChatHighlights,
+  ChatSkillMatches,
+  ChatSources,
+  ChatToolTrace,
+  type ParsedKnowledgeSource,
+} from "@/components/chat/chat-message-sections";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -77,6 +90,7 @@ type DraftPromptPayload = {
   content: string;
   sourceLabel?: string;
   headline?: string;
+  generatedBy?: string;
 };
 
 type HistoryMessage = {
@@ -98,13 +112,15 @@ function parseKnowledgeSource(source: string) {
   const trimmed = (source || "").trim();
   const match = /^knowledge:\/\/workspace\/([^/]+)\/([^?]+)(?:\?(.*))?$/.exec(trimmed);
   if (!match) return null;
-  const [, workspaceRaw, , queryRaw] = match;
+  const [, workspaceRaw, titleRaw, queryRaw] = match;
   const params = new URLSearchParams(queryRaw || "");
   const workspaceId = Number(workspaceRaw || 0);
   const docId = Number(params.get("doc") || 0);
   const chunkIndex = Number(params.get("chunk") || 0);
   return {
+    raw: trimmed,
     workspaceId: Number.isFinite(workspaceId) && workspaceId > 0 ? workspaceId : null,
+    title: decodeURIComponent(titleRaw || ""),
     docId: Number.isFinite(docId) && docId > 0 ? docId : null,
     chunkIndex: Number.isFinite(chunkIndex) && chunkIndex >= 0 ? chunkIndex : null,
   };
@@ -116,6 +132,28 @@ function buildBlindSpotWorkspaceLink(workspaceId: number, item: BlindSpotItem) {
   if (item.top_point) params.set("point", item.top_point);
   const query = params.toString();
   return query ? `/workspace/${workspaceId}?${query}` : `/workspace/${workspaceId}`;
+}
+
+function DetailDisclosure({
+  label,
+  count,
+  children,
+}: {
+  label: string;
+  count: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50/72 p-3">
+      <summary className="cursor-pointer list-none text-xs font-medium text-slate-600">
+        <div className="flex items-center justify-between gap-3">
+          <span>{label}</span>
+          <Badge variant="outline">{count}</Badge>
+        </div>
+      </summary>
+      <div className="mt-3">{children}</div>
+    </details>
+  );
 }
 
 export function AIPanel({
@@ -151,10 +189,13 @@ export function AIPanel({
   const [agentFramework, setAgentFramework] = useState("openai_agents");
   const [showThinking, setShowThinking] = useState(false);
   const [activeDraftPrompt, setActiveDraftPrompt] = useState<DraftPromptPayload | null>(null);
+  const [showConversationRail, setShowConversationRail] = useState(false);
+  const [showAdvancedControls, setShowAdvancedControls] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRootRef = useRef<HTMLDivElement>(null);
+  const activeHistoryReqRef = useRef(0);
   const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
   const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE.slice(0, -4) : RAW_API_BASE;
   const STREAM_API_BASE = useMemo(() => {
@@ -185,11 +226,13 @@ export function AIPanel({
   const fetchHistory = useCallback(
     async (nextConversationId: number) => {
       if (!username || !nextConversationId) return;
+      const reqId = ++activeHistoryReqRef.current;
       const res = await fetch(
         `${API_BASE}/api/chat/history/${nextConversationId}?username=${encodeURIComponent(username)}`,
         { credentials: "include" }
       );
       const data = res.ok ? await res.json() : null;
+      if (reqId !== activeHistoryReqRef.current) return;
       if (!data?.messages) return;
       setMessages(
         (data.messages as HistoryMessage[]).map((m) => ({
@@ -210,8 +253,10 @@ export function AIPanel({
   );
 
   useEffect(() => {
+    activeHistoryReqRef.current++;
     setConversationId(null);
     setMessages([]);
+    setShowConversationRail(false);
     void fetchConversations();
   }, [fetchConversations, workspaceId]);
 
@@ -275,204 +320,209 @@ export function AIPanel({
       { id: assistantMsgId, role: "assistant", content: "", timestamp: now, streaming: true },
     ]);
 
+    const payload: ChatTransportPayload = {
+      username,
+      message: userText,
+      conversation_id: conversationId,
+      workspace_id: workspaceId,
+      override_provider: "",
+      override_model: "",
+      reasoning_mode: showThinking ? "deep" : "standard",
+      show_thinking: showThinking,
+      execution_mode: executionMode === "agent" ? "agent" : "chat",
+      agent_framework: agentFramework === "langgraph" ? "langgraph" : "openai_agents",
+      prompt_strategy: promptStrategy || "",
+      generated_by: activeDraftPrompt?.generatedBy || "",
+    };
+
+    const patchAssistantMessage = (patch: Partial<PanelMessage>) => {
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === assistantMsgId ? { ...msg, ...patch } : msg))
+      );
+    };
+
+    const fallbackToNonStream = async (reason?: string) => {
+      try {
+        const data = await sendChatFallback(API_BASE, payload);
+        patchAssistantMessage({
+          content: data.message,
+          streaming: false,
+          highlights: data.highlights || [],
+          blind_spots: data.blind_spots || [],
+          sources: data.sources || [],
+          tool_trace: data.tool_trace || [],
+          skill_matches: data.skill_matches || [],
+        });
+        if (data.conversationId) {
+          setConversationId(data.conversationId);
+          await fetchConversations();
+        }
+        onLearningMemoryCaptured?.();
+      } catch (e) {
+        const hint = reason ? `（${reason}）` : "";
+        const errorText = e instanceof Error ? e.message : "请求失败";
+        patchAssistantMessage({
+          content: `请求失败${hint}：${errorText}`,
+          streaming: false,
+        });
+      }
+    };
+
     try {
-      const response = await fetch(`${STREAM_API_BASE}/api/chat/send-stream`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-          "Cache-Control": "no-cache",
+      const data = await streamChatMessage({
+        streamApiBase: STREAM_API_BASE,
+        payload,
+        onPatch: ({ content, thinking }) => {
+          patchAssistantMessage({ content, thinking });
         },
-        credentials: "include",
-        body: JSON.stringify({
-          username,
-          message: userText,
-          conversation_id: conversationId,
-          workspace_id: workspaceId,
-          prompt_strategy: promptStrategy || undefined,
-          execution_mode: executionMode,
-          agent_framework: agentFramework,
-          show_thinking: showThinking,
-          reasoning_mode: showThinking ? "deep" : "standard",
-        }),
+        onPing: (hint) => {
+          setMessages((prev) => {
+            const idx = prev.findIndex((msg) => msg.id === assistantMsgId);
+            if (idx === -1) return prev;
+            if ((prev[idx].content || "") === hint) return prev;
+            const next = [...prev];
+            next[idx] = { ...next[idx], content: hint };
+            return next;
+          });
+        },
       });
 
-      if (!response.ok || !response.body) {
-        throw new Error(`请求失败(${response.status})`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let content = "";
-      let thinking = "";
-      let sseBuffer = "";
-      let nextConversationId = conversationId;
-      let streamDone = false;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        sseBuffer += decoder.decode(value, { stream: true });
-        const parts = sseBuffer.split(/\r?\n\r?\n/);
-        sseBuffer = parts.pop() || "";
-
-        for (const event of parts) {
-          const dataLines = event
-            .split(/\r?\n/)
-            .map((line) => line.trim())
-            .filter((line) => line.startsWith("data:"))
-            .map((line) => line.replace(/^data:\s?/, "").trim());
-
-          for (const line of dataLines) {
-            if (!line) continue;
-            try {
-              const data = JSON.parse(line);
-              if (data.conversation_id) {
-                nextConversationId = data.conversation_id;
-              }
-              if (data.thinking) {
-                thinking += data.thinking;
-              }
-              if (data.content) {
-                content += data.content;
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMsgId ? { ...msg, content, thinking } : msg
-                  )
-                );
-              }
-              if (data.done) {
-                streamDone = true;
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMsgId
-                      ? {
-                          ...msg,
-                          content,
-                          thinking,
-                          highlights: data.highlights || [],
-                          blind_spots: data.blind_spots || [],
-                          sources: data.sources || [],
-                          tool_trace: data.tool_trace || [],
-                          skill_matches: data.skill_matches || [],
-                          streaming: false,
-                        }
-                      : msg
-                  )
-                );
-              }
-            } catch {
-            }
-          }
+      if (!data.receivedAnyChunk) {
+        await fallbackToNonStream("流式无分片");
+      } else {
+        patchAssistantMessage({
+          content: data.content,
+          thinking: data.thinking,
+          highlights: data.highlights || [],
+          blind_spots: data.blind_spots || [],
+          sources: data.sources || [],
+          tool_trace: data.tool_trace || [],
+          skill_matches: data.skill_matches || [],
+          streaming: false,
+        });
+        if (data.conversationId) {
+          setConversationId(data.conversationId);
+          await fetchConversations();
         }
-      }
-
-      if (nextConversationId) {
-        setConversationId(nextConversationId);
-        await fetchConversations();
-      }
-      if (streamDone) {
         onLearningMemoryCaptured?.();
       }
     } catch (e) {
-      const errorText = e instanceof Error ? e.message : "请求失败";
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMsgId ? { ...msg, content: `请求失败：${errorText}`, streaming: false } : msg
-        )
-      );
+      await fallbackToNonStream(e instanceof Error ? e.message : "流式失败");
     } finally {
       setLoading(false);
     }
   };
 
+  const startNewConversation = () => {
+    activeHistoryReqRef.current++;
+    setConversationId(null);
+    setMessages([]);
+    setShowConversationRail(false);
+  };
+
   return (
-    <div id="workspace-ai-panel" ref={panelRootRef} className="grid gap-4">
-      <Card className="shadow-none">
+    <div id="workspace-ai-panel" ref={panelRootRef} className="grid gap-3">
+      <Card className="border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.94))] shadow-[0_10px_26px_rgba(15,23,42,0.04)]">
         <CardContent className="space-y-3 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
               <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
-                <Bot className="h-4 w-4 text-[hsl(var(--primary))]" />
-                工作区内嵌 AI 面板
+                <Bot className="h-4 w-4 text-blue-600" />
+                工作区内嵌 AI
               </div>
-              <div className="text-xs text-slate-500">
-                当前绑定 {workspaceName || `workspace #${workspaceId}`}，直接在工作区内部做验证对话。
-              </div>
-            </div>
-            <Badge variant="secondary">workspace #{workspaceId}</Badge>
-          </div>
-          <div className="grid gap-2 md:grid-cols-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Execution</div>
-              <div className="flex flex-wrap gap-2">
-                {["chat", "agent"].map((mode) => (
-                  <Button
-                    key={mode}
-                    size="sm"
-                    variant={executionMode === mode ? "default" : "outline"}
-                    onClick={() => setExecutionMode(mode)}
-                  >
-                    {mode}
-                  </Button>
-                ))}
+              <div className="mt-1 text-xs leading-6 text-slate-500">
+                当前绑定 {workspaceName || `workspace #${workspaceId}`}。默认把注意力留给当前复习对话，历史会话和运行设置按需展开。
               </div>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Framework</div>
-              <div className="flex flex-wrap gap-2">
-                {["openai_agents", "langgraph"].map((framework) => (
-                  <Button
-                    key={framework}
-                    size="sm"
-                    variant={agentFramework === framework ? "default" : "outline"}
-                    onClick={() => setAgentFramework(framework)}
-                    disabled={executionMode !== "agent"}
-                  >
-                    {framework}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Thinking</div>
-              <Button
-                size="sm"
-                variant={showThinking ? "default" : "outline"}
-                onClick={() => setShowThinking((prev) => !prev)}
-              >
-                <BrainCircuit className="h-4 w-4" />
-                {showThinking ? "on" : "off"}
-              </Button>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary">workspace #{workspaceId}</Badge>
+              <Badge variant="outline">{conversations.length} 会话</Badge>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => router.push(`/workspace/${workspaceId}`)}>
-              返回工作区对话
+            <Button
+              size="sm"
+              variant={showConversationRail ? "default" : "outline"}
+              className="xl:hidden"
+              onClick={() => setShowConversationRail((prev) => !prev)}
+            >
+              <PanelLeft className="h-4 w-4" />
+              {showConversationRail ? "收起会话" : "查看会话"}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => router.push("/composition")}>
-              继续调整编排
+            <Button
+              size="sm"
+              variant={showAdvancedControls ? "default" : "outline"}
+              onClick={() => setShowAdvancedControls((prev) => !prev)}
+            >
+              <Settings2 className="h-4 w-4" />
+              {showAdvancedControls ? "收起设置" : "运行设置"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={startNewConversation}>
+              新对话
             </Button>
           </div>
+          {showAdvancedControls ? (
+            <div className="grid gap-2 rounded-[1.2rem] border border-slate-200 bg-slate-50/80 p-3 md:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Execution</div>
+                <div className="flex flex-wrap gap-2">
+                  {["chat", "agent"].map((mode) => (
+                    <Button
+                      key={mode}
+                      size="sm"
+                      variant={executionMode === mode ? "default" : "outline"}
+                      onClick={() => setExecutionMode(mode)}
+                    >
+                      {mode}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Framework</div>
+                <div className="flex flex-wrap gap-2">
+                  {["openai_agents", "langgraph"].map((framework) => (
+                    <Button
+                      key={framework}
+                      size="sm"
+                      variant={agentFramework === framework ? "default" : "outline"}
+                      onClick={() => setAgentFramework(framework)}
+                      disabled={executionMode !== "agent"}
+                    >
+                      {framework}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Thinking</div>
+                <Button
+                  size="sm"
+                  variant={showThinking ? "default" : "outline"}
+                  onClick={() => setShowThinking((prev) => !prev)}
+                >
+                  <BrainCircuit className="h-4 w-4" />
+                  {showThinking ? "on" : "off"}
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
-        <Card className="shadow-none">
+      <div className="grid gap-3 xl:grid-cols-[210px_minmax(0,1fr)]">
+        <Card className={`${showConversationRail ? "block" : "hidden"} border-slate-200/90 shadow-none xl:block`}>
           <CardContent className="p-4">
             <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-900">
               <MessageSquare className="h-4 w-4" />
               本工作区会话
             </div>
-            <ScrollArea className="h-[520px] pr-3">
+            <ScrollArea className="h-[620px] pr-3">
               <div className="space-y-2">
                 <Button
                   className="w-full"
                   variant="outline"
-                  onClick={() => {
-                    setConversationId(null);
-                    setMessages([]);
-                  }}
+                  onClick={startNewConversation}
                 >
                   新对话
                 </Button>
@@ -485,6 +535,7 @@ export function AIPanel({
                     type="button"
                     onClick={() => {
                       setConversationId(item.id);
+                      setShowConversationRail(false);
                       void fetchHistory(item.id);
                     }}
                     className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
@@ -502,9 +553,9 @@ export function AIPanel({
           </CardContent>
         </Card>
 
-        <Card className="shadow-none">
+        <Card className="border-slate-200/90 shadow-none">
           <CardContent className="p-0">
-            <div className="flex h-[620px] flex-col">
+            <div className="flex h-[760px] min-h-[70vh] flex-col 2xl:h-[800px]">
               <ScrollArea className="flex-1 px-4 py-4">
                 <div className="space-y-4">
                   {messages.length === 0 ? (
@@ -530,90 +581,53 @@ export function AIPanel({
                         ) : null}
                         <MarkdownMessage content={msg.content || (msg.streaming ? "生成中..." : "")} />
                         {msg.tool_trace && msg.tool_trace.length > 0 ? (
-                          <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
-                            <div className="text-xs font-medium text-slate-500">Tool Trace</div>
-                            {msg.tool_trace.map((trace, index) => (
-                              <div key={`${trace.tool}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                                {trace.skill} {"->"} {trace.tool} [{trace.status}]
-                              </div>
-                            ))}
-                          </div>
+                          <DetailDisclosure label="工具轨迹" count={msg.tool_trace.length}>
+                            <ChatToolTrace traces={msg.tool_trace} />
+                          </DetailDisclosure>
                         ) : null}
                         {msg.skill_matches && msg.skill_matches.length > 0 ? (
-                          <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
-                            <div className="text-xs font-medium text-slate-500">Matched Skills</div>
-                            {msg.skill_matches.map((skill, index) => (
-                              <div key={`${skill.name}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                                <div className="flex flex-wrap items-center gap-2 text-slate-900">
-                                  <span className="font-medium">{skill.name}</span>
-                                  <Badge variant="outline">{skill.mode || "rule"}</Badge>
-                                  <Badge variant="secondary">{skill.compatibility_level || "direct"}</Badge>
-                                  {skill.source_type ? <Badge variant="outline">{skill.source_type}</Badge> : null}
-                                </div>
-                                <div className="mt-1 leading-6">
-                                  {skill.always_on ? "always on" : `matched triggers: ${(skill.matched_triggers || []).join(", ") || "-"}`}
-                                </div>
-                                {skill.compatibility_level === "rule_only" ? (
-                                  <div className="leading-6 text-amber-700">
-                                    仅规则注入：会影响提示词，不会直接调用外部天气/搜索等工具。
-                                  </div>
-                                ) : null}
-                                <div className="leading-6">
-                                  capabilities: {(skill.capabilities || []).join(", ") || "-"}
-                                </div>
-                                <div className="leading-6">
-                                  tools: {(skill.tools || []).join(", ") || "-"}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
+                          <DetailDisclosure label="技能匹配" count={msg.skill_matches.length}>
+                            <ChatSkillMatches matches={msg.skill_matches} />
+                          </DetailDisclosure>
                         ) : null}
                         {msg.blind_spots && msg.blind_spots.length > 0 ? (
-                          <div className="mt-3 space-y-2 border-t border-amber-200 pt-3">
-                            <div className="text-xs font-medium text-amber-700">本轮参考的学习盲点</div>
-                            {msg.blind_spots.map((item, index) => (
-                              <div key={`${item.course_name}-${index}`} className="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
-                                <div className="font-medium text-slate-900">{item.course_name}</div>
-                                <div className="mt-1 leading-6">
-                                  未解决 {item.unresolved} 条
-                                  {item.top_point ? `，高频卡点 ${item.top_point}` : ""}
-                                </div>
-                                <div className="mt-2">
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 border-amber-200 bg-white px-2 text-[11px] text-amber-800 hover:bg-amber-100"
-                                    onClick={() => router.push(buildBlindSpotWorkspaceLink(workspaceId, item))}
-                                  >
-                                    定位到学习疑问
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
+                          <DetailDisclosure label="学习盲点" count={msg.blind_spots.length}>
+                            <ChatBlindSpots
+                              items={msg.blind_spots}
+                              workspaceId={workspaceId}
+                              onOpenBlindSpotLink={(item) => router.push(buildBlindSpotWorkspaceLink(workspaceId, item))}
+                            />
+                          </DetailDisclosure>
+                        ) : null}
+                        {msg.sources && msg.sources.length > 0 ? (
+                          <DetailDisclosure label="参考来源" count={msg.sources.length}>
+                            <ChatSources
+                              sources={msg.sources}
+                              parseKnowledgeSource={parseKnowledgeSource as (source: string) => ParsedKnowledgeSource | null}
+                              onOpenSourceLink={(source) => {
+                                const parsed = parseKnowledgeSource(source);
+                                if (parsed?.workspaceId && parsed.docId) {
+                                  const query = parsed.chunkIndex != null ? `?doc=${parsed.docId}&chunk=${parsed.chunkIndex}` : `?doc=${parsed.docId}`;
+                                  router.push(`/workspace/${parsed.workspaceId}${query}`);
+                                }
+                              }}
+                            />
+                          </DetailDisclosure>
                         ) : null}
                         {msg.highlights && msg.highlights.length > 0 ? (
-                          <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
-                            <div className="text-xs font-medium text-slate-500">引用片段</div>
-                            {msg.highlights.map((item, index) => (
-                              <button
-                                key={`${item.source}-${index}`}
-                                type="button"
-                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-left text-xs text-slate-600 transition-colors hover:bg-slate-100"
-                                onClick={() => {
-                                  const parsed = parseKnowledgeSource(item.source);
-                                  if (parsed?.workspaceId && parsed.docId) {
-                                    const query = parsed.chunkIndex != null ? `?doc=${parsed.docId}&chunk=${parsed.chunkIndex}` : `?doc=${parsed.docId}`;
-                                    router.push(`/workspace/${parsed.workspaceId}${query}`);
-                                  }
-                                }}
-                              >
-                                <div className="mb-1 text-sm font-medium text-slate-900">{item.title}</div>
-                                <div className="line-clamp-4 whitespace-pre-wrap leading-6">{item.snippet}</div>
-                              </button>
-                            ))}
-                          </div>
+                          <DetailDisclosure label="引用片段" count={msg.highlights.length}>
+                            <ChatHighlights
+                              highlights={msg.highlights}
+                              parseKnowledgeSource={parseKnowledgeSource as (source: string) => ParsedKnowledgeSource | null}
+                              onOpenSourceLink={(source) => {
+                                const parsed = parseKnowledgeSource(source);
+                                if (parsed?.workspaceId && parsed.docId) {
+                                  const query = parsed.chunkIndex != null ? `?doc=${parsed.docId}&chunk=${parsed.chunkIndex}` : `?doc=${parsed.docId}`;
+                                  router.push(`/workspace/${parsed.workspaceId}${query}`);
+                                }
+                              }}
+                            />
+                          </DetailDisclosure>
                         ) : null}
                       </div>
                     </div>
