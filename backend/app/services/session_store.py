@@ -74,22 +74,35 @@ class SessionStore:
     def _redis_set_json(self, key: str, value: Dict[str, Any], ttl: int):
         if not self.redis_available:
             return
-        self._redis.setex(key, ttl, json.dumps(value, ensure_ascii=False))
+        try:
+            self._redis.setex(key, ttl, json.dumps(value, ensure_ascii=False))
+        except Exception as e:
+            logger.warning(f"⚠️ Redis 写入失败，回退内存会话存储: {e}")
+            self.redis_available = False
+            self._redis = None
 
     def _redis_get_json(self, key: str) -> Optional[Dict[str, Any]]:
         if not self.redis_available:
             return None
-        raw = self._redis.get(key)
-        if not raw:
-            return None
         try:
+            raw = self._redis.get(key)
+            if not raw:
+                return None
             return json.loads(raw)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"⚠️ Redis 读取失败，回退内存会话存储: {e}")
+            self.redis_available = False
+            self._redis = None
             return None
 
     def _redis_del(self, key: str):
         if self.redis_available:
-            self._redis.delete(key)
+            try:
+                self._redis.delete(key)
+            except Exception as e:
+                logger.warning(f"⚠️ Redis 删除失败，回退内存会话存储: {e}")
+                self.redis_available = False
+                self._redis = None
 
     # ===== Captcha Session =====
     def set_captcha_session(self, captcha_session_id: str, session: requests.Session, server_url: str = "", ttl: int = 300):
